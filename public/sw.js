@@ -1,15 +1,15 @@
 /*
  * Minimal, conservative service worker for installability + offline shell.
  *
- * Deliberately does NOT cache API, auth, or dynamic HTML responses, so it can
- * never serve stale app code or leak another session's data:
- *   - navigations       -> network-first, fall back to /offline.html when offline
- *   - hashed static      -> cache-first (safe: /_next/static/* is content-hashed)
- *   - everything else    -> straight to network (no caching)
+ * Deliberately does NOT cache or transform API, auth, or dynamic HTML responses,
+ * so it can never serve stale app code or leak another session's data:
+ *   - top-level navigations -> network-first, fall back to /offline.html offline
+ *   - hashed static          -> cache-first (safe: /_next/static/* is content-hashed)
+ *   - API + everything else  -> straight to network (no SW involvement)
  *
  * Bump CACHE_VERSION to force old caches out on the next activate.
  */
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v3';
 const SHELL_CACHE = `shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const PRECACHE = ['/offline.html'];
@@ -46,6 +46,11 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return; // never touch cross-origin (Supabase, Cloudinary, CDNs)
 
+  // Never touch API/auth routes -- they must reach the network untransformed. In
+  // particular /api/html-embed serves sandboxed iframe HTML; intercepting it (and
+  // maybe substituting the offline shell) broke HTML embeds inside the installed app.
+  if (url.pathname.startsWith('/api/')) return;
+
   // Content-hashed static assets: cache-first.
   if (url.pathname.startsWith('/_next/static/')) {
     event.respondWith(
@@ -62,13 +67,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Page navigations: network-first, offline fallback. Never cache the HTML itself.
-  if (request.mode === 'navigate') {
+  // TOP-LEVEL page navigations only: network-first with an offline fallback. Do
+  // NOT touch iframe/subframe navigations -- embeds render their own sandboxed
+  // documents and must load straight from the network.
+  if (request.mode === 'navigate' && request.destination === 'document') {
     event.respondWith(
       fetch(request).catch(() => caches.match('/offline.html')),
     );
     return;
   }
 
-  // Everything else (API, auth, data): plain network, no SW involvement.
+  // Everything else: plain network, no SW involvement.
 });
