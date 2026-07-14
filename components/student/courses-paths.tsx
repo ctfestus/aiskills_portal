@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
-  BookOpen, Award, X, CheckCircle, ChevronRight, ChevronLeft, Play, FileText, Search, Layers, Lock,
+  BookOpen, Award, X, Check, CheckCircle, ChevronRight, ChevronLeft, Play, FileText, Search, Layers, Lock,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/components/ThemeProvider';
@@ -418,13 +418,18 @@ function PathRow({ path, C }: { path: any; C: typeof LIGHT_C }) {
           const card = (
             <>
               <CoverThumbnail cover={cover} Icon={isVE ? Layers : BookOpen}>
-                {/* Status -- light-green chip with white text for active items */}
-                {!isLocked && (
-                  <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
-                    style={{ background: done ? '#16a34a' : '#22c55e', color: '#ffffff' }}>
-                    {done ? 'Completed' : 'In progress'}
+                {/* Status -- check indicator when done, "In progress" pill otherwise */}
+                {!isLocked && (done ? (
+                  <span className="absolute top-2 left-2 flex items-center justify-center w-5 h-5 rounded-full shadow-sm"
+                    style={{ background: '#16a34a', color: '#ffffff' }} title="Completed" aria-label="Completed">
+                    <Check className="w-3 h-3" strokeWidth={3}/>
                   </span>
-                )}
+                ) : (
+                  <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
+                    style={{ background: '#22c55e', color: '#ffffff' }}>
+                    In progress
+                  </span>
+                ))}
                 {/* Locked -- small lock chip top-right, cover stays bright */}
                 {isLocked && (
                   <span className="absolute top-2 right-2 w-6 h-6 rounded-full grid place-items-center shadow-sm" style={{ background: 'rgba(255,255,255,0.92)' }}>
@@ -532,12 +537,17 @@ function PathItemPreview({ item, isVE, done, isCurrent, isLocked, href, C }: {
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: C.card, boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)' }}>
       <CoverThumbnail cover={cover} Icon={isVE ? Layers : BookOpen} iconClassName="w-9 h-9">
-        {!isLocked && (
-          <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
-            style={{ background: done ? '#16a34a' : '#22c55e', color: '#ffffff' }}>
-            {done ? 'Completed' : 'In progress'}
+        {!isLocked && (done ? (
+          <span className="absolute top-2 left-2 flex items-center justify-center w-5 h-5 rounded-full shadow-sm"
+            style={{ background: '#16a34a', color: '#ffffff' }} title="Completed" aria-label="Completed">
+            <Check className="w-3 h-3" strokeWidth={3}/>
           </span>
-        )}
+        ) : (
+          <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
+            style={{ background: '#22c55e', color: '#ffffff' }}>
+            In progress
+          </span>
+        ))}
         {isLocked && (
           <span className="absolute top-2 right-2 w-6 h-6 rounded-full grid place-items-center shadow-sm" style={{ background: 'rgba(255,255,255,0.92)' }}>
             <Lock className="w-3 h-3" style={{ color: '#475569' }}/>
@@ -630,9 +640,14 @@ function ToolRow({ tool, courses, deadlines, C, onDetails }: { tool: string; cou
               onMouseEnter={(e) => openHover(c, e.currentTarget)} onMouseLeave={scheduleClose}>
               <button onClick={() => onDetails(c)} className="block w-full text-left transition-transform hover:-translate-y-0.5">
                 <CoverThumbnail cover={cover} alt={title}>
-                  {status && (
+                  {completed ? (
+                    <span className="absolute top-2 left-2 flex items-center justify-center w-5 h-5 rounded-full shadow-sm"
+                      style={{ background: '#16a34a', color: '#ffffff' }} title="Completed" aria-label="Completed">
+                      <Check className="w-3 h-3" strokeWidth={3}/>
+                    </span>
+                  ) : status && (
                     <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
-                      style={{ background: completed ? '#16a34a' : '#22c55e', color: '#ffffff' }}>
+                      style={{ background: '#22c55e', color: '#ffffff' }}>
                       {status}
                     </span>
                   )}

@@ -14,7 +14,7 @@ import { LIGHT_C } from '@/lib/theme';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { CarouselSkeleton, EmptyState, ProgressBar, HoverPreviewCard } from '@/components/student/shared';
 import {
-  Briefcase, CheckCircle, ChevronLeft, ChevronRight, FileText, Play, RefreshCw, Star, X, Zap,
+  Briefcase, Check, CheckCircle, ChevronLeft, ChevronRight, FileText, Play, RefreshCw, Star, X, Zap,
 } from 'lucide-react';
 
 const IND_COLORS: Record<string, string> = {
@@ -81,8 +81,10 @@ function VirtualExperienceCard({ form, attempt, deadline, C, onDetails }: {
         {/* Status badge */}
         {isCompleted && (
           <div className="absolute top-2 right-2">
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-              style={{ background: '#f0fdf4', color: '#16a34a' }}>Completed</span>
+            <span className="flex items-center justify-center w-5 h-5 rounded-full shadow-sm"
+              style={{ background: '#16a34a', color: '#ffffff' }} title="Completed" aria-label="Completed">
+              <Check className="w-3 h-3" strokeWidth={3}/>
+            </span>
           </div>
         )}
       </div>
@@ -414,9 +416,14 @@ function IndustryRow({ industry, items, attempts, deadlines, C, onDetails }: {
                 <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: 'rgba(34,197,94,0.10)' }}>
                   <div className="absolute inset-0 flex items-center justify-center"><Briefcase className="w-8 h-8" style={{ color: '#16a34a' }}/></div>
                   {cover && <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>}
-                  {status && (
+                  {isCompleted ? (
+                    <span className="absolute top-2 left-2 flex items-center justify-center w-5 h-5 rounded-full shadow-sm"
+                      style={{ background: '#16a34a', color: '#ffffff' }} title="Completed" aria-label="Completed">
+                      <Check className="w-3 h-3" strokeWidth={3}/>
+                    </span>
+                  ) : status && (
                     <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
-                      style={{ background: isCompleted ? '#16a34a' : '#22c55e', color: '#ffffff' }}>
+                      style={{ background: '#22c55e', color: '#ffffff' }}>
                       {status}
                     </span>
                   )}
