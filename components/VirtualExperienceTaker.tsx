@@ -1667,7 +1667,7 @@ export default function VirtualExperienceTaker({
                                     </MailThreadMsg>
                                   </div>
                                   <MailThreadMsg isDark={isDark} from={manager}>
-                                    <p style={{ margin: '0 0 10px' }}>Your submission has been received and is currently under review. I will get back to you shortly.</p>
+                                    <p style={{ margin: '0 0 10px' }}>Thanks, {firstNameOf(studentName)} - I have received your {typeLabel} and it is currently under review. I will get back to you shortly.</p>
                                     {!done && (
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: isDark ? '#888' : '#999', fontSize: 12.5 }}>
                                         <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: accentColor }} /> AI is reviewing your {typeLabel}...
@@ -1681,7 +1681,8 @@ export default function VirtualExperienceTaker({
                               {done && (
                                 <div style={{ padding: '16px 22px 20px', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
                                   <MailThreadMsg isDark={isDark} from={manager}>
-                                    <p style={{ margin: '0 0 18px' }}>Hi, here is the report from the review that has been done.</p>
+                                    <p style={{ margin: '0 0 4px' }}>Hi {firstNameOf(studentName)},</p>
+                                    <p style={{ margin: '0 0 18px' }}>Thanks for sending over your {typeLabel}. I have completed the review - please find my detailed feedback below.</p>
                                     <div style={{ background: isDark ? '#111' : '#f8fafc', borderRadius: 10, padding: 16, border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
                                       {req.type === 'dashboard_critique' && savedReport && (
                                         <DashboardCritiquePlayer reqId={req.id} isDark={isDark ?? false} accentColor={accentColor} completed={true}
@@ -1698,6 +1699,8 @@ export default function VirtualExperienceTaker({
                                           context={req.context} rubric={req.rubric} minScore={req.minScore} onComplete={() => {}} />
                                       )}
                                     </div>
+                                    <p style={{ margin: '18px 0 0' }}>Let me know if anything is unclear.</p>
+                                    <p style={{ margin: '4px 0 0' }}>Best,<br />{firstNameOf(manager.name)}</p>
                                   </MailThreadMsg>
                                 </div>
                               )}
