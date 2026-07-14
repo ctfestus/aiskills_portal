@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import {
-  CheckCircle2, Circle, ChevronRight, ChevronLeft,
+  CheckCircle2, Circle, ChevronRight, ChevronLeft, ChevronDown,
   X, Loader2, Trophy, BookOpen, Lock, Download, Award, Star, Clock,
   Link as LinkIcon, Upload as UploadIcon, Paperclip, Send, Reply,
 } from 'lucide-react';
@@ -224,6 +224,11 @@ export default function VirtualExperienceTaker({
     typeof window !== 'undefined' ? window.innerWidth >= 640 : true
   );
   const [noteValues,   setNoteValues]   = useState<Record<string, string>>({});
+  // Mission content is read first, then a "Continue to Tasks" click reveals the
+  // tasks/deliverables below (hidden until then). Once continued, the content
+  // collapses into a re-readable toggle rather than disappearing.
+  const [continuedLessons, setContinuedLessons] = useState<Set<string>>(new Set());
+  const [contentExpanded,  setContentExpanded]  = useState<Set<string>>(new Set());
   const [saving,       setSaving]       = useState(false);
   const [completed,    setCompleted]    = useState(false);
   const [reviewMode,   setReviewMode]   = useState(false);
@@ -373,6 +378,18 @@ export default function VirtualExperienceTaker({
   useEffect(() => {
     mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentLesId]);
+
+  const continueToTasks = (lessonId: string) => {
+    setContinuedLessons(prev => new Set([...prev, lessonId]));
+  };
+
+  const toggleContentExpanded = (lessonId: string) => {
+    setContentExpanded(prev => {
+      const next = new Set(prev);
+      next.has(lessonId) ? next.delete(lessonId) : next.add(lessonId);
+      return next;
+    });
+  };
 
   const goNext = () => {
     if (!hasNext || !allCurrentDone) return;
@@ -859,7 +876,18 @@ export default function VirtualExperienceTaker({
               <p className="text-sm font-medium" style={{ color: muted }}>Select a mission from the sidebar</p>
             </div>
           )}
-          {currentLes ? (
+          {currentLes ? (() => {
+              // Mission content is read first; "Continue to Tasks" reveals the
+              // tasks/deliverables below. Skipped for review/preview and for a
+              // lesson that's already fully done, where everything just shows.
+              const hasContent = !!(currentLes.doc || currentLes.body);
+              const hasReqs = currentLes.requirements.length > 0;
+              const gateActive = !reviewMode && !previewMode && hasContent && hasReqs && !allCurrentDone;
+              const hasContinued = continuedLessons.has(currentLes.id);
+              const showGateButton = gateActive && !hasContinued;
+              const isCollapsible = gateActive && hasContinued;
+              const isContentExpanded = !isCollapsible || contentExpanded.has(currentLes.id);
+              return (
             <>
               {/* Single unified card: title + body + video + questions */}
               <div className="rounded-xl overflow-hidden"
@@ -892,25 +920,57 @@ export default function VirtualExperienceTaker({
                   </div>
                 )}
 
-                {/* Lesson body */}
-                {(currentLes.doc || currentLes.body) && (
-                  <div className="px-4 sm:px-8 pt-5 sm:pt-6 pb-6">
-                    {currentLes.doc ? (
-                      <LessonRenderer key={currentLes.id} doc={currentLes.doc} isDark={isDark} />
-                    ) : (
-                      <div
-                        className={`prose prose-sm max-w-none [font-size:14.5px] ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
-                          ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.6] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-code:text-emerald-400 [&_pre]:bg-[#0f1120] [&_pre]:border [&_pre]:border-[#2e2e33] [&_pre]:rounded-lg [&_pre_code]:text-[#c9d1d9] prose-table:w-full prose-thead:border-b prose-thead:border-zinc-700 prose-th:text-zinc-300 prose-th:font-semibold prose-th:py-2 prose-th:px-3 prose-td:text-zinc-400 prose-td:py-2 prose-td:px-3 prose-tr:border-b prose-tr:border-zinc-800'
-                          : 'prose-p:text-[#111] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#111] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-indigo-400 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-code:text-emerald-700 [&_pre]:bg-[#f6f8fa] [&_pre]:border [&_pre]:border-[#d0d7de] [&_pre]:rounded-lg [&_pre_code]:text-[#1f2328] prose-table:w-full prose-thead:border-b prose-thead:border-zinc-200 prose-th:text-zinc-700 prose-th:font-semibold prose-th:py-2 prose-th:px-3 prose-td:text-zinc-600 prose-td:py-2 prose-td:px-3 prose-tr:border-b prose-tr:border-zinc-100'
-                        }`}
-                        dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentLes.body) }}
-                      />
+                {/* Lesson body: read first, then "Continue to Tasks" reveals the
+                    tasks/deliverables below. Skipped for review/preview and for a
+                    lesson that's already fully done, where everything just shows. */}
+                {(() => {
+                  const isExpanded = isContentExpanded;
+
+                  const lessonBodyContent = currentLes.doc ? (
+                    <LessonRenderer key={currentLes.id} doc={currentLes.doc} isDark={isDark} />
+                  ) : (
+                    <div
+                      className={`prose prose-sm max-w-none [font-size:14.5px] ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
+                        ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.6] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-code:text-emerald-400 [&_pre]:bg-[#0f1120] [&_pre]:border [&_pre]:border-[#2e2e33] [&_pre]:rounded-lg [&_pre_code]:text-[#c9d1d9] prose-table:w-full prose-thead:border-b prose-thead:border-zinc-700 prose-th:text-zinc-300 prose-th:font-semibold prose-th:py-2 prose-th:px-3 prose-td:text-zinc-400 prose-td:py-2 prose-td:px-3 prose-tr:border-b prose-tr:border-zinc-800'
+                        : 'prose-p:text-[#111] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#111] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-indigo-400 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-code:text-emerald-700 [&_pre]:bg-[#f6f8fa] [&_pre]:border [&_pre]:border-[#d0d7de] [&_pre]:rounded-lg [&_pre_code]:text-[#1f2328] prose-table:w-full prose-thead:border-b prose-thead:border-zinc-200 prose-th:text-zinc-700 prose-th:font-semibold prose-th:py-2 prose-th:px-3 prose-td:text-zinc-600 prose-td:py-2 prose-td:px-3 prose-tr:border-b prose-tr:border-zinc-100'
+                      }`}
+                      dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentLes.body) }}
+                    />
+                  );
+
+                  return (<>
+                    {hasContent && (
+                      isCollapsible ? (
+                        <div style={{ borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#F2F5FA'}` }}>
+                          <button onClick={() => toggleContentExpanded(currentLes.id)}
+                            className="w-full flex items-center gap-2 px-4 sm:px-8 py-3 text-left hover:opacity-70 transition-opacity">
+                            {isExpanded ? <ChevronDown className="w-3.5 h-3.5" style={{ color: muted }} /> : <ChevronRight className="w-3.5 h-3.5" style={{ color: muted }} />}
+                            <span className="text-[12.5px] font-semibold" style={{ color: muted }}>
+                              Mission content{!isExpanded ? ' (click to reread)' : ''}
+                            </span>
+                          </button>
+                          {isExpanded && <div className="px-4 sm:px-8 pb-6">{lessonBodyContent}</div>}
+                        </div>
+                      ) : (
+                        <div className="px-4 sm:px-8 pt-5 sm:pt-6 pb-6">{lessonBodyContent}</div>
+                      )
                     )}
-                  </div>
-                )}
+
+                    {showGateButton && (
+                      <div className="px-4 sm:px-8 pb-8 flex justify-center"
+                        style={{ borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#F2F5FA'}` }}>
+                        <button onClick={() => continueToTasks(currentLes.id)}
+                          className="flex items-center gap-2 px-6 py-3 rounded-2xl font-bold text-[14px] transition-all hover:opacity-90"
+                          style={{ background: accentColor, color: isDark ? '#111' : '#fff' }}>
+                          Continue to Tasks <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </>);
+                })()}
 
                 {/* Questions section */}
-                {currentLes.requirements.length > 0 && (
+                {currentLes.requirements.length > 0 && !showGateButton && (
                   <>
                     {/* Divider + label */}
                     {(() => {
@@ -2341,7 +2401,7 @@ export default function VirtualExperienceTaker({
                 )}
               </div>
             </>
-          ) : null}
+          );})() : null}
           </div>
         </div>
       </main>

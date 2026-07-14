@@ -157,6 +157,11 @@ export default function AssignmentExperiencePlayer({
   const [reviewBeforeSubmit, setReviewBeforeSubmit] = useState(false);
   const [reviewMode,    setReviewMode]    = useState(false);
   const [expandedMods,  setExpandedMods]  = useState<Set<string>>(new Set([modules[0]?.id]));
+  // Mission content is read first, then a "Continue to Tasks" click reveals the
+  // tasks/deliverables below (hidden until then). Once continued, the content
+  // collapses into a re-readable toggle rather than disappearing.
+  const [continuedLessons, setContinuedLessons] = useState<Set<string>>(new Set());
+  const [contentExpanded,  setContentExpanded]  = useState<Set<string>>(new Set());
   // Review is read-only and exists only after grading. Pre-grading behaviour is unchanged.
   const readOnly = graded;
   const [completeError, setCompleteError] = useState<string | null>(null);
@@ -263,6 +268,18 @@ export default function AssignmentExperiencePlayer({
     setActiveLesson(lesId);
     setExpandedMods(prev => new Set([...prev, modId]));
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function continueToTasks(lessonId: string) {
+    setContinuedLessons(prev => new Set([...prev, lessonId]));
+  }
+
+  function toggleContentExpanded(lessonId: string) {
+    setContentExpanded(prev => {
+      const next = new Set(prev);
+      next.has(lessonId) ? next.delete(lessonId) : next.add(lessonId);
+      return next;
+    });
   }
 
   // The one place an assignment_submissions row gets created. Shared by the last-mission
@@ -470,7 +487,19 @@ export default function AssignmentExperiencePlayer({
 
         {/* Main content */}
         <div className="space-y-4">
-          {currentLes ? (
+          {currentLes ? (() => {
+              // Mission content is read first; "Continue to Tasks" reveals the
+              // tasks/deliverables below. Skipped for review/preview/graded and
+              // for a lesson that's already fully done, where everything shows.
+              const hasContent = !!(currentLes.doc || currentLes.body);
+              const hasReqs = currentLes.requirements.length > 0;
+              const lessonDone = lessonPct(currentLes, progress) === 100;
+              const gateActive = !reviewMode && !previewMode && !readOnly && hasContent && hasReqs && !lessonDone;
+              const hasContinued = continuedLessons.has(currentLes.id);
+              const showGateButton = gateActive && !hasContinued;
+              const isCollapsible = gateActive && hasContinued;
+              const isContentExpanded = !isCollapsible || contentExpanded.has(currentLes.id);
+              return (
             <div className="rounded-2xl overflow-hidden" style={{ background: bg, border: `1px solid ${border}`, boxShadow: shadow }}>
               {/* Lesson title */}
               <div className="px-6 py-5 border-b" style={{ borderColor: divider }}>
@@ -494,19 +523,41 @@ export default function AssignmentExperiencePlayer({
               )}
 
               {/* Body */}
-              {(currentLes.doc || currentLes.body) && (
-                <div className="px-6 py-5">
-                  {currentLes.doc ? (
-                    <LessonRenderer key={currentLes.id} doc={currentLes.doc} isDark={isDark} />
-                  ) : (
-                    <div className="rich-content text-sm leading-relaxed" style={{ color: isDark ? '#ccc' : '#333' }}
-                      dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentLes.body) }}/>
-                  )}
+              {hasContent && (() => {
+                const bodyContent = currentLes.doc ? (
+                  <LessonRenderer key={currentLes.id} doc={currentLes.doc} isDark={isDark} />
+                ) : (
+                  <div className="rich-content text-sm leading-relaxed" style={{ color: isDark ? '#ccc' : '#333' }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentLes.body) }}/>
+                );
+                return isCollapsible ? (
+                  <div style={{ borderTop: `1px solid ${divider}` }}>
+                    <button onClick={() => toggleContentExpanded(currentLes.id)}
+                      className="w-full flex items-center gap-2 px-6 py-3 text-left hover:opacity-70 transition-opacity">
+                      {isContentExpanded ? <ChevronDown className="w-3.5 h-3.5" style={{ color: faint }} /> : <ChevronRight className="w-3.5 h-3.5" style={{ color: faint }} />}
+                      <span className="text-[11px] font-semibold" style={{ color: faint }}>
+                        Mission content{!isContentExpanded ? ' (click to reread)' : ''}
+                      </span>
+                    </button>
+                    {isContentExpanded && <div className="px-6 pb-5">{bodyContent}</div>}
+                  </div>
+                ) : (
+                  <div className="px-6 py-5">{bodyContent}</div>
+                );
+              })()}
+
+              {showGateButton && (
+                <div className="px-6 pb-6 flex justify-center" style={{ borderTop: `1px solid ${divider}` }}>
+                  <button onClick={() => continueToTasks(currentLes.id)}
+                    className="flex items-center gap-2 px-6 py-3 rounded-2xl font-bold text-[14px] transition-all hover:opacity-90"
+                    style={{ background: accent, color: 'white' }}>
+                    Continue to Tasks <ChevronRight className="w-4 h-4" />
+                  </button>
                 </div>
               )}
 
               {/* Requirements */}
-              {currentLes.requirements.length > 0 && (
+              {currentLes.requirements.length > 0 && !showGateButton && (
                 <div style={{ borderTop: `1px solid ${divider}` }}>
                   <div className="px-6 py-4">
                     <p className="text-[11px] font-bold uppercase tracking-widest mb-4" style={{ color: faint }}>Tasks</p>
@@ -1483,7 +1534,7 @@ export default function AssignmentExperiencePlayer({
                 )}
               </div>
             </div>
-          ) : (
+          );})() : (
             <div className="rounded-2xl p-8 text-center" style={{ background: bg, border: `1px solid ${border}` }}>
               <p className="text-sm" style={{ color: faint }}>Select a lesson from the sidebar to begin.</p>
             </div>
