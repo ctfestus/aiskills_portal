@@ -9,7 +9,7 @@
  *
  * Bump CACHE_VERSION to force old caches out on the next activate.
  */
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const SHELL_CACHE = `shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const PRECACHE = ['/offline.html'];
@@ -46,6 +46,11 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return; // never touch cross-origin (Supabase, Cloudinary, CDNs)
 
+  // Never intercept API routes (the HTML-embed proxy, data endpoints). Routing these
+  // through the navigation/offline logic below breaks same-origin iframe embeds in the
+  // installed app -- which, unlike a browser tab, is controlled by this worker.
+  if (url.pathname.startsWith('/api/')) return;
+
   // Content-hashed static assets: cache-first.
   if (url.pathname.startsWith('/_next/static/')) {
     event.respondWith(
@@ -62,8 +67,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Page navigations: network-first, offline fallback. Never cache the HTML itself.
-  if (request.mode === 'navigate') {
+  // TOP-LEVEL page navigations only: network-first with offline fallback. Never cache
+  // the HTML, and never catch sub-frame (iframe/embed) navigations -- those must reach
+  // the network untouched so embedded documents (e.g. the HTML-embed proxy) render.
+  if (request.mode === 'navigate' && request.destination === 'document') {
     event.respondWith(
       fetch(request).catch(() => caches.match('/offline.html')),
     );
