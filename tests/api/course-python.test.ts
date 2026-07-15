@@ -134,6 +134,36 @@ describe('POST /api/course Python exercise security', () => {
     });
   });
 
+  it('allows SQL checks when course access comes from a published learning path', async () => {
+    authed(makeSupabaseStub({
+      courses: {
+        data: {
+          id: 'course1',
+          user_id: 'owner1',
+          status: 'published',
+          cohort_ids: ['direct-cohort'],
+          questions: [sqlQuestion],
+        },
+        error: null,
+      },
+      students: { data: { role: 'student', cohort_id: 'path-cohort' }, error: null },
+      learning_paths: { data: { id: 'path1' }, error: null },
+    }));
+
+    const res = await post({
+      action: 'check-sql-answer',
+      course_id: 'course1',
+      question_id: 'sql1',
+      query: 'SELECT 1 AS n',
+      result: { columns: ['n'], rows: [[1]] },
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.passed).toBe(true);
+    expect(body.proof).toMatch(/^v1:/);
+  });
+
   it('does not leak expected SQL cells or row counts in check-sql-answer feedback', async () => {
     authed(makeSupabaseStub({
       courses: {
@@ -716,6 +746,7 @@ describe('POST /api/course Python exercise security', () => {
         error: null,
       },
       students: { data: { role: 'student', cohort_id: 'co2' }, error: null },
+      learning_paths: { data: null, error: null },
     }));
 
     const res = await post({

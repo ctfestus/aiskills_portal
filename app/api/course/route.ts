@@ -209,8 +209,22 @@ async function loadAccessibleCourse(
   const isOwner = (course as any).user_id === sessionUser.id;
   const isPublished = (course as any).status === 'published';
   const cohortAllowed = cohortIds.length === 0 || (!!(student as any)?.cohort_id && cohortIds.includes((student as any).cohort_id));
+  let learningPathAllowed = false;
 
-  if (!isPrivileged && !isOwner && !(isPublished && cohortAllowed)) {
+  // Course SELECT policies also grant access through published learning paths.
+  // Mirror that rule here because this service-role client bypasses RLS.
+  if (!isPrivileged && !isOwner && isPublished && !cohortAllowed && (student as any)?.cohort_id) {
+    const { data: learningPath } = await supabase.from('learning_paths')
+      .select('id')
+      .eq('status', 'published')
+      .contains('item_ids', [courseId])
+      .contains('cohort_ids', [(student as any).cohort_id])
+      .limit(1)
+      .maybeSingle();
+    learningPathAllowed = !!learningPath;
+  }
+
+  if (!isPrivileged && !isOwner && !(isPublished && (cohortAllowed || learningPathAllowed))) {
     return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   }
 
