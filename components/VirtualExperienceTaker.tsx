@@ -1349,11 +1349,7 @@ export default function VirtualExperienceTaker({
                               fetch('/api/ve-answer-review', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json', ...authHeader },
-                                body: JSON.stringify({
-                                  question: req.label, description: req.description, studentAnswer: noteVal,
-                                  context: req.context, rubric: req.rubric, expectedAnswer: req.expectedAnswer,
-                                  projectContext: { company: config.company || null, role: config.role || null, industry: config.industry || null, moduleTitle: currentMod?.title || null, lessonTitle: currentLes?.title || null },
-                                }),
+                                body: JSON.stringify({ veId: formId, reqId: req.id, studentAnswer: noteVal }),
                               })
                               .then(r => r.json())
                               .then(json => {
@@ -1976,21 +1972,7 @@ export default function VirtualExperienceTaker({
                               const res = await fetch('/api/ve-answer-review', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json', ...authHeader },
-                                body: JSON.stringify({
-                                  question: req.label,
-                                  description: req.description,
-                                  studentAnswer: noteVal,
-                                  context: req.context,
-                                  rubric: req.rubric,
-                                  expectedAnswer: req.expectedAnswer,
-                                  projectContext: {
-                                    company:     config.company    || null,
-                                    role:        config.role       || null,
-                                    industry:    config.industry   || null,
-                                    moduleTitle: currentMod?.title || null,
-                                    lessonTitle: currentLes?.title || null,
-                                  },
-                                }),
+                                body: JSON.stringify({ veId: formId, reqId: req.id, studentAnswer: noteVal }),
                               });
                               const json = await res.json();
                               if (!res.ok) {

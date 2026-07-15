@@ -11,18 +11,17 @@ export const dynamic = 'force-dynamic';
 const RATE_LIMIT = 10;
 const RATE_WINDOW_SECONDS = 86400;
 
-function adminClient() {
+// RLS-scoped client for the caller: reading the VE through it enforces the same
+// access the standalone player itself has (owner / admin / cohort / learning path).
+function callerClient(token: string) {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false } },
   );
 }
 
-async function authenticate(req: NextRequest): Promise<{ userId: string } | NextResponse> {
-  const auth = await requireUser(req);
-  if (isAuthError(auth)) return auth.error;
-  return { userId: auth.user.id };
-}
+const VE_COLUMNS = 'user_id, modules, company, role, industry';
 
 async function checkRateLimit(userId: string): Promise<NextResponse | null> {
   const redis = getRedis();
@@ -52,18 +51,22 @@ const responseSchema = {
 };
 
 export async function POST(req: NextRequest) {
-  const auth = await authenticate(req);
-  if (auth instanceof NextResponse) return auth;
+  const auth = await requireUser(req);
+  if (isAuthError(auth)) return auth.error;
 
-  const rateLimitError = await checkRateLimit(auth.userId);
+  const rateLimitError = await checkRateLimit(auth.user.id);
   if (rateLimitError) return rateLimitError;
 
   const body = await req.json();
-  const { question, description, studentAnswer: rawAnswer, context, rubric, expectedAnswer, projectContext } = body;
+  const veId  = typeof body?.veId === 'string' ? body.veId : '';
+  const reqId = typeof body?.reqId === 'string' ? body.reqId : '';
 
   // Strip HTML tags so the AI evaluates the actual text, not markup
-  const studentAnswer = typeof rawAnswer === 'string' ? rawAnswer.replace(/<[^>]*>/g, '').trim() : '';
+  const studentAnswer = typeof body?.studentAnswer === 'string' ? body.studentAnswer.replace(/<[^>]*>/g, '').trim() : '';
 
+  if (!veId || !reqId) {
+    return NextResponse.json({ error: 'veId and reqId are required.' }, { status: 400 });
+  }
   if (!studentAnswer) {
     return NextResponse.json({ error: 'No answer submitted.' }, { status: 400 });
   }
@@ -71,7 +74,63 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Answer must be 500 characters or fewer.' }, { status: 400 });
   }
 
-  const { company, role, industry, moduleTitle, lessonTitle } = projectContext ?? {};
+  // Authoritative grading context: the question, rubric, and expected answer
+  // all come from the VE row, never from the request body. First read under
+  // the caller's own RLS (standalone-player parity); if that yields nothing,
+  // fall back to the assignment-embed access check, mirroring
+  // /api/ve-for-assignment.
+  let ve: any = (await callerClient(auth.token)
+    .from('virtual_experiences').select(VE_COLUMNS).eq('id', veId).maybeSingle()).data;
+
+  if (!ve) {
+    const svc = auth.supabase;
+    const { data: veSvc } = await svc
+      .from('virtual_experiences').select(VE_COLUMNS).eq('id', veId).maybeSingle();
+    if (!veSvc) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+
+    let allowed = veSvc.user_id === auth.user.id;
+    if (!allowed) {
+      const { data: caller } = await svc
+        .from('students').select('role, cohort_id').eq('id', auth.user.id).maybeSingle();
+      if (caller?.role === 'admin' || caller?.role === 'instructor') {
+        allowed = true;
+      } else {
+        const [{ data: assignments }, { data: memberships }] = await Promise.all([
+          svc.from('assignments').select('cohort_ids, group_ids')
+            .eq('status', 'published').eq('config->>ve_form_id', veId),
+          svc.from('group_members').select('group_id').eq('student_id', auth.user.id),
+        ]);
+        const myGroups = new Set((memberships ?? []).map((m: any) => m.group_id as string));
+        allowed = (assignments ?? []).some((a: any) =>
+          (caller?.cohort_id && (a.cohort_ids ?? []).includes(caller.cohort_id)) ||
+          (a.group_ids ?? []).some((g: string) => myGroups.has(g)));
+      }
+    }
+    if (!allowed) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
+    ve = veSvc;
+  }
+
+  // Locate the requirement being graded; only AI-review questions qualify.
+  let target: any = null;
+  let moduleTitle = '';
+  let lessonTitle = '';
+  for (const m of (Array.isArray(ve.modules) ? ve.modules : [])) {
+    for (const les of (Array.isArray(m?.lessons) ? m.lessons : [])) {
+      for (const r of (Array.isArray(les?.requirements) ? les.requirements : [])) {
+        if (r?.id === reqId) { target = r; moduleTitle = m?.title || ''; lessonTitle = les?.title || ''; }
+      }
+    }
+  }
+  if (!target || !target.aiReview) {
+    return NextResponse.json({ error: 'Question not found.' }, { status: 404 });
+  }
+
+  const { company, role, industry } = ve;
+  const question = target.label;
+  const description = target.description;
+  const context = target.context;
+  const rubric = target.rubric;
+  const expectedAnswer = target.expectedAnswer;
 
   const roleLine    = (role && company) ? `${role} at ${company}` : role || company || 'a professional';
   const taskLabel   = question || description || 'this task';
