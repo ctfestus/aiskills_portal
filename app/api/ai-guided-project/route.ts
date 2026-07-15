@@ -3,6 +3,7 @@ import { generateJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole, isAuthError } from '@/lib/api-auth';
 import { getRedis } from '@/lib/redis';
+import { bumpRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,10 +15,7 @@ async function checkRateLimit(userId: string, role: string): Promise<NextRespons
 
   const limit = role === 'admin' ? 50 : 10;
   try {
-    const key   = `rate:ai-guided-project:${userId}`;
-    const count = await redis.incr(key);
-    if (count === 1) await redis.expire(key, 3600);
-    if (count > limit) {
+    if (await bumpRateLimit(redis, `rate:ai-guided-project:${userId}`, limit, 3600)) {
       return NextResponse.json(
         { error: `AI generation limit reached. You can make up to ${limit} requests per hour.` },
         { status: 429 },

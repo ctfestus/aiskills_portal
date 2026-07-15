@@ -4,6 +4,7 @@ import { generateJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getRedis } from '@/lib/redis';
+import { bumpRateLimit } from '@/lib/rate-limit';
 import ExcelJS from 'exceljs';
 
 export const dynamic = 'force-dynamic';
@@ -34,10 +35,7 @@ async function checkRateLimit(userId: string): Promise<NextResponse | null> {
   const redis = getRedis();
   if (!redis) return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
   try {
-    const key   = `rate:excel-review:${userId}`;
-    const count = await redis.incr(key);
-    if (count === 1) await redis.expire(key, RATE_WINDOW_SECONDS);
-    if (count > RATE_LIMIT) {
+    if (await bumpRateLimit(redis, `rate:excel-review:${userId}`, RATE_LIMIT, RATE_WINDOW_SECONDS)) {
       return NextResponse.json(
         { error: `Limit reached: ${RATE_LIMIT} Excel reviews per day. Try again tomorrow.` },
         { status: 429 },

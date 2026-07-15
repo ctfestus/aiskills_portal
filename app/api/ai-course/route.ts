@@ -3,6 +3,7 @@ import { generateJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole, isAuthError } from '@/lib/api-auth';
 import { getRedis } from '@/lib/redis';
+import { bumpRateLimit } from '@/lib/rate-limit';
 import { pdfPageImageUrl } from '@/lib/cloudinary-pdf';
 import type { LessonDoc } from '@/lib/lesson-doc';
 import { normalizePythonCodeInput } from '@/lib/python-engine';
@@ -35,10 +36,7 @@ async function checkRateLimit(userId: string): Promise<NextResponse | null> {
     return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
   }
   try {
-    const key   = `rate:ai-course:${userId}`;
-    const count = await redis.incr(key);
-    if (count === 1) await redis.expire(key, 3600); // 1-hour window
-    if (count > 20) {
+    if (await bumpRateLimit(redis, `rate:ai-course:${userId}`, 20, 3600)) {
       return NextResponse.json(
         { error: 'AI generation limit reached. You can make up to 20 requests per hour.' },
         { status: 429 },
@@ -353,10 +351,7 @@ async function checkDocCourseRateLimit(userId: string, role: string): Promise<Ne
   if (!redis) return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
   const limit = role === 'admin' ? 20 : 5;
   try {
-    const key = `rate:ai-doc-course:${userId}`;
-    const count = await redis.incr(key);
-    if (count === 1) await redis.expire(key, 3600);
-    if (count > limit) {
+    if (await bumpRateLimit(redis, `rate:ai-doc-course:${userId}`, limit, 3600)) {
       return NextResponse.json(
         { error: `AI course limit reached. You can generate ${limit} courses per hour.` },
         { status: 429 },
@@ -373,10 +368,7 @@ async function checkSqlCourseRateLimit(userId: string, role: string): Promise<Ne
   if (!redis) return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
   const limit = role === 'admin' ? 20 : 5;
   try {
-    const key = `rate:ai-sql-course:${userId}`;
-    const count = await redis.incr(key);
-    if (count === 1) await redis.expire(key, 3600);
-    if (count > limit) {
+    if (await bumpRateLimit(redis, `rate:ai-sql-course:${userId}`, limit, 3600)) {
       return NextResponse.json(
         { error: `AI SQL course limit reached. You can generate ${limit} courses per hour.` },
         { status: 429 },
@@ -393,10 +385,7 @@ async function checkPythonCourseRateLimit(userId: string, role: string): Promise
   if (!redis) return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
   const limit = role === 'admin' ? 20 : 5;
   try {
-    const key = `rate:ai-python-course:${userId}`;
-    const count = await redis.incr(key);
-    if (count === 1) await redis.expire(key, 3600);
-    if (count > limit) {
+    if (await bumpRateLimit(redis, `rate:ai-python-course:${userId}`, limit, 3600)) {
       return NextResponse.json(
         { error: `AI Python course limit reached. You can generate ${limit} courses per hour.` },
         { status: 429 },

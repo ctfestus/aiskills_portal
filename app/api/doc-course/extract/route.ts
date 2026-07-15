@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { requireRole, isAuthError } from '@/lib/api-auth';
 import { getRedis } from '@/lib/redis';
+import { bumpRateLimit } from '@/lib/rate-limit';
 import { cloudinary } from '@/lib/cloudinary-server';
 import dns from 'dns/promises';
 import net from 'net';
@@ -28,10 +29,7 @@ async function checkRateLimit(userId: string): Promise<NextResponse | null> {
   const redis = getRedis();
   if (!redis) return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
   try {
-    const key = `rate:doc-course-extract:${userId}`;
-    const count = await redis.incr(key);
-    if (count === 1) await redis.expire(key, 3600);
-    if (count > 20) {
+    if (await bumpRateLimit(redis, `rate:doc-course-extract:${userId}`, 20, 3600)) {
       return NextResponse.json({ error: 'Limit reached: 20 document ingests per hour.' }, { status: 429 });
     }
   } catch {

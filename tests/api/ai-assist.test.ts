@@ -31,7 +31,12 @@ function post(body: Record<string, unknown>): Promise<Response> {
 }
 
 function redisStub(count = 1) {
-  return { incr: vi.fn(async () => count), expire: vi.fn(async () => 1) };
+  return {
+    incr: vi.fn(async () => count),
+    expire: vi.fn(async () => 1),
+    del: vi.fn(async () => 1),
+    ttl: vi.fn(async () => 3000),
+  };
 }
 
 beforeEach(() => {
