@@ -4,6 +4,7 @@ import { generateJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getRedis } from '@/lib/redis';
+import { bumpRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,18 +35,7 @@ async function checkRateLimit(userId: string): Promise<NextResponse | null> {
   const redis = getRedis();
   if (!redis) return null;
   try {
-    const key   = `rate:ve-brief-chat:${userId}`;
-    const count = await redis.incr(key);
-    if (count === 1) {
-      // If the key can't get a TTL it must not outlive this window, or the
-      // student would eventually be blocked forever. Fail open by removing it.
-      const ok = await redis.expire(key, RATE_WINDOW_SECONDS).catch(() => 0);
-      if (!ok) await redis.del(key).catch(() => {});
-    }
-    if (count > RATE_LIMIT) {
-      // Self-heal a key that lost its TTL (e.g. expire failed on creation).
-      const ttl = await redis.ttl(key).catch(() => -2);
-      if (ttl === -1) await redis.expire(key, RATE_WINDOW_SECONDS).catch(() => {});
+    if (await bumpRateLimit(redis, `rate:ve-brief-chat:${userId}`, RATE_LIMIT, RATE_WINDOW_SECONDS)) {
       return NextResponse.json(
         { error: `Limit reached: ${RATE_LIMIT} questions per day. Try again tomorrow.` },
         { status: 429 },

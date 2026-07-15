@@ -2,6 +2,7 @@ import { generateJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole, isAuthError } from '@/lib/api-auth';
 import { getRedis } from '@/lib/redis';
+import { bumpRateLimit } from '@/lib/rate-limit';
 import {
   ALLOWED_ACTIONS, INTERACTIVE_ACTIONS, FORMAT_SET, MAX_TEXT, MAX_INSTRUCTION, MAX_CONTEXT,
   SCHEMAS, TEXT_SCHEMA, FORMAT_PICK_SCHEMA,
@@ -24,10 +25,7 @@ async function checkRateLimit(userId: string): Promise<NextResponse | null> {
     return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
   }
   try {
-    const key   = `rate:ai-assist:${userId}`;
-    const count = await redis.incr(key);
-    if (count === 1) await redis.expire(key, 3600); // 1-hour window
-    if (count > 40) {
+    if (await bumpRateLimit(redis, `rate:ai-assist:${userId}`, 40, 3600)) {
       return NextResponse.json(
         { error: 'AI assist limit reached. You can make up to 40 edits per hour.' },
         { status: 429 },
