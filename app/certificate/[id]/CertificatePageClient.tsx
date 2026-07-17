@@ -344,7 +344,7 @@ export default function CertificatePageClient({
               )}
               {pathItems && pathItems.length > 0 && (
                 <>
-                  <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Courses in this learning path</p>
+                  <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">In this learning path</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {pathItems.map((item, i) => (
                       <div

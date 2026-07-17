@@ -156,16 +156,18 @@ export async function loadCertificate(id: string): Promise<CertificateResult> {
         ? Promise.all([
             svc.from('courses').select('id, title, cover_image').in('id', path!.item_ids),
             svc.from('virtual_experiences').select('id, title, cover_image').in('id', path!.item_ids),
+            svc.from('certifications').select('id, title, cover_image').in('id', path!.item_ids),
           ])
         : Promise.resolve(null),
     ]);
 
     let pathItems: { id: string; title: string; coverImage: string | null }[] = [];
     if (pathItemsResult && path?.item_ids) {
-      const [{ data: pCourses }, { data: pVes }] = pathItemsResult as any;
+      const [{ data: pCourses }, { data: pVes }, { data: pCerts }] = pathItemsResult as any;
       const itemMap: Record<string, { title: string; coverImage: string | null }> = Object.fromEntries([
         ...(pCourses ?? []).map((r: any) => [r.id, { title: r.title, coverImage: r.cover_image ?? null }]),
         ...(pVes     ?? []).map((r: any) => [r.id, { title: r.title, coverImage: r.cover_image ?? null }]),
+        ...(pCerts   ?? []).map((r: any) => [r.id, { title: r.title, coverImage: r.cover_image ?? null }]),
       ]);
       pathItems = (path.item_ids as string[]).map(itemId => ({ id: itemId, ...itemMap[itemId] })).filter(r => r.title);
     }

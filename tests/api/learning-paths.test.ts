@@ -21,12 +21,22 @@ vi.mock('@/lib/api-auth', async (importOriginal) => {
 const h = vi.hoisted(() => ({ db: undefined as any }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => h.db }));
 
+// The route schedules completion reconciliation via next/server after(), which throws outside
+// a real Next request scope; run the scheduled task inline so tests can observe it.
+vi.mock('next/server', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('next/server')>();
+  return { ...actual, after: (task: any) => { if (typeof task === 'function') task(); } };
+});
+vi.mock('@/lib/learning-path-progress', () => ({ reconcilePathCompletion: vi.fn() }));
+
 import { requireRole, requireUser } from '@/lib/api-auth';
+import { reconcilePathCompletion } from '@/lib/learning-path-progress';
 import { POST } from '@/app/api/learning-paths/route';
 import { makeSupabaseStub } from '../helpers/supabaseStub';
 
 const mockRole = vi.mocked(requireRole);
 const mockUser = vi.mocked(requireUser);
+const mockReconcile = vi.mocked(reconcilePathCompletion);
 
 function post(body: unknown) {
   return POST(new Request('http://localhost/api/learning-paths', {
@@ -42,6 +52,7 @@ const instructor = { user: { id: 'i1', email: 'i@x.co' }, supabase: {}, role: 'i
 beforeEach(() => {
   mockRole.mockReset();
   mockUser.mockReset();
+  mockReconcile.mockReset();
   h.db = makeSupabaseStub({});
 });
 
@@ -78,5 +89,34 @@ describe('POST /api/learning-paths student read path', () => {
     const res = await post({ action: 'get-student-paths' });
     expect(res.status).toBe(200);
     expect((await res.json()).paths).toEqual([]);
+  });
+
+  it('returns certification items and counts an earlier passing attempt as completed', async () => {
+    mockUser.mockResolvedValue({ user: { id: 's1', email: 's@x.co' }, supabase: {}, token: 't' } as any);
+    h.db = makeSupabaseStub({
+      students: { data: { cohort_id: 'co1' }, error: null },
+      learning_paths: { data: [{ id: 'lp1', title: 'Path', status: 'published', cohort_ids: ['co1'], item_ids: ['cert1'] }], error: null },
+      learning_path_progress: { data: [], error: null },
+      courses: { data: [], error: null },
+      virtual_experiences: { data: [], error: null },
+      certifications: { data: [{ id: 'cert1', title: 'SQL Associate', slug: 'sql-assoc', cover_image: null, description: null }], error: null },
+      course_attempts: { data: [], error: null },
+      guided_project_attempts: { data: [], error: null },
+      // The student passed this certification BEFORE it was added to the path -- it must
+      // still surface as completed (no stored learning_path_progress row exists).
+      certification_attempts: { data: [{ certification_id: 'cert1' }], error: null },
+    });
+
+    const res = await post({ action: 'get-student-paths' });
+    expect(res.status).toBe(200);
+    const { paths } = await res.json();
+    expect(paths).toHaveLength(1);
+    expect(paths[0].items[0]).toMatchObject({ id: 'cert1', title: 'SQL Associate', content_type: 'certification' });
+    expect(paths[0].progress.completed_item_ids).toContain('cert1');
+    // Every item is complete but the stored progress was never finalized (no completed_at /
+    // cert_id) -- the route must schedule the completion reconciliation for this path.
+    expect(mockReconcile).toHaveBeenCalledWith(
+      h.db, 's1', expect.objectContaining({ id: 'lp1', item_ids: ['cert1'] }), ['cert1'],
+    );
   });
 });

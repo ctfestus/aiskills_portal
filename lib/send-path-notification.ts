@@ -16,16 +16,18 @@ export async function sendPathNotification(
   if (!cohortIds.length) return;
 
   const itemIds: string[] = lp.item_ids ?? [];
-  const [{ data: coursesRaw }, { data: vesRaw }] = itemIds.length
+  const [{ data: coursesRaw }, { data: vesRaw }, { data: certsRaw }] = itemIds.length
     ? await Promise.all([
         supabase.from('courses').select('id, title, cover_image').in('id', itemIds),
         supabase.from('virtual_experiences').select('id, title, cover_image').in('id', itemIds),
+        supabase.from('certifications').select('id, title, cover_image').in('id', itemIds),
       ])
-    : [{ data: [] }, { data: [] }];
+    : [{ data: [] }, { data: [] }, { data: [] }];
 
   const contentMap: Record<string, any> = {};
   for (const c of coursesRaw ?? []) contentMap[c.id] = { ...c, content_type: 'course' };
   for (const v of vesRaw     ?? []) contentMap[v.id] = { ...v, content_type: 'virtual_experience' };
+  for (const x of certsRaw   ?? []) contentMap[x.id] = { ...x, content_type: 'certification' };
 
   const items = itemIds.map((id: string) => {
     const f = contentMap[id];
@@ -33,6 +35,7 @@ export async function sendPathNotification(
       title:       f?.title ?? 'Untitled',
       coverImage:  f?.cover_image ?? null,
       isVE:        f?.content_type === 'virtual_experience',
+      isCert:      f?.content_type === 'certification',
       description: undefined as string | undefined,
     };
   });
@@ -48,14 +51,17 @@ export async function sendPathNotification(
   const t            = await getTenantSettings();
   const FROM         = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
   const branding     = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
-  const dashboardUrl = `${t.appUrl}/student?section=courses`;
+  // The student dashboard routes by URL hash, not a section query parameter.
+  const dashboardUrl = `${t.appUrl}/student#learning_paths`;
 
   const failures: string[] = [];
 
   for (const student of students) {
     if (!student.email) continue;
     try {
-      await resend.emails.send({
+      // Resend reports API failures by resolving with { error }, not by throwing --
+      // count both shapes as failures so the caller's "emails failed" response is honest.
+      const { error: sendErr } = await resend.emails.send({
         from: FROM,
         to:   student.email,
         subject: `You've been enrolled in a new learning path: ${lp.title}`,
@@ -68,6 +74,7 @@ export async function sendPathNotification(
           branding,
         }),
       });
+      if (sendErr) throw new Error(`${sendErr.name ?? ''} ${sendErr.message ?? 'send failed'}`.trim());
     } catch (err) {
       console.error(`[send-path-notification] failed to email ${student.email}:`, err);
       failures.push(student.email);

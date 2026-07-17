@@ -658,6 +658,9 @@ CREATE UNIQUE INDEX certificates_unique_active_student_ve
 CREATE UNIQUE INDEX certificates_unique_active_student_certification
   ON public.certificates (certification_id, student_id)
   WHERE revoked = false AND certification_id IS NOT NULL;
+CREATE UNIQUE INDEX certificates_unique_active_student_learning_path
+  ON public.certificates (learning_path_id, student_id)
+  WHERE revoked = false AND learning_path_id IS NOT NULL;
 
 -- ── certificate_defaults ──────────────────────────────────────
 CREATE TABLE public.certificate_defaults (
@@ -3247,6 +3250,10 @@ AS
     UNION ALL
     SELECT id, title, cover_image, slug, 've'::text AS type
     FROM   public.virtual_experiences
+    WHERE  status = 'published'
+    UNION ALL
+    SELECT id, title, cover_image, slug, 'certification'::text AS type
+    FROM   public.certifications
     WHERE  status = 'published'
   )
   SELECT lp.id           AS path_id,

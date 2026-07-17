@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
-  BookOpen, Award, X, Check, CheckCircle, ChevronRight, ChevronLeft, Play, FileText, Search, Layers, Lock,
+  BookOpen, Award, X, Check, CheckCircle, ChevronRight, ChevronLeft, Play, FileText, Search, Layers, Lock, ShieldCheck,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/components/ThemeProvider';
@@ -412,12 +412,15 @@ function PathRow({ path, C }: { path: any; C: typeof LIGHT_C }) {
           const isCurrent = !done && (idx === 0 || completedIds.includes(items[idx - 1]?.id));
           const isLocked  = !done && !isCurrent;
           const isVE = item.content_type === 'virtual_experience' || item.content_type === 'guided_project' || item.config?.isVirtualExperience || item.config?.isGuidedProject;
-          const href = isVE ? `/student?section=virtual_experiences` : `/${item.slug || item.id}`;
+          const isCert = item.content_type === 'certification';
+          // Direct link for every type: a path item may not be listed in its own section until
+          // it has been attempted, so the card must be the way in (VEs resolve at /{slug} too).
+          const href = `/${item.slug || item.id}`;
           const cover = item.cover_image;
 
           const card = (
             <>
-              <CoverThumbnail cover={cover} Icon={isVE ? Layers : BookOpen}>
+              <CoverThumbnail cover={cover} Icon={isCert ? ShieldCheck : isVE ? Layers : BookOpen}>
                 {/* Status -- check indicator when done, "In progress" pill otherwise */}
                 {!isLocked && (done ? (
                   <span className="absolute top-2 left-2 flex items-center justify-center w-5 h-5 rounded-full shadow-sm"
@@ -437,14 +440,14 @@ function PathRow({ path, C }: { path: any; C: typeof LIGHT_C }) {
                   </span>
                 )}
               </CoverThumbnail>
-              <p className="text-xs mt-2" style={{ color: C.faint }}>{isVE ? 'Virtual Experience' : 'Course'}</p>
+              <p className="text-xs mt-2" style={{ color: C.faint }}>{isCert ? 'Certification' : isVE ? 'Virtual Experience' : 'Course'}</p>
               <p className="text-[15px] font-bold leading-snug mt-0.5 line-clamp-2" style={{ color: C.text }}>{item.title}</p>
             </>
           );
 
           return (
             <div key={item.id} className="flex-shrink-0 w-[220px] snap-start"
-              onMouseEnter={(e) => openHover({ item, isVE, done, isCurrent, isLocked, href }, e.currentTarget)}
+              onMouseEnter={(e) => openHover({ item, isVE, isCert, done, isCurrent, isLocked, href }, e.currentTarget)}
               onMouseLeave={scheduleClose}>
               {isLocked
                 ? <div className="cursor-not-allowed">{card}</div>
@@ -468,6 +471,7 @@ function PathRow({ path, C }: { path: any; C: typeof LIGHT_C }) {
           <PathItemPreview
             item={hover.data.item}
             isVE={hover.data.isVE}
+            isCert={hover.data.isCert}
             done={hover.data.done}
             isCurrent={hover.data.isCurrent}
             isLocked={hover.data.isLocked}
@@ -529,14 +533,14 @@ function CoverThumbnail({ cover, alt = '', Icon = BookOpen, iconClassName = 'w-8
   );
 }
 
-function PathItemPreview({ item, isVE, done, isCurrent, isLocked, href, C }: {
-  item: any; isVE: boolean; done: boolean; isCurrent: boolean; isLocked: boolean; href: string; C: typeof LIGHT_C;
+function PathItemPreview({ item, isVE, isCert, done, isCurrent, isLocked, href, C }: {
+  item: any; isVE: boolean; isCert?: boolean; done: boolean; isCurrent: boolean; isLocked: boolean; href: string; C: typeof LIGHT_C;
 }) {
   const cover = item.cover_image;
   const desc = (item.description || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: C.card, boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)' }}>
-      <CoverThumbnail cover={cover} Icon={isVE ? Layers : BookOpen} iconClassName="w-9 h-9">
+      <CoverThumbnail cover={cover} Icon={isCert ? ShieldCheck : isVE ? Layers : BookOpen} iconClassName="w-9 h-9">
         {!isLocked && (done ? (
           <span className="absolute top-2 left-2 flex items-center justify-center w-5 h-5 rounded-full shadow-sm"
             style={{ background: '#16a34a', color: '#ffffff' }} title="Completed" aria-label="Completed">
@@ -555,7 +559,7 @@ function PathItemPreview({ item, isVE, done, isCurrent, isLocked, href, C }: {
         )}
       </CoverThumbnail>
       <div className="p-5">
-        <p className="text-xs mb-1" style={{ color: C.faint }}>{isVE ? 'Virtual Experience' : 'Course'}</p>
+        <p className="text-xs mb-1" style={{ color: C.faint }}>{isCert ? 'Certification' : isVE ? 'Virtual Experience' : 'Course'}</p>
         <h3 className="text-lg font-bold leading-snug mb-2 line-clamp-2" style={{ color: C.text }}>{item.title}</h3>
         {desc && <p className="text-sm leading-relaxed line-clamp-4 mb-4" style={{ color: C.muted }}>{desc}</p>}
         {isLocked ? (

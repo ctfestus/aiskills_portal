@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { requireStudentUser, isAuthError } from '@/lib/api-auth';
 import { adminClient } from '@/lib/admin-client';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
@@ -6,6 +6,7 @@ import { courseResultEmail } from '@/lib/email-templates';
 import { gradeQuestion, normalizePythonOutput, signProof, verifyProof, sanitizeExamQuestions, assembleExamFormIds, withShuffledOptions, seededRng } from '@/lib/grade-question';
 import { ensureCertificate, awardContentBadge, sendCertificateEmailOnce } from '@/lib/issue-certificate';
 import { retakeReadyAt } from '@/lib/cert-cooldown';
+import { updateLearningPathProgress } from '@/lib/learning-path-progress';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -23,7 +24,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // certification id (UUID) or slug. Access model:
 // - owner (creator) or admin -> full access, including drafts
 // - instructor or staff -> published only (preview / proctor), NOT another creator's draft
-// - student -> published + assigned cohort
+// - student -> published + assigned cohort, directly or through a published learning path
 async function loadAccessibleCertification(
   supabase: ReturnType<typeof adminClient>,
   ref: string,
@@ -43,7 +44,21 @@ async function loadAccessibleCertification(
   const isPublished = (cert as any).status === 'published';
   const cohortAllowed = cohortIds.length === 0 || (!!(student as any)?.cohort_id && cohortIds.includes((student as any).cohort_id));
   const elevatedPublished = (role === 'instructor' || role === 'staff') && isPublished;
-  if (!(isOwner || isAdmin || elevatedPublished || (isPublished && cohortAllowed))) {
+  // A published learning path assigned to the student's cohort grants access to every item in it,
+  // even when the certification's own cohort list does not include that cohort. Mirror the
+  // course-route rule here because this service-role client bypasses RLS.
+  let learningPathAllowed = false;
+  if (!isOwner && !isAdmin && !elevatedPublished && isPublished && !cohortAllowed && (student as any)?.cohort_id) {
+    const { data: path } = await supabase.from('learning_paths')
+      .select('id')
+      .eq('status', 'published')
+      .contains('item_ids', [(cert as any).id])
+      .contains('cohort_ids', [(student as any).cohort_id])
+      .limit(1)
+      .maybeSingle();
+    learningPathAllowed = !!path;
+  }
+  if (!(isOwner || isAdmin || elevatedPublished || (isPublished && (cohortAllowed || learningPathAllowed)))) {
     return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   }
   return { cert };
@@ -154,12 +169,34 @@ export async function POST(req: NextRequest) {
         .from('certifications')
         .select('id, title, slug, cert_type, cover_image, badge_image_url, passmark, time_limit, max_attempts, description, cohort_ids')
         .eq('status', 'published');
+      // Published learning paths assigned to the student's cohort also grant access to the
+      // certifications they contain, even when the certification's own cohort list does not.
+      // Those surface in the catalog only after the student has attempted them from the path,
+      // matching how path-granted courses appear in the Courses section.
+      let pathItemIds = new Set<string>();
+      let attemptedIds = new Set<string>();
+      if (!privileged && cohortId) {
+        const { data: lps } = await supabase
+          .from('learning_paths')
+          .select('item_ids')
+          .eq('status', 'published')
+          .contains('cohort_ids', [cohortId]);
+        pathItemIds = new Set((lps ?? []).flatMap((p: any) => Array.isArray(p.item_ids) ? p.item_ids : []));
+        if (pathItemIds.size) {
+          const { data: atts } = await supabase
+            .from('certification_attempts')
+            .select('certification_id')
+            .eq('student_id', sessionUser.id);
+          attemptedIds = new Set((atts ?? []).map((a: any) => a.certification_id));
+        }
+      }
       // A certification with no assigned cohorts is open to everyone; otherwise the student's cohort
-      // must be in the list. Privileged users see all.
+      // must be in the list, or a learning path must grant it AND the student must have started it.
+      // Privileged users see all.
       const visible = (rows ?? []).filter((r: any) => {
         if (privileged) return true;
         const cids = Array.isArray(r.cohort_ids) ? r.cohort_ids : [];
-        return cids.length === 0 || (cohortId && cids.includes(cohortId));
+        return cids.length === 0 || (cohortId && cids.includes(cohortId)) || (pathItemIds.has(r.id) && attemptedIds.has(r.id));
       });
       // Never leak cohort_ids to the client.
       return NextResponse.json({ certifications: visible.map(({ cohort_ids, ...m }: any) => m) });
@@ -610,6 +647,10 @@ export async function POST(req: NextRequest) {
 
       let certId: string | undefined;
       if (passed) {
+        // A passing attempt completes this certification inside any learning path that contains it.
+        // after() runs once the response is sent, so serverless cannot cut it off mid-write (the
+        // path certificate and next-up email for a final item are only ever created here).
+        after(() => updateLearningPathProgress(supabase, sessionUser.id, certification_id));
         try {
           const { data: studentRow } = await supabase.from('students').select('full_name').eq('id', sessionUser.id).single();
           const studentName = studentRow?.full_name?.trim() || sessionUser.email;

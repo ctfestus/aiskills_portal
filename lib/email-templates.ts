@@ -687,7 +687,7 @@ export function learningPathAssignedEmail(data: {
   pathTitle: string;
   pathDescription?: string;
   dashboardUrl: string;
-  items: Array<{ title: string; coverImage?: string | null; isVE?: boolean; description?: string }>;
+  items: Array<{ title: string; coverImage?: string | null; isVE?: boolean; isCert?: boolean; description?: string }>;
   branding?: EmailBranding;
 }) {
   const { name, pathTitle, pathDescription, dashboardUrl, items, branding } = data;
@@ -697,9 +697,9 @@ export function learningPathAssignedEmail(data: {
   const itemsHtml = visibleItems.map((item, idx) => {
     const isLast = idx === visibleItems.length - 1;
     const circleColor = item.isVE ? '#6366f1' : '#22c55e';
-    const badgeColor  = item.isVE ? '#6366f1' : '#3b82f6';
-    const badgeLabel  = item.isVE ? 'Virtual Experience' : 'Course';
-    const emoji       = item.isVE ? '💼' : '📘';
+    const badgeColor  = item.isVE ? '#6366f1' : item.isCert ? '#15803d' : '#3b82f6';
+    const badgeLabel  = item.isVE ? 'Virtual Experience' : item.isCert ? 'Certification' : 'Course';
+    const emoji       = item.isVE ? '💼' : item.isCert ? '🎓' : '📘';
 
     const circle = `
       <table cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;">
@@ -808,7 +808,7 @@ export function learningPathCertificateEmail(data: {
   pathTitle: string;
   pathDescription?: string;
   certUrl: string;
-  items: Array<{ title: string; coverImage?: string | null; isVE?: boolean }>;
+  items: Array<{ title: string; coverImage?: string | null; isVE?: boolean; isCert?: boolean }>;
   badgeName?: string;
   badgeImageUrl?: string;
   branding?: EmailBranding;
@@ -826,10 +826,10 @@ export function learningPathCertificateEmail(data: {
               <img src="${resolveCoverUrl(item.coverImage)}" width="64" height="52" style="display:block;width:64px;height:52px;object-fit:cover;" />
             </td>` : `
             <td width="64" style="padding:0;vertical-align:middle;background:linear-gradient(135deg,#064e3b,#065f46);text-align:center;height:52px;">
-              <span style="font-size:20px;line-height:52px;">${item.isVE ? '💼' : '📘'}</span>
+              <span style="font-size:20px;line-height:52px;">${item.isVE ? '💼' : item.isCert ? '🎓' : '📘'}</span>
             </td>`}
             <td style="padding:10px 14px;vertical-align:middle;">
-              <p style="margin:0 0 2px;font-size:10px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:0.05em;">${item.isVE ? 'Virtual Experience' : 'Course'} · Completed ✓</p>
+              <p style="margin:0 0 2px;font-size:10px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:0.05em;">${item.isVE ? 'Virtual Experience' : item.isCert ? 'Certification' : 'Course'} · Completed ✓</p>
               <p style="margin:0;font-size:13px;font-weight:700;color:#111827;">${item.title}</p>
             </td>
           </tr>
@@ -884,11 +884,12 @@ export function courseCompletedNextUpEmail(data: {
   nextUrl: string;
   nextCoverImage?: string | null;
   nextIsVE?: boolean;
+  nextIsCert?: boolean;
   nextDescription?: string | null;
   branding?: EmailBranding;
 }) {
-  const { name, pathTitle, completedTitle, completedNumber, totalItems, nextTitle, nextUrl, nextCoverImage, nextIsVE, nextDescription, branding } = data;
-  const emoji = nextIsVE ? '💼' : '📘';
+  const { name, pathTitle, completedTitle, completedNumber, totalItems, nextTitle, nextUrl, nextCoverImage, nextIsVE, nextIsCert, nextDescription, branding } = data;
+  const emoji = nextIsVE ? '💼' : nextIsCert ? '🎓' : '📘';
 
   const content = `
     <p><b>Hi ${esc(name)},</b></p>
@@ -910,7 +911,7 @@ export function courseCompletedNextUpEmail(data: {
           <p style="margin:0 0 3px;font-size:13px;font-weight:700;color:#111827;line-height:1.35;font-family:Arial,sans-serif;">${nextTitle}</p>
           ${nextDescription
             ? `<p style="margin:0;font-size:12px;color:#6b7280;line-height:1.4;font-family:Arial,sans-serif;">${nextDescription}</p>`
-            : `<p style="margin:0;font-size:11px;font-weight:600;color:#6366f1;text-transform:uppercase;letter-spacing:0.05em;font-family:Arial,sans-serif;">${nextIsVE ? 'Virtual Experience' : 'Course'}</p>`}
+            : `<p style="margin:0;font-size:11px;font-weight:600;color:#15803d;text-transform:uppercase;letter-spacing:0.05em;font-family:Arial,sans-serif;">${nextIsVE ? 'Virtual Experience' : nextIsCert ? 'Certification' : 'Course'}</p>`}
         </td>
         <td width="36" style="padding:0 12px;text-align:center;vertical-align:middle;">
           <span style="font-size:18px;color:#9ca3af;font-family:Arial,sans-serif;"></span>

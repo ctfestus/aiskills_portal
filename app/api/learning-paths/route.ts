@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { requireStudentUser, requireRole, isAuthError } from '@/lib/api-auth';
 import { createClient } from '@supabase/supabase-js';
 import { sendPathNotification } from '@/lib/send-path-notification';
+import { reconcilePathCompletion } from '@/lib/learning-path-progress';
 
 function adminClient() {
   return createClient(
@@ -188,32 +189,40 @@ export async function POST(req: NextRequest) {
 
     // Fetch content metadata for all item_ids across all paths
     const allItemIds = [...new Set(paths.flatMap((p: any) => p.item_ids ?? []))];
-    const [{ data: coursesRaw }, { data: vesRaw }] = allItemIds.length
+    // Published only: an item unpublished after being added to a path must not leak its
+    // metadata to students (it falls back to the Unknown placeholder below).
+    const [{ data: coursesRaw }, { data: vesRaw }, { data: certsRaw }] = allItemIds.length
       ? await Promise.all([
-          supabase.from('courses').select('id, title, slug, cover_image, description').in('id', allItemIds),
-          supabase.from('virtual_experiences').select('id, title, slug, cover_image, description').in('id', allItemIds),
+          supabase.from('courses').select('id, title, slug, cover_image, description').in('id', allItemIds).eq('status', 'published'),
+          supabase.from('virtual_experiences').select('id, title, slug, cover_image, description').in('id', allItemIds).eq('status', 'published'),
+          supabase.from('certifications').select('id, title, slug, cover_image, description').in('id', allItemIds).eq('status', 'published'),
         ])
-      : [{ data: [] }, { data: [] }];
+      : [{ data: [] }, { data: [] }, { data: [] }];
 
     const formMap: Record<string, any> = {};
     for (const c of coursesRaw ?? []) formMap[c.id] = { ...c, content_type: 'course' };
     for (const v of vesRaw     ?? []) formMap[v.id] = { ...v, content_type: 'virtual_experience' };
+    for (const t of certsRaw   ?? []) formMap[t.id] = { ...t, content_type: 'certification' };
 
     // Determine which items the student has actually completed by checking
-    // course_attempts and guided_project_attempts directly -- this covers
-    // courses completed before the learning path feature was deployed.
-    const [{ data: courseAttempts }, { data: veAttempts }] = await Promise.all([
+    // course_attempts, guided_project_attempts and certification_attempts directly -- this
+    // covers items completed before they were added to a learning path.
+    const [{ data: courseAttempts }, { data: veAttempts }, { data: certAttempts }] = await Promise.all([
       allItemIds.length
         ? supabase.from('course_attempts').select('course_id').eq('student_id', user.id).eq('passed', true).not('completed_at', 'is', null).in('course_id', allItemIds)
         : { data: [] },
       allItemIds.length
         ? supabase.from('guided_project_attempts').select('ve_id').eq('student_id', user.id).not('completed_at', 'is', null).in('ve_id', allItemIds)
         : { data: [] },
+      allItemIds.length
+        ? supabase.from('certification_attempts').select('certification_id').eq('student_id', user.id).eq('passed', true).in('certification_id', allItemIds)
+        : { data: [] },
     ]);
 
     const actuallyCompleted = new Set([
       ...(courseAttempts ?? []).map((a: any) => a.course_id),
       ...(veAttempts ?? []).map((a: any) => a.ve_id),
+      ...(certAttempts ?? []).map((a: any) => a.certification_id),
     ]);
 
     const result = paths.map((path: any) => {
@@ -232,6 +241,19 @@ export async function POST(req: NextRequest) {
         items: (path.item_ids ?? []).map((id: string) => formMap[id] ?? { id, title: 'Unknown' }),
       };
     });
+
+    // Historical attempts can complete every item without the stored progress ever being
+    // finalized -- no completed_at, so no certificate, badge, or completion email. Reconcile
+    // after the response is sent so those side effects run exactly once without slowing
+    // the dashboard load.
+    for (const p of result) {
+      const itemIds: string[] = p.item_ids ?? [];
+      const done: string[] = p.progress?.completed_item_ids ?? [];
+      const finished = itemIds.length > 0 && itemIds.every((id: string) => done.includes(id));
+      if (finished && (!p.progress?.completed_at || !p.progress?.cert_id)) {
+        after(() => reconcilePathCompletion(supabase, user.id, { id: p.id, title: p.title, item_ids: itemIds, next_path_id: p.next_path_id }, done));
+      }
+    }
 
     return NextResponse.json({ paths: result });
   }
