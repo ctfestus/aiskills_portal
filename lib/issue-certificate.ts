@@ -61,35 +61,82 @@ export async function awardContentBadge(
   if (studentBadgesErr) console.error('[awardContentBadge] student_badges upsert failed', studentBadgesErr);
 }
 
-// Send a certificate email at most once, using email_dedup as an insert-as-lock keyed by the cert id.
-// On 23505 a prior caller already holds the lock: 'sent' = done; otherwise the prior holder crashed
-// before sending -- logged so the stale row can be cleared and the next call re-acquires.
+// A 'pending' email_dedup lock older than this belongs to a sender that crashed mid-send;
+// younger pending locks are presumed live (a real send settles in seconds) and left alone.
+const STALE_EMAIL_LOCK_MINUTES = 15;
+
+// Send a certificate email at most once, using email_dedup as an insert-as-lock keyed by the
+// cert id (or any stable dedupe key). Recovery-safe:
+// - provider failure: Resend reports API errors by RESOLVING with { error } (it does not
+//   throw), so both shapes are treated as a failed send -- the pending lock is released
+//   before the error propagates, and the caller's next run can retry;
+// - crashed sender: a pending lock older than STALE_EMAIL_LOCK_MINUTES is reclaimed via a
+//   conditional update -- the row lock serializes rival reclaimers, the loser's filter
+//   re-evaluates against the refreshed sent_at and matches nothing;
+// - lease ownership: sent_at doubles as a client-generated lease token; release and
+//   mark-sent are scoped to OUR token, so a sender that outlived the staleness window
+//   cannot delete or complete a lock someone else has since reclaimed;
+// - duplicate delivery: the deterministic Resend idempotency key makes a resend after a
+//   crash-between-accept-and-mark-sent a no-op at the provider (keys are held ~24h);
+// - 'sent' is final: never resent.
+// Returns true when the email is settled (sent now, sent previously, or email disabled) and
+// false when a fresh pending lock is held by another live sender -- callers that gate a
+// commit marker on the email (learning-path completion) must NOT finalize on false.
 export async function sendCertificateEmailOnce(
   supabase: Admin,
   { certId, dedupeType, from, to, subject, html }:
     { certId: string; dedupeType: string; from: string; to: string; subject: string; html: string },
-): Promise<void> {
-  if (!process.env.RESEND_API_KEY) return;
+): Promise<boolean> {
+  if (!process.env.RESEND_API_KEY) return true;
+
+  const leaseToken = new Date().toISOString();
 
   const { error: lockErr } = await supabase.from('email_dedup')
-    .insert({ dedupe_key: certId, type: dedupeType });
+    .insert({ dedupe_key: certId, type: dedupeType, sent_at: leaseToken });
   if (lockErr) {
-    if (lockErr.code === '23505') {
-      const { data: existing } = await supabase.from('email_dedup')
-        .select('status').eq('dedupe_key', certId).eq('type', dedupeType).maybeSingle();
-      if (existing?.status !== 'sent') {
-        console.error('[sendCertificateEmailOnce] stale pending lock -- email may not have been sent, delete the email_dedup row to unblock', { certId, dedupeType });
-      }
-    } else {
+    if (lockErr.code !== '23505') {
       console.error('[sendCertificateEmailOnce] email_dedup lock failed', lockErr);
+      return false;
     }
-    return;
+    const { data: existing } = await supabase.from('email_dedup')
+      .select('status').eq('dedupe_key', certId).eq('type', dedupeType).maybeSingle();
+    if (existing?.status === 'sent') return true;
+
+    // Pending lock from another run: take over its lease only when stale.
+    const cutoff = new Date(Date.now() - STALE_EMAIL_LOCK_MINUTES * 60_000).toISOString();
+    const { data: reclaimed } = await supabase.from('email_dedup')
+      .update({ sent_at: leaseToken })
+      .eq('dedupe_key', certId).eq('type', dedupeType)
+      .eq('status', 'pending').lt('sent_at', cutoff)
+      .select('id');
+    if (!(reclaimed ?? []).length) return false; // fresh lock -- its sender is presumed live
   }
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  await resend.emails.send({ from, to, subject, html });
+  try {
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const { error: sendApiErr } = await resend.emails.send(
+      { from, to, subject, html },
+      { idempotencyKey: `${dedupeType}/${certId}` },
+    );
+    if (sendApiErr) throw new Error(`Resend send failed: ${sendApiErr.name ?? ''} ${sendApiErr.message ?? ''}`.trim());
+  } catch (sendErr) {
+    // Release OUR lease so the next run can retry, then surface the failure to the caller.
+    const { error: releaseErr } = await supabase.from('email_dedup')
+      .delete()
+      .eq('dedupe_key', certId).eq('type', dedupeType)
+      .eq('status', 'pending').eq('sent_at', leaseToken);
+    if (releaseErr) console.error('[sendCertificateEmailOnce] failed to release pending lock', releaseErr);
+    throw sendErr;
+  }
 
+  // Scoped to our lease: if another sender reclaimed the lock meanwhile, completion is theirs.
   const { error: markSentErr } = await supabase.from('email_dedup')
-    .update({ status: 'sent' }).eq('dedupe_key', certId).eq('type', dedupeType);
-  if (markSentErr) console.error('[sendCertificateEmailOnce] email_dedup mark-sent failed', markSentErr);
+    .update({ status: 'sent', sent_at: new Date().toISOString() })
+    .eq('dedupe_key', certId).eq('type', dedupeType)
+    .eq('status', 'pending').eq('sent_at', leaseToken);
+  if (markSentErr) {
+    console.error('[sendCertificateEmailOnce] email_dedup mark-sent failed', markSentErr);
+    return false;
+  }
+  return true;
 }

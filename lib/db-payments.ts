@@ -482,7 +482,8 @@ export async function recordPayment(db: SupabaseClient, input: RecordPaymentInpu
         const dashboardUrl = t.appUrl || process.env.APP_URL || '';
         const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
 
-        await resend.emails.send({
+        // Resend reports API failures by resolving with { error }, not by throwing.
+        const { error: sendErr } = await resend.emails.send({
           from:    FROM,
           to:      input.payerEmail,
           subject: 'Payment received on your account',
@@ -497,6 +498,7 @@ export async function recordPayment(db: SupabaseClient, input: RecordPaymentInpu
             branding,
           }),
         });
+        if (sendErr) console.error('[db-payments] payment receipt email failed', sendErr);
       } catch { /* non-blocking */ }
     })();
   }
@@ -838,12 +840,19 @@ async function recomputeEnrollmentAccess(
           const dashboardUrl = t.appUrl || process.env.APP_URL || '';
           const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
 
-          await resend.emails.send({
+          // Resend reports API failures by resolving with { error }, not by throwing.
+          const { error: sendErr } = await resend.emails.send({
             from:    FROM,
             to:      studentEmail,
             subject: 'Your account has an overdue payment',
             html:    overdueNotificationEmail({ name: studentName, dashboardUrl, branding }),
           });
+          // Record the nudge ONLY when Resend accepted the email -- recording a failed
+          // send would suppress the overdue alert for the next 14 days.
+          if (sendErr) {
+            console.error('[db-payments] overdue alert email failed', sendErr);
+            return;
+          }
           await db.from('sent_nudges').insert({ student_id: enroll.student_id, form_id: enrollmentId, nudge_type: 'overdue_alert' });
         } catch { /* non-blocking */ }
       })();

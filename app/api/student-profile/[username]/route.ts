@@ -46,7 +46,7 @@ export async function GET(
   // 3. Certificates (by student_id, non-revoked)
   const { data: certsRaw } = await supabase
     .from('certificates')
-    .select('id, course_id, ve_id, learning_path_id, student_name, issued_at')
+    .select('id, course_id, ve_id, learning_path_id, certification_id, student_name, issued_at')
     .eq('student_id', student.id)
     .eq('revoked', false)
     .order('issued_at', { ascending: false });
@@ -55,6 +55,7 @@ export async function GET(
   const courseIds = [...new Set((certsRaw ?? []).map((c: any) => c.course_id).filter(Boolean))];
   const veIds     = [...new Set((certsRaw ?? []).map((c: any) => c.ve_id).filter(Boolean))];
   const pathIds   = [...new Set((certsRaw ?? []).map((c: any) => c.learning_path_id).filter(Boolean))];
+  const certificationIds = [...new Set((certsRaw ?? []).map((c: any) => c.certification_id).filter(Boolean))];
 
   const [{ data: coursesRaw }, { data: vesRaw }, { data: pathsRaw }] = await Promise.all([
     courseIds.length ? supabase.from('courses').select('id, title, cover_image').in('id', courseIds) : Promise.resolve({ data: [] }),
@@ -66,30 +67,36 @@ export async function GET(
   const veMap:     Record<string, any> = Object.fromEntries((vesRaw     ?? []).map((r: any) => [r.id, r]));
   const pathMap:   Record<string, any> = Object.fromEntries((pathsRaw   ?? []).map((r: any) => [r.id, r]));
 
-  // Resolve learning path item titles + cover images for tooltips
+  // Resolve learning path item titles + cover images for tooltips, plus metadata for
+  // certifications (both as path items and as earned certification certificates).
   const allItemIds = [...new Set((pathsRaw ?? []).flatMap((p: any) => p.item_ids ?? []))];
-  const [{ data: pathCourses }, { data: pathVes }] = await Promise.all([
+  const certMetaIds = [...new Set([...allItemIds, ...certificationIds])];
+  const [{ data: pathCourses }, { data: pathVes }, { data: certificationsRaw }] = await Promise.all([
     allItemIds.length ? supabase.from('courses').select('id, title, cover_image').in('id', allItemIds) : Promise.resolve({ data: [] }),
     allItemIds.length ? supabase.from('virtual_experiences').select('id, title, cover_image').in('id', allItemIds) : Promise.resolve({ data: [] }),
+    certMetaIds.length ? supabase.from('certifications').select('id, title, cover_image').in('id', certMetaIds) : Promise.resolve({ data: [] }),
   ]);
+  const certificationMap: Record<string, any> = Object.fromEntries((certificationsRaw ?? []).map((r: any) => [r.id, r]));
   const itemMap: Record<string, { title: string; coverImage: string | null }> = Object.fromEntries([
-    ...(pathCourses ?? []).map((r: any) => [r.id, { title: r.title, coverImage: r.cover_image ?? null }]),
-    ...(pathVes     ?? []).map((r: any) => [r.id, { title: r.title, coverImage: r.cover_image ?? null }]),
+    ...(pathCourses       ?? []).map((r: any) => [r.id, { title: r.title, coverImage: r.cover_image ?? null }]),
+    ...(pathVes           ?? []).map((r: any) => [r.id, { title: r.title, coverImage: r.cover_image ?? null }]),
+    ...(certificationsRaw ?? []).map((r: any) => [r.id, { title: r.title, coverImage: r.cover_image ?? null }]),
   ]);
 
   const allCerts = (certsRaw ?? []).map((c: any) => {
     const isCourse = !!c.course_id;
     const isVE     = !!c.ve_id;
     const isPath   = !!c.learning_path_id;
-    const content  = isCourse ? courseMap[c.course_id] : isVE ? veMap[c.ve_id] : isPath ? pathMap[c.learning_path_id] : null;
-    const contentType = isCourse ? 'course' : isVE ? 'virtual_experience' : isPath ? 'learning_path' : 'course';
+    const isCertn  = !!c.certification_id;
+    const content  = isCourse ? courseMap[c.course_id] : isVE ? veMap[c.ve_id] : isPath ? pathMap[c.learning_path_id] : isCertn ? certificationMap[c.certification_id] : null;
+    const contentType = isCourse ? 'course' : isVE ? 'virtual_experience' : isPath ? 'learning_path' : isCertn ? 'certification' : 'course';
     const pathItems = isPath
       ? (content?.item_ids ?? []).map((id: string) => itemMap[id]).filter(Boolean)
       : undefined;
     return {
       id:          c.id,
       studentName: c.student_name,
-      courseName:  content?.title || (isVE ? 'Virtual Experience' : isPath ? 'Learning Path' : 'Course'),
+      courseName:  content?.title || (isVE ? 'Virtual Experience' : isPath ? 'Learning Path' : isCertn ? 'Certification' : 'Course'),
       coverImage:  content?.cover_image ?? null,
       contentType,
       issuedAt:    c.issued_at,
@@ -97,9 +104,10 @@ export async function GET(
     };
   });
 
-  const certificates    = allCerts.filter((c: any) => c.contentType === 'course');
-  const virtualExpCerts = allCerts.filter((c: any) => c.contentType === 'virtual_experience');
-  const pathCerts       = allCerts.filter((c: any) => c.contentType === 'learning_path');
+  const certificates       = allCerts.filter((c: any) => c.contentType === 'course');
+  const virtualExpCerts    = allCerts.filter((c: any) => c.contentType === 'virtual_experience');
+  const pathCerts          = allCerts.filter((c: any) => c.contentType === 'learning_path');
+  const certificationCerts = allCerts.filter((c: any) => c.contentType === 'certification');
 
   // 5. Leaderboard rank within cohort
   let leaderboardRank: number | null = null;
@@ -151,5 +159,6 @@ export async function GET(
     certificates,
     virtualExpCerts,
     pathCerts,
+    certificationCerts,
   });
 }

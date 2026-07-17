@@ -495,7 +495,7 @@ function CertCard({ cert, t, isDark }: { cert: any; t: typeof LIGHT; isDark: boo
           </div>
           {pathItems.length > 0 && (
             <p style={{ fontSize: 10, color: t.accent, margin: '5px 0 0', fontWeight: 700, letterSpacing: '0.04em' }}>
-              {pathItems.length} COURSE{pathItems.length !== 1 ? 'S' : ''}
+              {pathItems.length} ITEM{pathItems.length !== 1 ? 'S' : ''}
             </p>
           )}
         </div>
@@ -635,9 +635,9 @@ export default function StudentPublicProfile() {
     </div>
   );
 
-  const { profile, certificates, virtualExpCerts, pathCerts } = data;
+  const { profile, certificates, virtualExpCerts, pathCerts, certificationCerts } = data;
   const portfolioItems = (profile.portfolioItems ?? []) as any[];
-  const allCerts       = [...(certificates ?? []), ...(virtualExpCerts ?? []), ...(pathCerts ?? [])];
+  const allCerts       = [...(certificates ?? []), ...(virtualExpCerts ?? []), ...(pathCerts ?? []), ...(certificationCerts ?? [])];
   const hasWork        = (profile.workExperience ?? []).length > 0;
   const hasEdu         = (profile.education ?? []).length > 0;
   const hasCerts       = allCerts.length > 0;
@@ -780,6 +780,17 @@ export default function StudentPublicProfile() {
                 <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: t.faint, margin: '0 0 14px' }}>Learning Paths</p>
                 <div className="p-certs-grid">
                   {(pathCerts ?? []).map((cert: any) => (
+                    <CertCard key={cert.id} cert={cert} t={t} isDark={isDark} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(certificationCerts ?? []).length > 0 && (
+              <div style={{ marginBottom: 32 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: t.faint, margin: '0 0 14px' }}>Certifications</p>
+                <div className="p-certs-grid">
+                  {(certificationCerts ?? []).map((cert: any) => (
                     <CertCard key={cert.id} cert={cert} t={t} isDark={isDark} />
                   ))}
                 </div>

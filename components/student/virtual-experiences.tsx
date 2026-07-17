@@ -474,15 +474,8 @@ export function VirtualExperiencesSection({ userId, userEmail, C }: { userId: st
       const { data: profile } = await supabase.from('students').select('cohort_id').eq('id', userId).maybeSingle();
       if (!profile?.cohort_id) { setLoading(false); return; }
 
-      const veQuery = supabase
-        .from('virtual_experiences')
-        .select('id, title, slug, cover_image, modules, industry, difficulty, role, company, duration, tools, tagline, deadline_days, cohort_ids, status')
-        .eq('status', 'published')
-        .contains('cohort_ids', [profile.cohort_id]);
-
-      const { data: veRows } = await veQuery;
-
-      const forms = (veRows ?? []).map((ve: any) => ({
+      const veSelect = 'id, title, slug, cover_image, modules, industry, difficulty, role, company, duration, tools, tagline, deadline_days, cohort_ids, status';
+      const normalizeVe = (ve: any) => ({
         ...ve,
         content_type: 'virtual_experience',
         config: {
@@ -498,25 +491,48 @@ export function VirtualExperiencesSection({ userId, userEmail, C }: { userId: st
           tools: ve.tools,
           tagline: ve.tagline,
         },
-      }));
+      });
 
+      const [{ data: veRows }, { data: attRows }] = await Promise.all([
+        supabase
+          .from('virtual_experiences')
+          .select(veSelect)
+          .eq('status', 'published')
+          .contains('cohort_ids', [profile.cohort_id]),
+        supabase
+          .from('guided_project_attempts')
+          .select('*')
+          .eq('student_id', userId),
+      ]);
+
+      const cohortForms = (veRows ?? []).map(normalizeVe);
+
+      // Merge: VEs the student has attempted that are not directly assigned to the cohort
+      // (e.g. started from a learning path) -- matches how the Courses section surfaces
+      // attempted extra courses. RLS grants the read through the published learning path.
+      const cohortVeIds = new Set(cohortForms.map((f: any) => f.id));
+      const extraIds = [...new Set((attRows ?? []).map((a: any) => a.ve_id))].filter(id => id && !cohortVeIds.has(id));
+      let extraForms: any[] = [];
+      if (extraIds.length) {
+        const { data: extraRows } = await supabase
+          .from('virtual_experiences')
+          .select(veSelect)
+          .eq('status', 'published')
+          .in('id', extraIds);
+        extraForms = (extraRows ?? []).map(normalizeVe);
+      }
+
+      const forms = [...cohortForms, ...extraForms];
       setItems(forms);
 
       if (forms.length) {
         const ids = forms.map((f: any) => f.id);
-        const [{ data: attRows }, { data: assignments }] = await Promise.all([
-          supabase
-            .from('guided_project_attempts')
-            .select('*')
-            .eq('student_id', userId)
-            .in('ve_id', ids),
-          supabase
-            .from('cohort_assignments')
-            .select('content_id, assigned_at')
-            .eq('cohort_id', profile.cohort_id)
-            .eq('content_type', 'virtual_experience')
-            .in('content_id', ids),
-        ]);
+        const { data: assignments } = await supabase
+          .from('cohort_assignments')
+          .select('content_id, assigned_at')
+          .eq('cohort_id', profile.cohort_id)
+          .eq('content_type', 'virtual_experience')
+          .in('content_id', ids);
         const attMap: Record<string, any> = {};
         for (const a of attRows ?? []) attMap[a.ve_id] = a;
         setAttempts(attMap);

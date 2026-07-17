@@ -13,6 +13,7 @@ import { LIGHT_C, cardStyle } from '@/lib/theme';
 export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] }) {
   const [paths, setPaths]           = useState<any[]>([]);
   const [cohorts, setCohorts]       = useState<any[]>([]);
+  const [certOptions, setCertOptions] = useState<any[]>([]);
   const [loading, setLoading]       = useState(true);
   const [editing, setEditing]       = useState<any | null>(null);
   const [saving, setSaving]         = useState(false);
@@ -31,17 +32,21 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
   const publishedForms = forms.filter(f => f.status === 'published');
   const courseOptions  = publishedForms.filter(f => f.content_type === 'course' || f.config?.isCourse);
   const veOptions      = publishedForms.filter(f => f.content_type === 'virtual_experience' || f.content_type === 'guided_project' || f.config?.isVirtualExperience || f.config?.isGuidedProject);
-  const allOptions     = [...courseOptions, ...veOptions];
+  const allOptions     = [...courseOptions, ...veOptions, ...certOptions];
 
   const load = async () => {
     setLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
-    const [res, { data: coh }] = await Promise.all([
+    // Certifications live in their own table (not `forms`); RLS scopes this read to the
+    // caller's own certifications (admins see all), matching the course options above.
+    const [res, { data: coh }, { data: certs }] = await Promise.all([
       fetch('/api/learning-paths', { headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {} }),
       supabase.from('cohorts').select('id, name').order('name'),
+      supabase.from('certifications').select('id, title').eq('status', 'published').order('title'),
     ]);
     if (res.ok) { const { paths: p } = await res.json(); setPaths(p ?? []); }
     setCohorts(coh ?? []);
+    setCertOptions((certs ?? []).map((c: any) => ({ ...c, content_type: 'certification' })));
     setLoading(false);
   };
 
@@ -176,7 +181,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
         {(() => {
           const LP_SECTIONS = [
             { id: 'details', label: 'Basic Information & Cohorts' },
-            { id: 'content', label: 'Add Courses & Virtual Experiences' },
+            { id: 'content', label: 'Add Courses, Virtual Experiences & Certifications' },
           ] as const;
           const si = LP_SECTIONS.findIndex(s => s.id === lpSection);
           return (
@@ -329,7 +334,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
                     <div key={c.id} onClick={() => toggleCohort(c.id)}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors"
                       style={{ background: selected ? `${C.green}14` : C.pill }}>
-                      <div className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center" style={{ background: selected ? C.green : C.cardBorder }}>
+                      <div className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border-2" style={{ background: selected ? C.green : 'transparent', borderColor: selected ? C.green : C.faint }}>
                         {selected && <Check className="w-2.5 h-2.5 text-white"/>}
                       </div>
                       <span className="text-sm" style={{ color: C.text }}>{c.name}</span>
@@ -350,12 +355,13 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
 
         {/* Item selection -- grouped by type */}
         {allOptions.length === 0 ? (
-          <p className="text-sm" style={{ color: C.muted }}>No published courses or virtual experiences found.</p>
+          <p className="text-sm" style={{ color: C.muted }}>No published courses, virtual experiences, or certifications found.</p>
         ) : (
           <div className="space-y-5">
             {([
               { label: 'Courses', items: courseOptions },
               { label: 'Virtual Experiences', items: veOptions },
+              { label: 'Certifications', items: certOptions },
             ] as const).filter(g => g.items.length > 0).map(group => (
               <div key={group.label} className="space-y-1.5">
                 <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>{group.label}</h3>
@@ -366,7 +372,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
                       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleItem(f.id); } }}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors"
                       style={{ background: selected ? `${C.green}14` : C.pill }}>
-                      <div className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center" style={{ background: selected ? C.green : C.cardBorder }}>
+                      <div className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border-2" style={{ background: selected ? C.green : 'transparent', borderColor: selected ? C.green : C.faint }}>
                         {selected && <Check className="w-2.5 h-2.5 text-white"/>}
                       </div>
                       <span className="text-sm flex-1 truncate" style={{ color: C.text }}>{f.title}</span>
@@ -386,11 +392,12 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
               {selectedIds.map((id, idx) => {
                 const f = allOptions.find((x: any) => x.id === id);
                 const isVE = f && (f.content_type === 'virtual_experience' || f.content_type === 'guided_project' || f.config?.isVirtualExperience || f.config?.isGuidedProject);
+                const isCert = f?.content_type === 'certification';
                 return (
                   <div key={id} className="flex items-center gap-2 px-3 py-2.5 rounded-xl" style={{ background: C.pill }}>
                     <span className="text-xs font-bold w-5 text-center flex-shrink-0" style={{ color: C.faint }}>{idx + 1}</span>
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: C.card, color: C.muted }}>
-                      {isVE ? 'VE' : 'Course'}
+                      {isCert ? 'Cert' : isVE ? 'VE' : 'Course'}
                     </span>
                     <span className="text-sm flex-1 truncate" style={{ color: C.text }}>{f?.title ?? id}</span>
                     <button onClick={() => moveItem(idx, -1)} disabled={idx === 0} className="p-1 rounded opacity-50 hover:opacity-100 disabled:opacity-20"><ArrowLeft className="w-3 h-3 rotate-90" style={{ color: C.muted }}/></button>
@@ -427,7 +434,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <p className="text-sm" style={{ color: C.faint }}>Group courses and virtual experiences into structured learning journeys.</p>
+        <p className="text-sm" style={{ color: C.faint }}>Group courses, virtual experiences, and certifications into structured learning journeys.</p>
         <button onClick={() => { setLpSection('details'); setEditing({ title: '', description: '', cover_image: '', item_ids: [], cohort_ids: [], status: 'draft', next_path_id: null }); }}
           className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-80 transition-opacity"
           style={{ background: C.cta, color: C.ctaText }}>

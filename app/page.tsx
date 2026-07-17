@@ -171,7 +171,7 @@ const OFFERING_ICONS = [BookOpen, Calendar, Briefcase, Award];
 // Icon map for highlights (fixed set, text comes from config)
 const HIGHLIGHT_ICONS = [BookOpen, Award, Calendar, Briefcase, TrendingUp, User, Check, Zap];
 
-type PathCourse = { id: string; title: string; imageUrl: string; slug: string; type?: 'course' | 've' };
+type PathCourse = { id: string; title: string; imageUrl: string; slug: string; type?: 'course' | 've' | 'certification' };
 
 type ProgrammeItem = {
   id: string; title: string; description: string;
