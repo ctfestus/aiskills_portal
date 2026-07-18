@@ -28,15 +28,18 @@ vi.mock('next/server', async (importOriginal) => {
   return { ...actual, after: (task: any) => { if (typeof task === 'function') task(); } };
 });
 vi.mock('@/lib/learning-path-progress', () => ({ reconcilePathCompletion: vi.fn() }));
+vi.mock('@/lib/send-path-notification', () => ({ sendPathNotification: vi.fn() }));
 
 import { requireRole, requireUser } from '@/lib/api-auth';
 import { reconcilePathCompletion } from '@/lib/learning-path-progress';
+import { sendPathNotification } from '@/lib/send-path-notification';
 import { POST } from '@/app/api/learning-paths/route';
 import { makeSupabaseStub } from '../helpers/supabaseStub';
 
 const mockRole = vi.mocked(requireRole);
 const mockUser = vi.mocked(requireUser);
 const mockReconcile = vi.mocked(reconcilePathCompletion);
+const mockSendPathNotification = vi.mocked(sendPathNotification);
 
 function post(body: unknown) {
   return POST(new Request('http://localhost/api/learning-paths', {
@@ -53,6 +56,8 @@ beforeEach(() => {
   mockRole.mockReset();
   mockUser.mockReset();
   mockReconcile.mockReset();
+  mockSendPathNotification.mockReset();
+  mockSendPathNotification.mockResolvedValue({ total: 0, sent: 0, failed: 0 });
   h.db = makeSupabaseStub({});
 });
 
@@ -78,6 +83,52 @@ describe('POST /api/learning-paths authoring gate', () => {
     const res = await post({ action: 'create', title: 'Path' });
     expect(res.status).toBe(200);
     expect((await res.json()).id).toBe('lp1');
+  });
+
+  it('returns success when the path saves but a notification batch partially fails', async () => {
+    mockRole.mockResolvedValue(instructor as any);
+    mockSendPathNotification.mockResolvedValue({ total: 10, sent: 9, failed: 1 });
+    h.db = makeSupabaseStub({ learning_paths: { data: { id: 'lp1' }, error: null } });
+
+    const res = await post({
+      action: 'create',
+      request_id: '11111111-1111-4111-8111-111111111111',
+      title: 'Path',
+      status: 'published',
+      cohort_ids: ['co1'],
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      id: 'lp1',
+      notification: { total: 10, sent: 9, failed: 1 },
+    });
+  });
+
+  it('reuses a path created by the same request id without resending notifications', async () => {
+    mockRole.mockResolvedValue(instructor as any);
+    const requestId = '11111111-1111-4111-8111-111111111111';
+    h.db = makeSupabaseStub({
+      learning_paths: [
+        { data: null, error: { code: '23505' } },
+        { data: { id: requestId }, error: null },
+      ],
+    });
+
+    const res = await post({
+      action: 'create', request_id: requestId, title: 'Path',
+      status: 'published', cohort_ids: ['co1'],
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ id: requestId, reused: true });
+    expect(mockSendPathNotification).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed create request id', async () => {
+    mockRole.mockResolvedValue(instructor as any);
+    const res = await post({ action: 'create', request_id: 'not-a-uuid', title: 'Path' });
+    expect(res.status).toBe(400);
   });
 });
 

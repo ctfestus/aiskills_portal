@@ -26,6 +26,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
   const [lpSection, setLpSection] = useState<'details' | 'content'>('details');
   const coverInputRef = useRef<HTMLInputElement>(null);
   const badgeInputRef = useRef<HTMLInputElement>(null);
+  const editingBaseline = useRef<string | null>(null);
   const lpScrollRef = useRef<HTMLDivElement>(null);
   const lpScrollBy = (dir: number) => lpScrollRef.current?.scrollBy({ left: dir * 340, behavior: 'smooth' });
 
@@ -107,20 +108,42 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
 
   const save = async () => {
     if (!editing?.title?.trim()) { setSaveMsg({ ok: false, text: 'Title is required.' }); return; }
-    setSaving(true); setSaveMsg(null);
-    const { data: { session } } = await supabase.auth.getSession();
-    const headers = { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) };
-    const action = editing.id ? 'update' : 'create';
-    const res = await fetch('/api/learning-paths', { method: 'POST', headers, body: JSON.stringify({ action, ...editing }) });
-    const json = await res.json();
-    if (res.ok) {
-      setSaveMsg({ ok: true, text: 'Saved!' });
+    setSaving(true);
+    setSaveMsg(null);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers = { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) };
+      const action = editing.id ? 'update' : 'create';
+      const res = await fetch('/api/learning-paths', { method: 'POST', headers, body: JSON.stringify({ action, ...editing }) });
+      const json = await res.json();
+
+      if (!res.ok) {
+        setSaveMsg({ ok: false, text: json.error ?? 'Save failed.' });
+        return;
+      }
+
+      const savedEditing = { ...editing, id: json.id ?? editing.id };
+      setEditing(savedEditing);
+      editingBaseline.current = JSON.stringify(savedEditing);
+
+      const notification = json.notification;
+      const notificationFailed = notification?.error || notification?.failed > 0;
+      const notificationText = notification?.failed > 0
+        ? ` ${notification.failed} notification email${notification.failed === 1 ? '' : 's'} could not be sent after automatic retries.`
+        : notification?.error
+          ? ' Notification emails could not be sent.'
+          : '';
+      setSaveMsg({ ok: true, text: `Saved.${notificationFailed ? notificationText : ''}` });
+
       await load();
-      setTimeout(() => setEditing(null), 800);
-    } else {
-      setSaveMsg({ ok: false, text: json.error ?? 'Save failed.' });
+      setTimeout(() => setEditing(null), notificationFailed ? 2500 : 800);
+    } catch {
+      // New paths carry a stable request_id, so repeating an unconfirmed request is safe.
+      setSaveMsg({ ok: false, text: 'Could not confirm the save. You can safely try again.' });
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const deletePath = async (id: string) => {
@@ -133,6 +156,24 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
     });
     setDeleting(null);
     await load();
+  };
+
+  const openEditor = (path: any) => {
+    setLpSection('details');
+    editingBaseline.current = JSON.stringify(path);
+    setEditing(path);
+  };
+
+  const openNewEditor = () => openEditor({
+    request_id: crypto.randomUUID(), title: '', description: '', cover_image: '',
+    item_ids: [], cohort_ids: [], status: 'draft', next_path_id: null,
+  });
+
+  const closeEditor = () => {
+    const dirty = editingBaseline.current !== null && JSON.stringify(editing) !== editingBaseline.current;
+    if (dirty && !window.confirm('You have unsaved changes. Leave without saving?')) return;
+    setEditing(null);
+    setSaveMsg(null);
   };
 
   const toggleItem = (id: string) => {
@@ -171,7 +212,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
     return (
       <div className="space-y-5">
         <div className="flex items-center gap-3">
-          <button onClick={() => { setEditing(null); setSaveMsg(null); }} className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-xl transition-opacity hover:opacity-70" style={{ background: C.pill, color: C.muted }}>
+          <button onClick={closeEditor} className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-xl transition-opacity hover:opacity-70" style={{ background: C.pill, color: C.muted }}>
             <ArrowLeft className="w-4 h-4"/> Back
           </button>
           <h2 className="text-lg font-bold" style={{ color: C.text }}>{editing.id ? 'Edit Learning Path' : 'New Learning Path'}</h2>
@@ -435,7 +476,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <p className="text-sm" style={{ color: C.faint }}>Group courses, virtual experiences, and certifications into structured learning journeys.</p>
-        <button onClick={() => { setLpSection('details'); setEditing({ title: '', description: '', cover_image: '', item_ids: [], cohort_ids: [], status: 'draft', next_path_id: null }); }}
+        <button onClick={openNewEditor}
           className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-80 transition-opacity"
           style={{ background: C.cta, color: C.ctaText }}>
           <Plus className="w-4 h-4"/> New Path
@@ -449,7 +490,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
           </div>
           <p className="font-semibold text-base mb-1" style={{ color: C.text }}>No learning paths yet</p>
           <p className="text-sm mb-6" style={{ color: C.faint }}>Create your first learning path to group courses into a structured journey.</p>
-          <button onClick={() => { setLpSection('details'); setEditing({ title: '', description: '', cover_image: '', item_ids: [], cohort_ids: [], status: 'draft', next_path_id: null }); }}
+          <button onClick={openNewEditor}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold"
             style={{ background: C.cta, color: C.ctaText }}>
             <Plus className="w-4 h-4"/> New Learning Path
@@ -498,7 +539,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
                     </p>
                   )}
                   <div className="flex gap-2 pt-1">
-                    <button onClick={() => { setLpSection('details'); setEditing(path); }}
+                    <button onClick={() => openEditor(path)}
                       className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl transition-all hover:opacity-80"
                       style={{ background: `${C.green}18`, color: C.green }}>
                       Edit

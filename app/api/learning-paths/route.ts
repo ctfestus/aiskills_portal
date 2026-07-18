@@ -58,10 +58,14 @@ export async function POST(req: NextRequest) {
     const user = await getInstructorUser(req);
     if (user instanceof NextResponse) return user;
 
-    const { title, description, cover_image, badge_image_url, item_ids, cohort_ids, status, next_path_id } = body;
+    const { title, description, cover_image, badge_image_url, item_ids, cohort_ids, status, next_path_id, request_id } = body;
     if (!title?.trim()) return NextResponse.json({ error: 'title is required' }, { status: 400 });
+    if (request_id !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request_id)) {
+      return NextResponse.json({ error: 'request_id must be a UUID' }, { status: 400 });
+    }
 
     const { data, error } = await supabase.from('learning_paths').insert({
+      ...(request_id ? { id: request_id } : {}),
       title: title.trim(),
       description: description ?? null,
       cover_image: cover_image ?? null,
@@ -73,19 +77,42 @@ export async function POST(req: NextRequest) {
       next_path_id: next_path_id ?? null,
     }).select('id').single();
 
-    if (error) { console.error('[learning-paths] create error:', error); return NextResponse.json({ error: 'Failed to create learning path.' }, { status: 500 }); }
+    if (error) {
+      // The browser generates request_id once per new-path editor. If a response was lost
+      // after the insert committed, retrying the same request reuses that row and never
+      // sends the cohort notification a second time.
+      if (error.code === '23505' && request_id) {
+        const { data: existing } = await supabase.from('learning_paths')
+          .select('id').eq('id', request_id).eq('instructor_id', user.id).maybeSingle();
+        if (existing?.id) {
+          return NextResponse.json({
+            id: existing.id,
+            reused: true,
+            notification: { total: 0, sent: 0, failed: 0, skipped: true },
+          });
+        }
+      }
+      console.error('[learning-paths] create error:', error);
+      return NextResponse.json({ error: 'Failed to create learning path.' }, { status: 500 });
+    }
 
-    // Send assignment emails if published with cohorts
+    let notification: any = null;
     if ((status ?? 'draft') === 'published' && (cohort_ids ?? []).length > 0) {
       try {
-        await sendPathNotification(supabase, { id: data.id, title: title.trim(), description, item_ids: item_ids ?? [] }, cohort_ids);
+        notification = await sendPathNotification(
+          supabase,
+          { id: data.id, title: title.trim(), description, item_ids: item_ids ?? [] },
+          cohort_ids,
+        );
       } catch (err) {
         console.error('[learning-paths] create notify error:', err);
-        return NextResponse.json({ error: 'Saved but notification emails failed to send.' }, { status: 500 });
+        notification = { total: 0, sent: 0, failed: null, error: 'Notification service unavailable.' };
       }
     }
 
-    return NextResponse.json({ id: data.id });
+    // The database insert is already committed. Notification problems are partial success,
+    // never a failed save and never a reason for the client to issue another create.
+    return NextResponse.json({ id: data.id, notification });
   }
 
   // -- Update ---
@@ -116,24 +143,30 @@ export async function POST(req: NextRequest) {
 
     if (error) { console.error('[learning-paths] update error:', error); return NextResponse.json({ error: 'Failed to update learning path.' }, { status: 500 }); }
 
-    // Send assignment emails to cohorts that are newly added (or path just published)
+    // Send assignment emails to cohorts that are newly added (or path just published).
+    // As with create, the update remains successful when delivery is only partial.
+    let notification: any = null;
     if ((status ?? 'draft') === 'published' && (cohort_ids ?? []).length > 0) {
       const prevCohorts: string[] = prev?.cohort_ids ?? [];
       const wasPublished = prev?.status === 'published';
       const newCohorts = wasPublished
         ? (cohort_ids ?? []).filter((cid: string) => !prevCohorts.includes(cid))
-        : cohort_ids ?? []; // just published -- notify all cohorts
+        : cohort_ids ?? [];
       if (newCohorts.length > 0) {
         try {
-          await sendPathNotification(supabase, { id, title: title?.trim() ?? '', description, item_ids: item_ids ?? [] }, newCohorts);
+          notification = await sendPathNotification(
+            supabase,
+            { id, title: title?.trim() ?? '', description, item_ids: item_ids ?? [] },
+            newCohorts,
+          );
         } catch (err) {
           console.error('[learning-paths] update notify error:', err);
-          return NextResponse.json({ error: 'Saved but notification emails failed to send.' }, { status: 500 });
+          notification = { total: 0, sent: 0, failed: null, error: 'Notification service unavailable.' };
         }
       }
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, id, notification });
   }
 
   // -- Delete ---
