@@ -36,11 +36,13 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await sendPathNotification(supabase, lp, cohortIds);
+    const notification = await sendPathNotification(supabase, lp, cohortIds);
+    if (notification.failed > 0) {
+      return NextResponse.json({ ok: false, notification }, { status: 502 });
+    }
+    return NextResponse.json({ ok: true, notification });
   } catch (err) {
     console.error('[learning-paths/notify-cohorts] error:', err);
     return NextResponse.json({ error: 'Notification failed.' }, { status: 500 });
   }
-
-  return NextResponse.json({ ok: true });
 }
