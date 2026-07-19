@@ -118,6 +118,19 @@ CREATE TABLE public.responses (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- Learning partners (migration 141)
+CREATE TABLE public.partners (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        text        NOT NULL,
+  logo_url    text,
+  website_url text,
+  description text,
+  is_active   boolean     NOT NULL DEFAULT true,
+  created_by  uuid        REFERENCES public.students(id) ON DELETE SET NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
 -- ── courses (purpose-built — migrated out of forms in migration 030) ──
 CREATE TABLE public.courses (
   id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -148,6 +161,7 @@ CREATE TABLE public.courses (
   lesson_timing   text        CHECK (lesson_timing IN ('before', 'after')),
   show_answers    text        NOT NULL DEFAULT 'per_question'
                               CHECK (show_answers IN ('per_question', 'after_quiz', 'none')),
+  partner_id      uuid        REFERENCES public.partners(id) ON DELETE SET NULL,
   max_attempts    integer     CHECK (max_attempts IS NULL OR max_attempts > 0),
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
@@ -899,6 +913,7 @@ ALTER TABLE public.students                   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cohorts                    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.forms                      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.responses                  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.partners                   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.courses                    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.events                     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.virtual_experiences        ENABLE ROW LEVEL SECURITY;
@@ -976,6 +991,8 @@ CREATE TRIGGER trg_cohorts_updated_at
   BEFORE UPDATE ON public.cohorts FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_forms_updated_at
   BEFORE UPDATE ON public.forms FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE TRIGGER trg_partners_updated_at
+  BEFORE UPDATE ON public.partners FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_courses_updated_at
   BEFORE UPDATE ON public.courses FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_events_updated_at
@@ -1646,6 +1663,20 @@ CREATE POLICY "Instructors manage data center datasets"
 CREATE INDEX IF NOT EXISTS idx_data_center_datasets_published_at
   ON public.data_center_datasets (is_published, created_at DESC)
   WHERE is_published = true;
+
+-- partners (migration 141)
+CREATE POLICY "Students read active partners"
+  ON public.partners FOR SELECT TO authenticated
+  USING (is_active = true);
+
+CREATE POLICY "Instructors manage partners"
+  ON public.partners FOR ALL TO authenticated
+  USING ((SELECT public.is_instructor_or_admin()))
+  WITH CHECK ((SELECT public.is_instructor_or_admin()));
+
+CREATE INDEX IF NOT EXISTS idx_courses_partner_id
+  ON public.courses (partner_id)
+  WHERE partner_id IS NOT NULL;
 
 -- ── virtual_experiences (migration 100: remove group_ids check; standalone VEs are cohort-only) ──
 CREATE POLICY "virtual_experiences: participants select"
@@ -3216,9 +3247,11 @@ DROP VIEW IF EXISTS public.published_learning_paths;
 CREATE VIEW public.published_courses
 WITH (security_barrier = true)
 AS
-  SELECT id, title, description, cover_image, slug, category
-  FROM   public.courses
-  WHERE  status = 'published';
+  SELECT c.id, c.title, c.description, c.cover_image, c.slug, c.category,
+         p.name AS partner_name, p.logo_url AS partner_logo_url
+  FROM public.courses c
+  LEFT JOIN public.partners p ON p.id = c.partner_id AND p.is_active = true
+  WHERE c.status = 'published';
 
 GRANT SELECT ON public.published_courses TO anon, authenticated;
 

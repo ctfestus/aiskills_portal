@@ -25,6 +25,8 @@ export interface CertificateData {
   settings:         Record<string, any> | null;
   pathItems?:       { id: string; title: string; coverImage: string | null }[];
   pathCoverImage?:  string | null;
+  partnerName?:     string | null;
+  partnerLogoUrl?:  string | null;
 }
 
 export type CertificateResult =
@@ -189,13 +191,18 @@ export async function loadCertificate(id: string): Promise<CertificateResult> {
   // Course certificate
   const { data: content } = await svc
     .from('courses')
-    .select('title, user_id, badge_image_url')
+    .select('title, user_id, badge_image_url, partner_id')
     .eq('id', cert.course_id)
     .maybeSingle();
 
-  const { data: rawSettings } = content?.user_id
-    ? await svc.from('certificate_defaults').select('*').eq('user_id', content.user_id).eq('content_type', 'default').maybeSingle()
-    : { data: null };
+  const [{ data: rawSettings }, { data: partner }] = await Promise.all([
+    content?.user_id
+      ? svc.from('certificate_defaults').select('*').eq('user_id', content.user_id).eq('content_type', 'default').maybeSingle()
+      : Promise.resolve({ data: null }),
+    content?.partner_id
+      ? svc.from('partners').select('name, logo_url').eq('id', content.partner_id).eq('is_active', true).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
 
   return {
     status: 'ready',
@@ -204,6 +211,8 @@ export async function loadCertificate(id: string): Promise<CertificateResult> {
       courseName:    content?.title || 'Course',
       certType:      'course',
       badgeImageUrl: content?.badge_image_url ?? null,
+      partnerName:    partner?.name ?? null,
+      partnerLogoUrl: partner?.logo_url ?? null,
       settings:      mapSettings(rawSettings),
     },
   };

@@ -575,6 +575,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
   const [closedLessons, setClosedLessons] = useState<Set<string>>(new Set());
   const [availableForms, setAvailableForms] = useState<{ id: string; title: string; slug: string }[]>([]);
   const [cohorts, setCohorts]               = useState<{ id: string; name: string }[]>([]);
+  const [partners, setPartners]               = useState<{ id: string; name: string; is_active: boolean }[]>([]);
   const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
   const savedCohortIds = useRef<string[]>([]);
   const toggleCohort = (id: string) =>
@@ -621,7 +622,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     setIsLoading(true);
     (async () => {
       if (contentType === 'course') {
-        const { data: course } = await supabase.from('courses').select('id, title, description, slug, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, points_system, post_submission, cover_image, badge_image_url, deadline_days, theme, mode, font, custom_accent, category, show_answers, lesson_timing, max_attempts').eq('id', formId).maybeSingle();
+        const { data: course } = await supabase.from('courses').select('id, title, description, slug, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, points_system, post_submission, cover_image, badge_image_url, deadline_days, theme, mode, font, custom_accent, category, partner_id, show_answers, lesson_timing, max_attempts').eq('id', formId).maybeSingle();
         if (course) {
           setFormConfig({
             isCourse: true,
@@ -645,6 +646,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
             customAccent: course.custom_accent,
             category: course.category ?? null,
             badgeImageUrl: course.badge_image_url ?? null,
+            partnerId: course.partner_id ?? null,
           });
           setCustomSlug(course.slug || '');
           const loadedCohorts = course.cohort_ids ?? [];
@@ -692,6 +694,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     })();
     supabase.from('cohorts').select('id, name').order('name').then(({ data }) => {
       if (data) setCohorts(data);
+    });
+    supabase.from('partners').select('id, name, is_active').order('name').then(({ data }) => {
+      if (data) setPartners(data);
     });
   }, [formId, contentType]);
 
@@ -2231,6 +2236,29 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     </div>
                     <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: FE.faint }}>
                       Students can filter courses by category on their dashboard.
+                    </p>
+                  </div>
+
+                  {/* Partner */}
+                  <div>
+                    <label className={labelCls} style={labelStyle}>Partner</label>
+                    <select
+                      value={formConfig.partnerId ?? ''}
+                      onChange={e => updateConfig({ partnerId: e.target.value || null })}
+                      className={inputCls}
+                      style={inputStyle}
+                    >
+                      <option value="">Select partner</option>
+                      {partners
+                        .filter(partner => partner.is_active || partner.id === formConfig.partnerId)
+                        .map(partner => (
+                          <option key={partner.id} value={partner.id}>
+                            {partner.name}{partner.is_active ? '' : ' (inactive)'}
+                          </option>
+                        ))}
+                    </select>
+                    <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: FE.faint }}>
+                      Displayed as &quot;Offered by&quot; attribution on catalog cards and certificates.
                     </p>
                   </div>
 

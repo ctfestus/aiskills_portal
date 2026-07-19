@@ -213,6 +213,7 @@ export interface FormConfig {
   pointsSystem?: PointsSystem;    // canonical (legacy aliases: `pointsEnabled` + `pointsBase`)
   deadline_days?: number | null;
   category?: string | null;
+  partnerId?: string | null;
   badgeImageUrl?: string | null;
 }
 

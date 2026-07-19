@@ -279,6 +279,7 @@ const [isSaving, setIsSaving] = useState(false);
   };
   const [availableForms, setAvailableForms] = useState<{ id: string; title: string; slug: string }[]>([]);
   const [cohorts, setCohorts] = useState<{ id: string; name: string }[]>([]);
+  const [partners, setPartners] = useState<{ id: string; name: string; is_active: boolean }[]>([]);
   const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
   const toggleCohort = (id: string) =>
     setSelectedCohortIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -359,7 +360,7 @@ const [isSaving, setIsSaving] = useState(false);
     } else if (editId) {
       // Load existing content from purpose-built tables
       Promise.all([
-        supabase.from('courses').select('id, title, description, slug, status, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, points_system, post_submission, cover_image, badge_image_url, deadline_days, theme, mode, font, custom_accent, category, show_answers, lesson_timing, max_attempts').eq('id', editId).maybeSingle(),
+        supabase.from('courses').select('id, title, description, slug, status, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, points_system, post_submission, cover_image, badge_image_url, deadline_days, theme, mode, font, custom_accent, category, partner_id, show_answers, lesson_timing, max_attempts').eq('id', editId).maybeSingle(),
         supabase.from('events').select('id, title, description, slug, status, cohort_ids, fields, event_date, event_time, timezone, location, event_type, capacity, meeting_link, is_private, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent, speakers, recurrence, recurrence_end_date, recurrence_days').eq('id', editId).maybeSingle(),
       ]).then(([{ data: course }, { data: event }]) => {
         let id: string | null = null;
@@ -388,7 +389,8 @@ const [isSaving, setIsSaving] = useState(false);
             coverImage: course.cover_image, badgeImageUrl: course.badge_image_url ?? null,
             deadline_days: course.deadline_days,
             theme: course.theme, mode: course.mode, font: course.font, customAccent: course.custom_accent,
-            category: course.category ?? null };
+            category: course.category ?? null,
+            partnerId: course.partner_id ?? null };
         } else if (event) {
           id = event.id; slug = event.slug || ''; cohortIds = event.cohort_ids || []; status = event.status;
           config = { title: event.title, description: event.description,
@@ -431,6 +433,9 @@ const [isSaving, setIsSaving] = useState(false);
   useEffect(() => {
     supabase.from('cohorts').select('id, name').order('name').then(({ data }) => {
       if (data) setCohorts(data);
+    });
+    supabase.from('partners').select('id, name, is_active').order('name').then(({ data }) => {
+      if (data) setPartners(data);
     });
   }, []);
 
@@ -2898,6 +2903,29 @@ const [isSaving, setIsSaving] = useState(false);
                     </div>
                     <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: C.faint }}>
                       Students can filter courses by category on their dashboard.
+                    </p>
+                  </div>
+
+                  {/* Partner */}
+                  <div>
+                    <label className={labelCls} style={labelStyle}>Partner</label>
+                    <select
+                      value={formConfig.partnerId ?? ''}
+                      onChange={e => updateConfig({ partnerId: e.target.value || null })}
+                      className={inputCls}
+                      style={inputStyle}
+                    >
+                      <option value="">Select partner</option>
+                      {partners
+                        .filter(partner => partner.is_active || partner.id === formConfig.partnerId)
+                        .map(partner => (
+                          <option key={partner.id} value={partner.id}>
+                            {partner.name}{partner.is_active ? '' : ' (inactive)'}
+                          </option>
+                        ))}
+                    </select>
+                    <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: C.faint }}>
+                      Displayed as &quot;Offered by&quot; attribution on catalog cards and certificates.
                     </p>
                   </div>
 

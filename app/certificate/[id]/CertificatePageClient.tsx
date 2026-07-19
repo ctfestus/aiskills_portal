@@ -19,6 +19,8 @@ interface Props {
   issuedAt:          string;
   certType:          'course' | 'virtual_experience' | 'learning_path' | 'certification';
   badgeImageUrl?:    string | null;
+  partnerName?:      string | null;
+  partnerLogoUrl?:   string | null;
   pathItems?:        { id: string; title: string; coverImage: string | null }[];
   pathCoverImage?:   string | null;
 }
@@ -40,7 +42,7 @@ function LinkedInIcon() {
 
 export default function CertificatePageClient({
   certId, studentName, studentAvatarUrl, studentUsername, courseName, issueDate, settings, issuedAt,
-  certType, badgeImageUrl, pathItems, pathCoverImage,
+  certType, badgeImageUrl, partnerName, partnerLogoUrl, pathItems, pathCoverImage,
 }: Props) {
   const certRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
@@ -168,6 +170,8 @@ export default function CertificatePageClient({
                     studentName={studentName}
                     courseName={courseName}
                     issueDate={issueDate}
+                    partnerName={partnerName}
+                    partnerLogoUrl={partnerLogoUrl}
                     settings={settings}
                   />
                 </div>
@@ -225,6 +229,8 @@ export default function CertificatePageClient({
                     studentName={studentName}
                     courseName={courseName}
                     issueDate={issueDate}
+                    partnerName={partnerName}
+                    partnerLogoUrl={partnerLogoUrl}
                     settings={settings}
                   />
                 </div>
@@ -386,6 +392,8 @@ export default function CertificatePageClient({
           studentName={studentName}
           courseName={courseName}
           issueDate={issueDate}
+          partnerName={partnerName}
+          partnerLogoUrl={partnerLogoUrl}
           settings={settings}
         />
       </div>

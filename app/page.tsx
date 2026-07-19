@@ -177,6 +177,8 @@ type ProgrammeItem = {
   id: string; title: string; description: string;
   imageUrl: string; badge: string; difficulty?: string; type: 'course' | 've' | 'path'; slug: string;
   category?: string;
+  partnerName?: string;
+  partnerLogoUrl?: string;
   pathCourses?: PathCourse[];
 };
 
@@ -184,7 +186,7 @@ function useProgrammes() {
   const [items, setItems] = useState<ProgrammeItem[]>([]);
   useEffect(() => {
     Promise.all([
-      supabase.from('published_courses').select('id,title,cover_image,slug,category,description').limit(20),
+      supabase.from('published_courses').select('id,title,cover_image,slug,category,description,partner_name,partner_logo_url').limit(20),
       supabase.from('published_virtual_experiences').select('id,title,cover_image,slug,tagline,difficulty,industry').limit(12),
       supabase.from('published_learning_paths').select('id,title,description,cover_image').limit(8),
     ]).then(async ([c, v, lp]) => {
@@ -192,6 +194,8 @@ function useProgrammes() {
         id: r.id, title: r.title, description: r.description ?? '',
         imageUrl: resolveCoverUrl(r.cover_image), badge: 'Course', type: 'course', slug: r.slug,
         category: r.category ?? '',
+        partnerName: r.partner_name ?? undefined,
+        partnerLogoUrl: r.partner_logo_url ?? undefined,
       }));
       const ves: ProgrammeItem[] = (v.data ?? []).map((r: any) => ({
         id: r.id, title: r.title, description: r.tagline ?? r.industry ?? '',
@@ -1455,6 +1459,12 @@ function LandingCoursePreview({ item, typeColor, user, hFont, bFont, isDark }: {
       <div className="p-5">
         <p className="text-xs mb-1" style={{ color: isDark ? 'rgba(255,255,255,0.45)' : '#888' }}>{LAND_TYPE_LABEL[item.type]}</p>
         <h3 className="text-lg font-bold leading-snug mb-2 line-clamp-2" style={{ color: isDark ? 'white' : '#111', fontFamily: hFont }}>{item.title}</h3>
+        {item.partnerName && (
+          <div className="flex items-center gap-1.5 mb-2 text-xs" style={{ color: isDark ? 'rgba(255,255,255,0.5)' : '#777' }}>
+            {item.partnerLogoUrl && <img src={item.partnerLogoUrl} alt="" className="w-4 h-4 object-contain" />}
+            <span>Offered by {item.partnerName}</span>
+          </div>
+        )}
         {desc && <p className="text-sm leading-relaxed line-clamp-3 mb-3" style={{ color: isDark ? 'rgba(255,255,255,0.65)' : '#555', fontFamily: bFont }}>{desc}</p>}
         {item.difficulty && <p className="text-xs mb-3" style={{ color: isDark ? 'rgba(255,255,255,0.45)' : '#888' }}>{item.difficulty}</p>}
         <Link href={user ? href : '/auth'}
@@ -1558,6 +1568,12 @@ function LandingCarouselRow({ title, items, type, typeColor, user, hFont, bFont,
                   </div>
                 </div>
                 <p className="text-[15px] font-bold leading-snug mt-2.5 line-clamp-2" style={{ color: rowText, fontFamily: hFont }}>{item.title}</p>
+                {item.partnerName && (
+                  <div className="flex items-center gap-1.5 mt-1 text-[11px]" style={{ color: rowMuted }}>
+                    {item.partnerLogoUrl && <img src={item.partnerLogoUrl} alt="" className="w-4 h-4 object-contain" />}
+                    <span>Offered by {item.partnerName}</span>
+                  </div>
+                )}
                 {item.difficulty && <p className="text-[11px] mt-1" style={{ color: rowMuted }}>{item.difficulty}</p>}
               </div>
             </MReveal>
