@@ -14,6 +14,12 @@ const C = {
 };
 
 export type TextPosition = { x: number; y: number };
+export interface PartnerAttributionLayout extends TextPosition {
+  logoHeight?: number;
+  direction?: "horizontal" | "vertical";
+  showLabel?: boolean;
+}
+
 
 export interface TextPositions {
   institutionName?: TextPosition;
@@ -25,6 +31,7 @@ export interface TextPositions {
   issueDate?:      TextPosition;
   signatory?:      TextPosition;
   certificateId?:  TextPosition;
+  partnerAttribution?: PartnerAttributionLayout;
 }
 
 export interface CertificateSettings {
@@ -82,6 +89,7 @@ export function defaultTextPositions(paddingTop = 280, paddingLeft = 182, headin
     issueDate:       { x: paddingLeft, y: paddingTop + 162 + headingPx + 25 + 55 + 95 },
     signatory:       { x: paddingLeft, y: 980 },
     certificateId:   { x: 1580, y: 120 },
+    partnerAttribution: { x: 380, y: 60, logoHeight: 90, direction: "horizontal", showLabel: true },
   };
 }
 
@@ -144,11 +152,13 @@ export interface CertificateTemplateProps {
   studentName:  string;
   courseName:   string;
   issueDate:    string;
+  partnerName?: string | null;
+  partnerLogoUrl?: string | null;
   settings?:    CertificateSettings;
 }
 
 const CertificateTemplate = React.forwardRef<HTMLDivElement, CertificateTemplateProps>(
-  ({ certId, studentName, courseName, issueDate, settings }, ref) => {
+  ({ certId, studentName, courseName, issueDate, partnerName, partnerLogoUrl, settings }, ref) => {
     const s               = { ...DEFAULT_CERT_SETTINGS, ...settings };
     const hasCustomBg     = Boolean(s.backgroundImageUrl);
     const fontFamily      = FONT_MAP[s.fontFamily];
@@ -160,6 +170,7 @@ const CertificateTemplate = React.forwardRef<HTMLDivElement, CertificateTemplate
     // Resolve positions: saved overrides take priority, then defaults derived from paddingTop/paddingLeft
     const defaults = defaultTextPositions(s.paddingTop, s.paddingLeft, s.headingSize);
     const tp = { ...defaults, ...(s.textPositions ?? {}) } as Required<TextPositions>;
+    const partnerLayout = tp.partnerAttribution;
     const centered = s.alignment === "center";
     // Centered layout (DataCamp-style): keep each element's vertical position but center it
     // horizontally on the canvas and center its text. Left layout keeps the saved x/y.
@@ -201,11 +212,47 @@ const CertificateTemplate = React.forwardRef<HTMLDivElement, CertificateTemplate
           </svg>
         )}
 
-        {/* Logo */}
+        {/* Institution logo */}
         {s.logoUrl && (
           <div style={{ position: "absolute", top: "60px", left: centered ? "50%" : "120px", transform: centered ? "translateX(-50%)" : undefined, zIndex: 20 }}>
             <img src={s.logoUrl} alt={s.institutionName} crossOrigin="anonymous"
               style={{ height: "120px", width: "auto", objectFit: "contain" }} />
+          </div>
+        )}
+
+        {/* Partner attribution: course data at the instructor-defined template position. */}
+        {partnerName && (
+          <div style={{
+            position: "absolute",
+            left: `${partnerLayout.x}px`,
+            top: `${partnerLayout.y}px`,
+            zIndex: 20,
+            display: "flex",
+            flexDirection: partnerLayout.direction === "vertical" ? "column" : "row",
+            alignItems: partnerLayout.direction === "vertical" ? "flex-start" : "center",
+            gap: partnerLayout.direction === "vertical" ? "10px" : "18px",
+          }}>
+            {partnerLogoUrl && (
+              <img src={partnerLogoUrl} alt="" crossOrigin="anonymous"
+                style={{
+                  height: `${partnerLayout.logoHeight ?? 90}px`,
+                  maxWidth: `${(partnerLayout.logoHeight ?? 90) * 3}px`,
+                  width: "auto",
+                  objectFit: "contain",
+                }} />
+            )}
+            <p style={{
+              fontFamily,
+              fontSize: "20px",
+              lineHeight: "1.3",
+              color: C.w70,
+              margin: 0,
+              maxWidth: "300px",
+            }}>
+              {partnerLayout.showLabel === false
+                ? <strong style={{ color: C.white }}>{partnerName}</strong>
+                : <>Offered by <strong style={{ color: C.white }}>{partnerName}</strong></>}
+            </p>
           </div>
         )}
 

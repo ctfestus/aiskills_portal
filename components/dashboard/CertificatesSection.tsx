@@ -6,11 +6,13 @@ import { useState, useEffect, useRef } from 'react';
 import { Check, CheckCircle2, Loader2, Trash2, Upload, XCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
-import CertificateTemplate, { CertificateSettings, DEFAULT_CERT_SETTINGS, TextPositions, defaultTextPositions } from '@/components/CertificateTemplate';
+import CertificateTemplate, { CertificateSettings, DEFAULT_CERT_SETTINGS, TextPositions, defaultTextPositions, type PartnerAttributionLayout } from '@/components/CertificateTemplate';
 import { LIGHT_C, cardStyle } from '@/lib/theme';
 
 const CERT_W = 1860;
 const CERT_H = 1200;
+const SAMPLE_PARTNER_LOGO = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22 viewBox=%220 0 100 100%22%3E%3Crect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230ea5e9%22/%3E%3Ctext x=%2250%22 y=%2264%22 text-anchor=%22middle%22 font-family=%22Arial%22 font-size=%2252%22 font-weight=%22700%22 fill=%22white%22%3EP%3C/text%3E%3C/svg%3E';
+
 
 export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
   const [user, setUser]           = useState<any>(null);
@@ -55,6 +57,26 @@ export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
         },
       };
     });
+  const setPartnerLayout = <K extends keyof PartnerAttributionLayout>(
+    key: K,
+    value: PartnerAttributionLayout[K],
+  ) => setSettings(prev => {
+    const resolved = {
+      ...defaultTextPositions(prev.paddingTop, prev.paddingLeft, prev.headingSize),
+      ...(prev.textPositions ?? {}),
+    };
+    return {
+      ...prev,
+      textPositions: {
+        ...prev.textPositions,
+        partnerAttribution: {
+          ...resolved.partnerAttribution,
+          [key]: value,
+        },
+      },
+    };
+  });
+
 
 
   const applySettingsData = (data: any) => {
@@ -291,6 +313,7 @@ export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
 
           const ELEMENTS: { key: keyof TextPositions; label: string; color: string }[] = [
             { key: 'institutionName', label: 'Institution Name',            color: '#f59e0b' },
+            ...(contentType === 'default' ? [{ key: 'partnerAttribution' as const, label: 'Partner Attribution', color: '#0ea5e9' }] : []),
             { key: 'header',         label: 'Certificate of Completion',    color: '#10b981' },
             { key: 'certifyText',    label: 'Certify Text',                 color: '#6366f1' },
             { key: 'studentName',    label: 'Student Name',                 color: '#ef4444' },
@@ -334,6 +357,43 @@ export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
                   </div>
                 ))}
               </div>
+              {contentType === 'default' && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl p-3" style={{ background: C.input }}>
+                  <div>
+                    <label className={labelCls} style={{ color: C.muted }}>Partner layout</label>
+                    <select
+                      value={resolved.partnerAttribution.direction ?? 'horizontal'}
+                      onChange={e => setPartnerLayout('direction', e.target.value as PartnerAttributionLayout['direction'])}
+                      className="w-full rounded-lg px-2 py-1.5 text-xs"
+                      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, color: C.text }}
+                    >
+                      <option value="horizontal">Horizontal</option>
+                      <option value="vertical">Vertical</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls} style={{ color: C.muted }}>Partner logo height</label>
+                    <input
+                      type="number" min={24} max={240}
+                      value={resolved.partnerAttribution.logoHeight ?? 90}
+                      onChange={e => setPartnerLayout('logoHeight', Math.max(24, Math.min(240, Number(e.target.value))))}
+                      className="w-full rounded-lg px-2 py-1.5 text-xs font-mono"
+                      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, color: C.text }}
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 self-end min-h-8 text-xs" style={{ color: C.muted }}>
+                    <input
+                      type="checkbox"
+                      checked={resolved.partnerAttribution.showLabel !== false}
+                      onChange={e => setPartnerLayout('showLabel', e.target.checked)}
+                    />
+                    Show &quot;Offered by&quot;
+                  </label>
+                  <p className="sm:col-span-3 text-[11px]" style={{ color: C.faint }}>
+                    The sample partner in the preview is replaced automatically by each course&apos;s selected partner.
+                  </p>
+                </div>
+              )}
               <div className="flex items-center gap-2 pt-1">
                 <div className="flex gap-1.5 text-[10px]" style={{ color: C.faint }}>
                   <span className="font-mono px-1.5 py-0.5 rounded" style={{ background: C.pill }}>X</span> left 
@@ -374,6 +434,7 @@ export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
           institutionName: '#f59e0b', header: '#10b981', certifyText: '#6366f1',
           studentName: '#ef4444', completionText: '#ec4899', courseName: '#3b82f6',
           issueDate: '#14b8a6', certificateId: '#a855f7', signatory: '#f97316',
+          ...(contentType === 'default' ? { partnerAttribution: '#0ea5e9' } : {}),
         };
 
         const handlePreviewClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -429,6 +490,8 @@ export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
                     studentName="Sample Student"
                     courseName="Sample Course"
                     issueDate={new Date().toLocaleDateString()}
+                    partnerName={contentType === 'default' ? 'Sample Partner' : null}
+                    partnerLogoUrl={contentType === 'default' ? SAMPLE_PARTNER_LOGO : null}
                   />
                 </div>
                 {/* Dots overlaid at scaled coordinates */}

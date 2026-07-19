@@ -97,6 +97,15 @@ function CourseCard({ course, deadline, C, onDetails, hideCategory }: { course: 
           style={{ color: C.text, fontSize: '17.5px', fontFamily: 'var(--font-lato)', fontWeight: 900 }} onClick={onDetails}>
           {course.form?.title ?? 'Untitled Course'}
         </h3>
+        {course.form?.partner && (
+          <div className="flex items-center gap-1.5 mb-2 text-xs" style={{ color: C.faint }}>
+            {course.form.partner.logo_url && (
+              <img src={course.form.partner.logo_url} alt="" className="w-4 h-4 object-contain" />
+            )}
+            <span>Offered by {course.form.partner.name}</span>
+          </div>
+        )}
+
 
         {description && (
           <p className="mb-2.5 line-clamp-4" style={{ color: C.faint, fontSize: '14.5px', fontFamily: 'var(--font-lato)', lineHeight: 1.45 }}>
@@ -214,6 +223,14 @@ function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT
               <h2 className="text-base font-bold leading-snug mb-2" style={{ color: C.text }}>
                 {course.form?.title ?? 'Untitled Course'}
               </h2>
+              {course.form?.partner && (
+                <div className="flex items-center gap-2 mb-2 text-xs" style={{ color: C.faint }}>
+                  {course.form.partner.logo_url && (
+                    <img src={course.form.partner.logo_url} alt="" className="w-5 h-5 object-contain" />
+                  )}
+                  <span>Offered by {course.form.partner.name}</span>
+                </div>
+              )}
               {completed && (
                 <span className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full"
                   style={{ background: passed ? '#f0fdf4' : '#fef2f2', color: passed ? '#16a34a' : '#dc2626' }}>
@@ -656,8 +673,15 @@ function ToolRow({ tool, courses, deadlines, C, onDetails }: { tool: string; cou
                     </span>
                   )}
                 </CoverThumbnail>
-                <p className="text-xs mt-2" style={{ color: C.faint }}>Course</p>
-                <p className="text-[15px] font-bold leading-snug mt-0.5 mb-2.5 line-clamp-2" style={{ color: C.text }}>{title}</p>
+                {c.form?.partner && (
+                  <div className="flex items-center gap-2 mt-2" style={{ color: C.faint }}>
+                    {c.form.partner.logo_url && (
+                      <img src={c.form.partner.logo_url} alt="" className="w-5 h-5 object-contain flex-shrink-0" />
+                    )}
+                    <span className="text-xs truncate">{c.form.partner.name}</span>
+                  </div>
+                )}
+                <p className={`text-[15px] font-bold leading-snug ${c.form?.partner ? 'mt-1' : 'mt-2'} mb-2.5 line-clamp-2`} style={{ color: C.text }}>{title}</p>
                 <ProgressBar value={progress} color="#22c55e"/>
                 <p className="text-[11px] mt-1" style={{ color: C.faint }}>
                   {completed ? 'Completed' : currentIdx > 0 ? `${progress}% complete` : `${totalQ} questions`}
@@ -762,7 +786,7 @@ export function CoursesSection({ userEmail, userId: userIdProp, C, isOutstanding
       // Load cohort courses + student attempts + certificates in parallel
       const [{ data: cohortCourseRows }, { data: attempts }, certsRes] = await Promise.all([
         student?.cohort_id && !restrictedByPayment
-          ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes, category, content_type:id').contains('cohort_ids', [student.cohort_id]).eq('status', 'published')
+          ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes, category, content_type:id, partner:partners(name, logo_url)').contains('cohort_ids', [student.cohort_id]).eq('status', 'published')
           : Promise.resolve({ data: [] }),
         supabase.from('course_attempts')
           .select('course_id, score, points, current_question_index, completed_at, passed, updated_at, answers')
@@ -813,7 +837,7 @@ export function CoursesSection({ userEmail, userId: userIdProp, C, isOutstanding
 
       let extraForms: any[] = [];
       if (extraIds.length) {
-        const { data } = await supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes, category').in('id', extraIds).eq('status', 'published');
+        const { data } = await supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes, category, partner:partners(name, logo_url)').in('id', extraIds).eq('status', 'published');
         extraForms = (data ?? []).map(normalizeCourse);
       }
 
