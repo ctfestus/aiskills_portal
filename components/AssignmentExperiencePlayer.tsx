@@ -78,7 +78,7 @@ interface ProjectConfig {
   dataset?: Dataset;
   [key: string]: any;
 }
-type Progress = Record<string, { completed: boolean; notes?: string; selectedAnswer?: string; fileUrl?: string; linkUrl?: string }>;
+type Progress = Record<string, { completed: boolean; notes?: string; selectedAnswer?: string; fileUrl?: string; linkUrl?: string; aiPassed?: boolean; aiFeedback?: string; aiScore?: number }>;
 
 interface Props {
   formId: string;
@@ -852,7 +852,13 @@ export default function AssignmentExperiencePlayer({
                             const wantsNewReply = needsEval && openReplies.has(req.id);
                             const isTyping = efTyping[req.id];
                             const isReviewing = efReviewing[req.id];
-                            const feedback = aiFeedback[req.id];
+                            // AI verdict is persisted (aiPassed/aiFeedback/aiScore) so a reload can
+                            // rebuild the feedback block and its Reply button - without this, a
+                            // refreshed page only knows "completed", not what the manager said.
+                            const persistedFeedback = prog?.aiFeedback
+                              ? { passed: !!prog?.aiPassed, feedback: prog.aiFeedback, score: prog?.aiScore ?? 0 }
+                              : null;
+                            const feedback = aiFeedback[req.id] !== undefined ? aiFeedback[req.id] : persistedFeedback;
                             const evaluating = !!aiReviewing[req.id];
                             // What the thread shows as "sent": the in-flight attempt first, then saved notes
                             const sentText = efPending[req.id] || prog?.notes || '';
@@ -886,12 +892,21 @@ export default function AssignmentExperiencePlayer({
                                 })
                                 .then(r => r.json())
                                 .then(json => {
-                                  setAiFeedback(prev => ({ ...prev, [req.id]: { passed: json.passed ?? false, feedback: json.feedback || '', score: json.score ?? 0 } }));
-                                  updateProgress(req.id, { notes: val, completed: true });
+                                  const passed = json.passed ?? false;
+                                  const fb = json.feedback || '';
+                                  const score = json.score ?? 0;
+                                  setAiFeedback(prev => ({ ...prev, [req.id]: { passed, feedback: fb, score } }));
+                                  updateProgress(req.id, { notes: val, completed: true, aiPassed: passed, aiFeedback: fb, aiScore: score });
                                 })
                                 .catch(() => {
-                                  setAiFeedback(prev => ({ ...prev, [req.id]: { passed: true, feedback: 'Your response has been noted. Well done for engaging with this question.', score: 70 } }));
-                                  updateProgress(req.id, { notes: val, completed: true });
+                                  // The review genuinely did not run -- never fake a pass. Progression
+                                  // still is not blocked (completed: true), but the verdict must stay
+                                  // honest, and passed:false keeps the Reply option available.
+                                  const passed = false;
+                                  const fb = 'We could not complete an AI review of your response right now due to a temporary issue. Your answer has been saved so you can continue, or click Reply to try again.';
+                                  const score = 0;
+                                  setAiFeedback(prev => ({ ...prev, [req.id]: { passed, feedback: fb, score } }));
+                                  updateProgress(req.id, { notes: val, completed: true, aiPassed: passed, aiFeedback: fb, aiScore: score });
                                 })
                                 .finally(() => setAiReviewing(prev => ({ ...prev, [req.id]: false })));
                                 setTimeout(() => {
@@ -983,6 +998,11 @@ export default function AssignmentExperiencePlayer({
                                           onClick={() => {
                                             setEfRounds(prev => ({ ...prev, [req.id]: [...(prev[req.id] || []), { me: sentText, feedback: feedback.feedback, passed: feedback.passed }] }));
                                             setAiFeedback(prev => ({ ...prev, [req.id]: null }));
+                                            // The graded attempt is archived into the thread above, so the
+                                            // "received/reviewing" state must reset too - otherwise the render
+                                            // stays locked on the Reviewed chip and the composer never opens.
+                                            setEfReviewing(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                                            setEfPending(prev => { const n = { ...prev }; delete n[req.id]; return n; });
                                             updateProgress(req.id, { notes: '' });
                                             setOpenReplies(prev => new Set([...prev, req.id]));
                                           }}
