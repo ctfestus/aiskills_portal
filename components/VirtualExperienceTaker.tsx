@@ -102,7 +102,7 @@ interface ProjectConfig {
   dataset?: Dataset;
 }
 
-type Progress = Record<string, { completed: boolean; notes?: string; selectedAnswer?: string; fileUrl?: string; linkUrl?: string }>;
+type Progress = Record<string, { completed: boolean; notes?: string; selectedAnswer?: string; fileUrl?: string; linkUrl?: string; aiPassed?: boolean; aiFeedback?: string; aiScore?: number }>;
 
 interface Props {
   formId: string;
@@ -1318,7 +1318,13 @@ export default function VirtualExperienceTaker({
                           const wantsNewReply = needsEval && openReplies.has(req.id);
                           const isTyping = efTyping[req.id];
                           const isReviewing = efReviewing[req.id];
-                          const feedback = aiFeedback[req.id];
+                          // AI verdict is persisted (aiPassed/aiFeedback/aiScore) so a reload can
+                          // rebuild the feedback block and its Reply button - without this, a
+                          // refreshed page only knows "completed", not what the manager said.
+                          const persistedFeedback = progress[req.id]?.aiFeedback
+                            ? { passed: !!progress[req.id]?.aiPassed, feedback: progress[req.id]!.aiFeedback!, score: progress[req.id]?.aiScore ?? 0 }
+                            : null;
+                          const feedback = aiFeedback[req.id] !== undefined ? aiFeedback[req.id] : persistedFeedback;
                           const evaluating = !!aiReviewing[req.id];
                           // What the thread shows as "sent": the in-flight attempt first, then saved notes
                           const sentText = efPending[req.id] || progress[req.id]?.notes || noteValues[req.id] || '';
@@ -1353,12 +1359,21 @@ export default function VirtualExperienceTaker({
                               })
                               .then(r => r.json())
                               .then(json => {
-                                setAiFeedback(prev => ({ ...prev, [req.id]: { passed: json.passed ?? false, feedback: json.feedback || '', score: json.score ?? 0 } }));
-                                setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true } }; saveProgress(next, currentModId, currentLesId); return next; });
+                                const passed = json.passed ?? false;
+                                const fb = json.feedback || '';
+                                const score = json.score ?? 0;
+                                setAiFeedback(prev => ({ ...prev, [req.id]: { passed, feedback: fb, score } }));
+                                setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true, aiPassed: passed, aiFeedback: fb, aiScore: score } }; saveProgress(next, currentModId, currentLesId); return next; });
                               })
                               .catch(() => {
-                                setAiFeedback(prev => ({ ...prev, [req.id]: { passed: true, feedback: 'Your response has been noted. Well done for engaging with this question.', score: 70 } }));
-                                setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true } }; saveProgress(next, currentModId, currentLesId); return next; });
+                                // The review genuinely did not run -- never fake a pass. Progression
+                                // still is not blocked (completed: true), but the verdict must stay
+                                // honest, and passed:false keeps the Reply option available.
+                                const passed = false;
+                                const fb = 'We could not complete an AI review of your response right now due to a temporary issue. Your answer has been saved so you can continue, or click Reply to try again.';
+                                const score = 0;
+                                setAiFeedback(prev => ({ ...prev, [req.id]: { passed, feedback: fb, score } }));
+                                setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true, aiPassed: passed, aiFeedback: fb, aiScore: score } }; saveProgress(next, currentModId, currentLesId); return next; });
                               })
                               .finally(() => setAiReviewing(prev => ({ ...prev, [req.id]: false })));
                               setTimeout(() => {
@@ -1452,6 +1467,11 @@ export default function VirtualExperienceTaker({
                                         onClick={() => {
                                           setEfRounds(prev => ({ ...prev, [req.id]: [...(prev[req.id] || []), { me: sentText, feedback: feedback.feedback, passed: feedback.passed }] }));
                                           setAiFeedback(prev => ({ ...prev, [req.id]: null }));
+                                          // The graded attempt is archived into the thread above, so the
+                                          // "received/reviewing" state must reset too - otherwise the render
+                                          // stays locked on the Reviewed chip and the composer never opens.
+                                          setEfReviewing(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                                          setEfPending(prev => { const n = { ...prev }; delete n[req.id]; return n; });
                                           // Clear only the live compose box - keep the already-graded
                                           // answer in persisted progress until a new reply is actually sent.
                                           setNoteValues(prev => ({ ...prev, [req.id]: '' }));
