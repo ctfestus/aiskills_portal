@@ -3819,12 +3819,12 @@ export function CourseTaker({
 
                     const hasLesson = (currentQuestion?.lesson?.doc || currentQuestion?.lesson?.body || currentQuestion?.lesson?.videoUrl || currentQuestion?.lesson?.imageUrl || currentQuestion?.lesson?.pdfUrl || currentQuestion?.lesson?.audioUrl) && (config as any).lessonTiming !== 'before';
                     const footerBg = isChecking
-                      ? (isCorrect ? (isDark ? '#0a2e1a' : '#f0fdf4') : (isDark ? '#662525' : '#fff1f1'))
+                      ? (isCorrect ? (isDark ? '#1f5c42' : '#f0fdf4') : (isDark ? '#662525' : '#fff1f1'))
                       : (isDark ? '#1E1F26' : '#ffffff');
                     return (
                       <div className="px-4 sm:px-8 py-3 sm:py-4" style={{ background: footerBg }}>
                         {isChecking && currentQuestion?.explanation && (
-                          <div className={`mb-3 text-sm leading-relaxed ${mutedColor}`}>
+                          <div className={`mb-3 text-sm leading-relaxed ${isDark ? 'text-white' : mutedColor}`}>
                             <span className="font-semibold text-[11px] uppercase tracking-wider opacity-50 mr-2">Explanation</span>
                             {currentQuestion.explanation}
                           </div>
