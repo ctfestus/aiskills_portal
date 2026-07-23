@@ -10,6 +10,17 @@ export const dynamic = 'force-dynamic';
 
 const RATE_LIMIT = 10;
 const RATE_WINDOW_SECONDS = 86400;
+// Max length of a written answer we send to the model (HTML stripped). Keep the client-side
+// caps/counters in the VE players (VirtualExperienceTaker, AssignmentExperiencePlayer) in sync.
+const MAX_ANSWER_CHARS = 2000;
+// Hard cap on the raw (pre-strip) answer string. Rich text carries markup, so allow headroom
+// over MAX_ANSWER_CHARS, but bound it so a huge payload cannot be stripped down under the limit
+// and consume server memory in the process.
+const MAX_RAW_ANSWER_CHARS = 20000;
+// Ceiling on the whole request body in raw bytes - enforced by the bounded stream reader (and by a
+// Content-Length fast-path when present). Generous vs. the raw answer cap + JSON overhead so a
+// legitimate max-length answer is never falsely rejected, but far tighter than any platform limit.
+const MAX_BODY_BYTES = 128 * 1024;
 
 // RLS-scoped client for the caller: reading the VE through it enforces the same
 // access the standalone player itself has (owner / admin / cohort / learning path).
@@ -50,19 +61,82 @@ const responseSchema = {
   required: ['score', 'passed', 'feedback'],
 };
 
+// Read the request body while enforcing a hard byte ceiling. Streams the body and counts RAW bytes,
+// aborting (and cancelling the stream) the instant the cap is exceeded, so an over-large body -
+// including chunked requests that omit Content-Length - is never fully buffered or JSON-parsed.
+// This is the platform-independent guarantee; the Content-Length check in POST is only a cheaper
+// early reject in front of it. Malformed or empty JSON resolves to 'bad_json' (-> 400).
+type BoundedBody =
+  | { status: 'ok'; body: any }
+  | { status: 'too_large' }
+  | { status: 'bad_json' };
+
+async function readBoundedJson(req: NextRequest, maxBytes: number): Promise<BoundedBody> {
+  const reader = req.body?.getReader();
+  if (!reader) return { status: 'bad_json' };
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength; // raw bytes, not decoded characters
+      if (total > maxBytes) {
+        await reader.cancel();
+        return { status: 'too_large' };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return { status: 'bad_json' };
+  }
+  if (total === 0) return { status: 'bad_json' };
+  const buf = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) { buf.set(c, offset); offset += c.byteLength; }
+  try {
+    return { status: 'ok', body: JSON.parse(new TextDecoder().decode(buf)) };
+  } catch {
+    return { status: 'bad_json' };
+  }
+}
+
 export async function POST(req: NextRequest) {
   const auth = await requireUser(req);
   if (isAuthError(auth)) return auth.error;
 
-  const rateLimitError = await checkRateLimit(auth.user.id);
-  if (rateLimitError) return rateLimitError;
+  // Note: the daily rate limit is consumed later, once the request is validated and authorized,
+  // so an oversized or invalid attempt never costs the student one of their reviews.
 
-  const body = await req.json();
+  // Content-Length is a cheap early reject when present; the bounded read below is the real,
+  // platform-independent guarantee (chunked requests omit Content-Length, so this alone is not
+  // enough - it just avoids opening the stream for an obviously over-large declared body).
+  const declaredBytes = Number(req.headers.get('content-length') || 0);
+  if (declaredBytes > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: `Answer must be ${MAX_ANSWER_CHARS} characters or fewer.` }, { status: 413 });
+  }
+
+  const parsed = await readBoundedJson(req, MAX_BODY_BYTES);
+  if (parsed.status === 'too_large') {
+    return NextResponse.json({ error: `Answer must be ${MAX_ANSWER_CHARS} characters or fewer.` }, { status: 413 });
+  }
+  if (parsed.status === 'bad_json') {
+    return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
+  }
+  const body = parsed.body;
   const veId  = typeof body?.veId === 'string' ? body.veId : '';
   const reqId = typeof body?.reqId === 'string' ? body.reqId : '';
 
+  // Reject an oversized raw payload before stripping, so huge markup cannot be collapsed under
+  // the limit at the cost of processing it in memory.
+  const rawAnswer = typeof body?.studentAnswer === 'string' ? body.studentAnswer : '';
+  if (rawAnswer.length > MAX_RAW_ANSWER_CHARS) {
+    return NextResponse.json({ error: `Answer must be ${MAX_ANSWER_CHARS} characters or fewer.` }, { status: 400 });
+  }
+
   // Strip HTML tags so the AI evaluates the actual text, not markup
-  const studentAnswer = typeof body?.studentAnswer === 'string' ? body.studentAnswer.replace(/<[^>]*>/g, '').trim() : '';
+  const studentAnswer = rawAnswer.replace(/<[^>]*>/g, '').trim();
 
   if (!veId || !reqId) {
     return NextResponse.json({ error: 'veId and reqId are required.' }, { status: 400 });
@@ -70,8 +144,8 @@ export async function POST(req: NextRequest) {
   if (!studentAnswer) {
     return NextResponse.json({ error: 'No answer submitted.' }, { status: 400 });
   }
-  if (studentAnswer.length > 500) {
-    return NextResponse.json({ error: 'Answer must be 500 characters or fewer.' }, { status: 400 });
+  if (studentAnswer.length > MAX_ANSWER_CHARS) {
+    return NextResponse.json({ error: `Answer must be ${MAX_ANSWER_CHARS} characters or fewer.` }, { status: 400 });
   }
 
   // Authoritative grading context: the question, rubric, and expected answer
@@ -155,6 +229,11 @@ Score 0-100 (60+ passes). Write exactly 2-3 sentences of feedback. Rules:
 - If passed: name one specific strength, then one concrete way to go further.
 - If not passed: name the exact gap, explain why it matters on the job, tell them precisely what to add or change.
 - No preamble. No filler phrases ("great effort", "however", "it's worth noting"). No bullet points. Start with the assessment, not their name.`;
+
+  // Consume the daily quota only now: the request is valid and the caller is authorized for a
+  // real review, so a rejected attempt above never spent one of the student's ten.
+  const rateLimitError = await checkRateLimit(auth.user.id);
+  if (rateLimitError) return rateLimitError;
 
   try {
     const parsed = await generateJSON(prompt, responseSchema, { temperature: 0.4 });

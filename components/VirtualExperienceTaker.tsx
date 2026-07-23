@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   CheckCircle2, Circle, ChevronRight, ChevronLeft, ChevronDown,
   X, Loader2, Trophy, BookOpen, Lock, Download, Award, Star, Clock,
-  Link as LinkIcon, Upload as UploadIcon, Paperclip, Send, Reply,
+  Link as LinkIcon, Upload as UploadIcon, Paperclip, Send, Reply, AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText, sanitizeEmailContent } from '@/lib/sanitize';
@@ -102,7 +102,7 @@ interface ProjectConfig {
   dataset?: Dataset;
 }
 
-type Progress = Record<string, { completed: boolean; notes?: string; selectedAnswer?: string; fileUrl?: string; linkUrl?: string; aiPassed?: boolean; aiFeedback?: string; aiScore?: number }>;
+type Progress = Record<string, { completed: boolean; notes?: string; selectedAnswer?: string; fileUrl?: string; linkUrl?: string; aiPassed?: boolean; aiFeedback?: string; aiScore?: number; aiErrored?: boolean }>;
 
 interface Props {
   formId: string;
@@ -241,7 +241,9 @@ export default function VirtualExperienceTaker({
   const [certError,    setCertError]    = useState<string | null>(null);
   const [uploadingReq, setUploadingReq] = useState<string | null>(null);
   const [aiReviewing,  setAiReviewing]  = useState<Record<string, boolean>>({});
-  const [aiFeedback,   setAiFeedback]   = useState<Record<string, { passed: boolean; feedback: string; score: number } | null>>({});
+  // `errored: true` marks a review that never actually ran (validation / rate-limit / server /
+  // network) - it is shown as a neutral "could not review" state, never a pass/fail grade.
+  const [aiFeedback,   setAiFeedback]   = useState<Record<string, { passed: boolean; feedback: string; score: number; errored?: boolean } | null>>({});
   const [saveError,    setSaveError]    = useState<string | null>(null);
   const saveTimeout  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mainScrollRef = useRef<HTMLDivElement>(null);
@@ -1321,10 +1323,19 @@ export default function VirtualExperienceTaker({
                           // AI verdict is persisted (aiPassed/aiFeedback/aiScore) so a reload can
                           // rebuild the feedback block and its Reply button - without this, a
                           // refreshed page only knows "completed", not what the manager said.
-                          const persistedFeedback = progress[req.id]?.aiFeedback
+                          const persistedFeedback = progress[req.id]?.aiErrored
+                            ? { passed: false, feedback: progress[req.id]?.aiFeedback || 'We could not complete an AI review of your response. Please try again.', score: 0, errored: true }
+                            : progress[req.id]?.aiFeedback
                             ? { passed: !!progress[req.id]?.aiPassed, feedback: progress[req.id]!.aiFeedback!, score: progress[req.id]?.aiScore ?? 0 }
                             : null;
                           const feedback = aiFeedback[req.id] !== undefined ? aiFeedback[req.id] : persistedFeedback;
+                          const fbErrored = !!feedback?.errored;
+                          // Neutral tone for a review that never ran; green/amber only for a real verdict.
+                          const fbTone = !feedback ? null : fbErrored
+                            ? { bg: isDark ? 'rgba(148,163,184,0.10)' : 'rgba(148,163,184,0.12)', border: isDark ? 'rgba(148,163,184,0.30)' : 'rgba(148,163,184,0.40)', color: isDark ? '#cbd5e1' : '#64748b', label: 'Review unavailable' }
+                            : feedback.passed
+                            ? { bg: isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)', border: 'rgba(16,185,129,0.25)', color: '#10b981', label: 'Correct' }
+                            : { bg: isDark ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.25)', color: '#f59e0b', label: 'Incorrect' };
                           const evaluating = !!aiReviewing[req.id];
                           // What the thread shows as "sent": the in-flight attempt first, then saved notes
                           const sentText = efPending[req.id] || progress[req.id]?.notes || noteValues[req.id] || '';
@@ -1357,23 +1368,31 @@ export default function VirtualExperienceTaker({
                                 headers: { 'Content-Type': 'application/json', ...authHeader },
                                 body: JSON.stringify({ veId: formId, reqId: req.id, studentAnswer: noteVal }),
                               })
-                              .then(r => r.json())
-                              .then(json => {
-                                const passed = json.passed ?? false;
-                                const fb = json.feedback || '';
-                                const score = json.score ?? 0;
-                                setAiFeedback(prev => ({ ...prev, [req.id]: { passed, feedback: fb, score } }));
-                                setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true, aiPassed: passed, aiFeedback: fb, aiScore: score } }; saveProgress(next, currentModId, currentLesId); return next; });
+                              .then(async r => ({ ok: r.ok, json: await r.json().catch(() => ({})) }))
+                              .then(({ ok, json }) => {
+                                if (ok) {
+                                  // A real verdict from the model - record it (pass or fail) and clear
+                                  // any prior error marker.
+                                  const passed = json.passed ?? false;
+                                  const fb = json.feedback || '';
+                                  const score = json.score ?? 0;
+                                  setAiFeedback(prev => ({ ...prev, [req.id]: { passed, feedback: fb, score } }));
+                                  setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true, aiErrored: undefined, aiPassed: passed, aiFeedback: fb, aiScore: score } }; saveProgress(next, currentModId, currentLesId); return next; });
+                                } else {
+                                  // The answer was never actually evaluated (validation / rate limit /
+                                  // server error). Record a distinct error state - never a pass/fail grade.
+                                  // Progression is intentionally NOT blocked (completed stays true); the
+                                  // persisted error marker lets a reload rebuild "could not review" + Try again.
+                                  const fb = json.error || 'We could not complete an AI review of your response right now. Please edit your answer if needed and try again.';
+                                  setAiFeedback(prev => ({ ...prev, [req.id]: { passed: false, feedback: fb, score: 0, errored: true } }));
+                                  setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true, aiErrored: true, aiPassed: undefined, aiFeedback: fb, aiScore: undefined } }; saveProgress(next, currentModId, currentLesId); return next; });
+                                }
                               })
                               .catch(() => {
-                                // The review genuinely did not run -- never fake a pass. Progression
-                                // still is not blocked (completed: true), but the verdict must stay
-                                // honest, and passed:false keeps the Reply option available.
-                                const passed = false;
-                                const fb = 'We could not complete an AI review of your response right now due to a temporary issue. Your answer has been saved so you can continue, or click Reply to try again.';
-                                const score = 0;
-                                setAiFeedback(prev => ({ ...prev, [req.id]: { passed, feedback: fb, score } }));
-                                setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true, aiPassed: passed, aiFeedback: fb, aiScore: score } }; saveProgress(next, currentModId, currentLesId); return next; });
+                                // Network/parse failure - same distinct error state; progression stays open.
+                                const fb = 'We could not complete an AI review of your response right now due to a temporary issue. Please try again.';
+                                setAiFeedback(prev => ({ ...prev, [req.id]: { passed: false, feedback: fb, score: 0, errored: true } }));
+                                setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true, aiErrored: true, aiPassed: undefined, aiFeedback: fb, aiScore: undefined } }; saveProgress(next, currentModId, currentLesId); return next; });
                               })
                               .finally(() => setAiReviewing(prev => ({ ...prev, [req.id]: false })));
                               setTimeout(() => {
@@ -1442,43 +1461,45 @@ export default function VirtualExperienceTaker({
                                   <MailThreadMsg isDark={isDark} from={manager}>
                                     <p style={{ margin: '0 0 10px' }}>Thanks for your response, {firstNameOf(studentName)}. Let me review what you have written.</p>
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: evaluating ? (isDark ? '#2a2a2a' : '#f0f0f0') : `${accentColor}12`, color: evaluating ? (isDark ? '#888' : '#666') : accentColor, border: `1px solid ${evaluating ? 'transparent' : accentColor + '30'}`, fontSize: 12.5 }}>
-                                      {evaluating ? <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ display: 'inline' }} /> : <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} />}
-                                      {evaluating ? 'Reviewing your answer...' : 'Reviewed'}
+                                      {evaluating ? <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ display: 'inline' }} /> : fbErrored ? <AlertTriangle className="w-3.5 h-3.5" style={{ display: 'inline' }} /> : <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} />}
+                                      {evaluating ? 'Reviewing your answer...' : fbErrored ? 'Could not review' : 'Reviewed'}
                                     </div>
                                   </MailThreadMsg>
                                 </div>
                                 {/* Manager: feedback reply */}
-                                {feedback && (
+                                {feedback && fbTone && (
                                   <div style={{ borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, paddingTop: 18 }}>
                                     <MailThreadMsg isDark={isDark} from={manager}>
-                                      <p style={{ margin: '0 0 12px' }}>Hi, here is my feedback on your response:</p>
-                                      <div style={{ borderRadius: 10, padding: '12px 16px', background: feedback.passed ? (isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)') : (isDark ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.06)'), border: `1px solid ${feedback.passed ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}` }}>
-                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: feedback.passed ? '#10b981' : '#f59e0b', marginBottom: 8 }}>
-                                          {feedback.passed ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
-                                          {feedback.passed ? 'Correct' : 'Incorrect'}
+                                      <p style={{ margin: '0 0 12px' }}>{fbErrored ? 'I could not review your response just now:' : 'Hi, here is my feedback on your response:'}</p>
+                                      <div style={{ borderRadius: 10, padding: '12px 16px', background: fbTone.bg, border: `1px solid ${fbTone.border}` }}>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: fbTone.color, marginBottom: 8 }}>
+                                          {fbErrored ? <AlertTriangle className="w-4 h-4" /> : feedback.passed ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                                          {fbTone.label}
                                         </div>
                                         <p style={{ fontSize: 13.5, color: isDark ? '#ddd' : '#333', margin: 0, lineHeight: 1.6 }}>{feedback.feedback}</p>
                                       </div>
                                     </MailThreadMsg>
-                                    {/* Only a wrong answer gets a way back to the composer - a
-                                        correct one is done, the mission just moves on. */}
+                                    {/* A wrong answer or a failed review both get a way back to the composer;
+                                        only a real pass moves the mission on. */}
                                     {!evaluating && !reviewMode && !feedback.passed && (
                                       <button
                                         onClick={() => {
-                                          setEfRounds(prev => ({ ...prev, [req.id]: [...(prev[req.id] || []), { me: sentText, feedback: feedback.feedback, passed: feedback.passed }] }));
+                                          // A real wrong answer is archived into the thread as a graded round
+                                          // and its text cleared; an errored (never-reviewed) attempt is neither,
+                                          // so the student keeps their draft to fix and resend.
+                                          if (!fbErrored) {
+                                            setEfRounds(prev => ({ ...prev, [req.id]: [...(prev[req.id] || []), { me: sentText, feedback: feedback.feedback, passed: feedback.passed }] }));
+                                            setNoteValues(prev => ({ ...prev, [req.id]: '' }));
+                                          }
                                           setAiFeedback(prev => ({ ...prev, [req.id]: null }));
-                                          // The graded attempt is archived into the thread above, so the
-                                          // "received/reviewing" state must reset too - otherwise the render
+                                          // Reset the "received/reviewing" state too - otherwise the render
                                           // stays locked on the Reviewed chip and the composer never opens.
                                           setEfReviewing(prev => { const n = { ...prev }; delete n[req.id]; return n; });
                                           setEfPending(prev => { const n = { ...prev }; delete n[req.id]; return n; });
-                                          // Clear only the live compose box - keep the already-graded
-                                          // answer in persisted progress until a new reply is actually sent.
-                                          setNoteValues(prev => ({ ...prev, [req.id]: '' }));
                                           setOpenReplies(prev => new Set([...prev, req.id]));
                                         }}
                                         style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 18px', borderRadius: 18, border: `1px solid ${isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)'}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: isDark ? '#ddd' : '#444', cursor: 'pointer' }}>
-                                        <Reply className="w-4 h-4" /> Reply
+                                        <Reply className="w-4 h-4" /> {fbErrored ? 'Try again' : 'Reply'}
                                       </button>
                                     )}
                                   </div>
@@ -1504,6 +1525,7 @@ export default function VirtualExperienceTaker({
                                 <MailComposer isDark={isDark} accent={accentColor} to={manager} subject={efSubject}
                                   value={noteVal} onChange={(html) => setNote(req.id, html)} canSend={hasContent} onSend={handleSend}
                                   placeholder={rounds.length ? 'Write a new reply...' : 'Write your reply...'}
+                                  maxChars={req.aiReview ? 2000 : undefined}
                                   onDiscard={() => { setNote(req.id, ''); setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; }); }} />
                               </div>
                             )}
@@ -1980,40 +2002,56 @@ export default function VirtualExperienceTaker({
                       if (req.type === 'text') {
                         const noteVal   = noteValues[req.id] ?? (progress[req.id]?.notes || '');
                         const reviewing = !!aiReviewing[req.id];
-                        const feedback  = aiFeedback[req.id];
+                        // Fall back to a persisted error marker so a reload rebuilds the "could not
+                        // review" state (with retry) rather than silently showing the answer as done.
+                        const feedback  = aiFeedback[req.id] !== undefined
+                          ? aiFeedback[req.id]
+                          : (progress[req.id]?.aiErrored
+                            ? { passed: false, feedback: progress[req.id]?.aiFeedback || 'We could not complete an AI review of your response. Please try again.', score: 0, errored: true }
+                            : null);
+                        const fbErrored = !!feedback?.errored;
+                        // The box stays editable/retryable whenever the LAST review errored - keyed off the
+                        // PERSISTED marker, not the transient banner. The banner clears on the first keystroke
+                        // (fbErrored -> false); if the editable/"done" look were keyed off it, that first edit
+                        // would re-lock the field. Progression is never blocked (completed stays true); this
+                        // only governs the editable/"done" presentation, which a successful resubmit restores.
+                        const showDone  = done && !progress[req.id]?.aiErrored;
 
                         if (req.aiReview) {
                           // --- AI Review path ---
                           const handleSubmitAi = async () => {
-                            if (!noteVal.trim() || reviewing || done) return;
+                            if (!noteVal.trim() || reviewing || showDone) return;
                             setAiReviewing(prev => ({ ...prev, [req.id]: true }));
                             setAiFeedback(prev => ({ ...prev, [req.id]: null }));
+                            // Record an error state that is never a grade, but keep progression open
+                            // (completed stays true) so a flaky reviewer can never trap a student.
+                            const saveErrored = (msg: string) => {
+                              setAiFeedback(prev => ({ ...prev, [req.id]: { passed: false, feedback: msg, score: 0, errored: true } }));
+                              setProgress(prev => {
+                                const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true, aiErrored: true, aiFeedback: msg } };
+                                saveProgress(next, currentModId, currentLesId);
+                                return next;
+                              });
+                            };
                             try {
                               const res = await fetch('/api/ve-answer-review', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json', ...authHeader },
                                 body: JSON.stringify({ veId: formId, reqId: req.id, studentAnswer: noteVal }),
                               });
-                              const json = await res.json();
+                              const json = await res.json().catch(() => ({}));
                               if (!res.ok) {
-                                setAiFeedback(prev => ({ ...prev, [req.id]: { passed: false, feedback: json.error || 'Review failed. Please try again.', score: 0 } }));
+                                saveErrored(json.error || 'We could not complete an AI review right now. Please try again.');
                               } else {
                                 setAiFeedback(prev => ({ ...prev, [req.id]: { passed: json.passed, feedback: json.feedback, score: json.score } }));
+                                setProgress(prev => {
+                                  const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true, aiErrored: undefined, aiFeedback: undefined } };
+                                  saveProgress(next, currentModId, currentLesId);
+                                  return next;
+                                });
                               }
-                              // Always mark complete regardless of API outcome - feedback is informational, not a gate
-                              setProgress(prev => {
-                                const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true } };
-                                saveProgress(next, currentModId, currentLesId);
-                                return next;
-                              });
                             } catch {
-                              setAiFeedback(prev => ({ ...prev, [req.id]: { passed: false, feedback: 'Network error. Please try again.', score: 0 } }));
-                              // Mark complete on network failures too so students are never hard-blocked
-                              setProgress(prev => {
-                                const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true } };
-                                saveProgress(next, currentModId, currentLesId);
-                                return next;
-                              });
+                              saveErrored('Network error. Please check your connection and try again.');
                             } finally {
                               setAiReviewing(prev => ({ ...prev, [req.id]: false }));
                             }
@@ -2028,34 +2066,34 @@ export default function VirtualExperienceTaker({
                                   <p className="text-[14.5px] font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</p>
                                   {req.description && <p className="text-[12.5px] mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}
                                 </div>
-                                {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
+                                {showDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
                               </div>
                               <AiReviewDisclaimer isDark={isDark ?? false} />
                               <textarea
                                 value={noteVal}
                                 onChange={e => {
-                                  if (e.target.value.length > 500) return;
+                                  if (e.target.value.length > 2000) return;
                                   setNoteValues(prev => ({ ...prev, [req.id]: e.target.value }));
-                                  if (feedback && !done) setAiFeedback(prev => ({ ...prev, [req.id]: null }));
+                                  if (feedback && !showDone) setAiFeedback(prev => ({ ...prev, [req.id]: null }));
                                 }}
-                                disabled={done && !reviewMode}
-                                placeholder="Type your answer here (500 characters max)..."
+                                disabled={showDone && !reviewMode}
+                                placeholder="Type your answer here (2000 characters max)..."
                                 rows={4}
                                 className="w-full text-[14.5px] rounded-lg p-3 outline-none resize-none"
                                 style={{
                                   background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
                                   color: isDark ? '#f0f0f0' : '#111',
-                                  border: `1px solid ${done ? accentColor : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
+                                  border: `1px solid ${showDone ? accentColor : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
                                   lineHeight: 1.6,
-                                  opacity: done && !reviewMode ? 0.7 : 1,
+                                  opacity: showDone && !reviewMode ? 0.7 : 1,
                                 }}
                               />
-                              {!done && (
-                                <p className="text-[11px] text-right" style={{ color: noteVal.length >= 480 ? '#ef4444' : isDark ? '#555' : '#aaa' }}>
-                                  {noteVal.length} / 500
+                              {!showDone && (
+                                <p className="text-[11px] text-right" style={{ color: noteVal.length >= 1920 ? '#ef4444' : isDark ? '#555' : '#aaa' }}>
+                                  {noteVal.length} / 2000
                                 </p>
                               )}
-                              {!done && (
+                              {!showDone && (
                                 <button
                                   onClick={handleSubmitAi}
                                   disabled={noteVal.trim().length === 0 || reviewing}
@@ -2065,8 +2103,19 @@ export default function VirtualExperienceTaker({
                                   {reviewing ? 'AI is reviewing...' : 'Submit for AI Review'}
                                 </button>
                               )}
+                              {/* Distinct error state: the review never ran, so no pass/fail, no score. */}
+                              {feedback && fbErrored && (
+                                <div className="rounded-xl p-3 flex items-start gap-2"
+                                  style={{ background: isDark ? 'rgba(148,163,184,0.10)' : 'rgba(148,163,184,0.12)', border: `1px solid ${isDark ? 'rgba(148,163,184,0.30)' : 'rgba(148,163,184,0.40)'}` }}>
+                                  <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: isDark ? '#cbd5e1' : '#64748b' }} />
+                                  <div className="min-w-0">
+                                    <p className="text-[13px] font-bold" style={{ color: isDark ? '#cbd5e1' : '#64748b' }}>Review unavailable</p>
+                                    <p className="text-[13px] leading-relaxed mt-0.5" style={{ color: isDark ? '#ccc' : '#444' }}>{feedback.feedback}</p>
+                                  </div>
+                                </div>
+                              )}
                               {/* AI feedback panel */}
-                              {feedback && (
+                              {feedback && !fbErrored && (
                                 <div className="rounded-xl p-4 space-y-2"
                                   style={{
                                     background: feedback.passed ? 'rgba(16,185,129,0.07)' : 'rgba(245,158,11,0.07)',
@@ -2130,7 +2179,7 @@ export default function VirtualExperienceTaker({
                                   <p className="text-[13px] leading-relaxed" style={{ color: isDark ? '#ccc' : '#444' }}>{feedback.feedback}</p>
                                 </div>
                               )}
-                              {done && !feedback && (
+                              {showDone && !feedback && (
                                 <div className="rounded-lg p-3 flex items-center gap-2"
                                   style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)' }}>
                                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: '#10b981' }} />
