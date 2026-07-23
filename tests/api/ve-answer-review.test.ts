@@ -109,8 +109,69 @@ describe('POST /api/ve-answer-review - auth, rate limit, validation', () => {
     expect((await post(answerBody({ studentAnswer: '  <p></p> ' }))).status).toBe(400);
   });
 
-  it('rejects an answer over 500 characters', async () => {
-    expect((await post(answerBody({ studentAnswer: 'a'.repeat(501) }))).status).toBe(400);
+  it('rejects an answer over 2000 characters', async () => {
+    expect((await post(answerBody({ studentAnswer: 'a'.repeat(2001) }))).status).toBe(400);
+  });
+
+  it('rejects an oversized raw payload before stripping HTML', async () => {
+    const redis = redisStub();
+    mockGetRedis.mockReturnValue(redis as any);
+    // ~21000 raw chars of markup that would strip down to nothing - must be rejected on raw size.
+    const res = await post(answerBody({ studentAnswer: '<b></b>'.repeat(3001) }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain('2000 characters');
+    expect(mockGenerateJSON).not.toHaveBeenCalled();
+  });
+
+  it('does not consume the daily quota for a rejected (oversized) attempt', async () => {
+    const redis = redisStub();
+    mockGetRedis.mockReturnValue(redis as any);
+    expect((await post(answerBody({ studentAnswer: 'a'.repeat(2001) }))).status).toBe(400);
+    expect(redis.incr).not.toHaveBeenCalled();
+    expect(mockGenerateJSON).not.toHaveBeenCalled();
+  });
+
+  it('rejects an over-large body from Content-Length before parsing', async () => {
+    const res = await POST(new Request('http://localhost/api/ve-answer-review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-token', 'Content-Length': String(200 * 1024) },
+      body: JSON.stringify(answerBody()),
+    }) as any) as unknown as Response;
+    expect(res.status).toBe(413);
+    expect(mockGenerateJSON).not.toHaveBeenCalled();
+  });
+
+  it('rejects an oversized body with no Content-Length via the bounded stream read', async () => {
+    // A chunked stream body has no Content-Length, so the fast-path cannot catch it - the bounded
+    // reader must stop counting bytes and reject before the whole payload is buffered/parsed.
+    const bytes = new TextEncoder().encode(JSON.stringify(answerBody({ studentAnswer: 'a'.repeat(200 * 1024) })));
+    const step = 16 * 1024;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let i = 0; i < bytes.length; i += step) controller.enqueue(bytes.slice(i, i + step));
+        controller.close();
+      },
+    });
+    const req = new Request('http://localhost/api/ve-answer-review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-token' },
+      body: stream,
+      duplex: 'half', // Node fetch requires this for a stream request body
+    } as any);
+    expect(req.headers.get('content-length')).toBeNull(); // sanity: truly no declared length
+    const res = await POST(req as any) as unknown as Response;
+    expect(res.status).toBe(413);
+    expect(mockGenerateJSON).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed JSON body with 400', async () => {
+    const res = await POST(new Request('http://localhost/api/ve-answer-review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-token' },
+      body: '{ not valid json',
+    }) as any) as unknown as Response;
+    expect(res.status).toBe(400);
+    expect(mockGenerateJSON).not.toHaveBeenCalled();
   });
 
   it('404s when the caller cannot read the VE and no assignment grants access', async () => {
