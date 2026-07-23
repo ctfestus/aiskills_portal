@@ -10,6 +10,7 @@ const ALLOWED_EXTENSIONS = new Set([
   '.xlsx', '.csv', '.tsv',
   '.png', '.jpg', '.jpeg', '.gif', '.webp',
   '.zip', '.json', '.txt', '.md',
+  '.pbix', '.pbip', // Power BI (a full PBIP project is submitted zipped)
 ]);
 
 

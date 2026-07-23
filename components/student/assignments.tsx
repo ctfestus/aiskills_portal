@@ -203,6 +203,14 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
     'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     'application/zip',
   ]);
+  // Browsers report MIME inconsistently: Windows sends .zip as application/x-zip-compressed
+  // (not application/zip), and Power BI files as "" or octet-stream. So validate by EXTENSION
+  // as the reliable gate; the MIME set above is only a secondary allow.
+  const ALLOWED_EXTENSIONS = new Set([
+    '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp',
+    '.csv', '.tsv', '.txt', '.xls', '.xlsx', '.doc', '.docx', '.ppt', '.pptx',
+    '.zip', '.pbix', '.pbip',
+  ]);
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -210,8 +218,10 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
     const files = Array.from(e.target.files);
     e.target.value = '';
     for (const file of files) {
-      if (!ALLOWED_TYPES.has(file.type)) {
-        setReadyFiles(prev => [...prev, { name: file.name, url: '', status: 'error', error: 'File type not allowed. Accepted: PDF, images, Word, Excel, PowerPoint, CSV, ZIP.' }]);
+      const dot = file.name.lastIndexOf('.');
+      const ext = dot >= 0 ? file.name.slice(dot).toLowerCase() : '';
+      if (!ALLOWED_TYPES.has(file.type) && !ALLOWED_EXTENSIONS.has(ext)) {
+        setReadyFiles(prev => [...prev, { name: file.name, url: '', status: 'error', error: 'File type not allowed. Accepted: PDF, images, Word, Excel, PowerPoint, CSV, ZIP, Power BI (.pbix, .pbip).' }]);
         continue;
       }
       if (file.size > MAX_FILE_SIZE) {
