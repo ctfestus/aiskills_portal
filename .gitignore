@@ -7,3 +7,9 @@ coverage/
 .env*
 !.env.example
 mcp/
+mcp-student/
+
+# Assignment review kits: downloaded student submissions (PII + their files). Never commit.
+review/
+# Per-user default tenant for the review scripts (local preference, not a shared default).
+.review-tenant
