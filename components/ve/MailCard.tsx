@@ -336,7 +336,7 @@ export function SmartReplies({ isDark, accent, options, onPick, label = 'Suggest
 // Reply composer: To/Subject header + rich text + send bar.
 export function MailComposer({
   isDark, accent, to, subject, value, onChange, onSend, onDiscard, canSend,
-  sending = false, sendLabel = 'Send', placeholder = 'Write your reply...', extra,
+  sending = false, sendLabel = 'Send', placeholder = 'Write your reply...', extra, maxChars,
 }: {
   isDark: boolean;
   accent: string;
@@ -351,10 +351,15 @@ export function MailComposer({
   sendLabel?: string;
   placeholder?: string;
   extra?: React.ReactNode;   // e.g. attach controls rendered above the send bar
+  maxChars?: number;         // opt-in char cap on the stripped text (e.g. AI-review answers)
 }) {
   const line   = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
   const tMuted = isDark ? '#9aa0a6' : '#5f6368';
   const tFaint = isDark ? '#6b7075' : '#9aa0a6';
+  // Count the stripped text the same way the server does, so the counter matches the real limit.
+  const plainLen = maxChars != null ? value.replace(/<[^>]*>/g, '').trim().length : 0;
+  const overLimit = maxChars != null && plainLen > maxChars;
+  const sendable = canSend && !sending && !overLimit;
   return (
     <div style={{ border: `1px solid ${line}`, borderRadius: 12, overflow: 'hidden', background: isDark ? '#1e1f24' : '#fff', boxShadow: isDark ? 'none' : '0 1px 4px rgba(0,0,0,0.06)' }}>
       {/* To / Subject headers */}
@@ -378,19 +383,24 @@ export function MailComposer({
       {extra && <div style={{ padding: '0 14px 10px' }}>{extra}</div>}
       {/* Send bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderTop: `1px solid ${line}` }}>
-        <button onClick={onSend} disabled={!canSend || sending}
+        <button onClick={onSend} disabled={!sendable}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 22px', borderRadius: 18,
-            background: canSend && !sending ? accent : (isDark ? '#333' : '#e0e0e0'),
-            color: canSend && !sending ? '#fff' : (isDark ? '#666' : '#aaa'),
+            background: sendable ? accent : (isDark ? '#333' : '#e0e0e0'),
+            color: sendable ? '#fff' : (isDark ? '#666' : '#aaa'),
             fontSize: 13.5, fontWeight: 700, border: 'none',
-            cursor: canSend && !sending ? 'pointer' : 'not-allowed', transition: 'all 0.2s',
+            cursor: sendable ? 'pointer' : 'not-allowed', transition: 'all 0.2s',
           }}>
           <Send size={14} /> {sending ? 'Sending...' : sendLabel}
         </button>
         <Paperclip size={15} style={{ color: tFaint }} aria-hidden />
         <Smile size={15} style={{ color: tFaint }} aria-hidden />
         <span style={{ flex: 1 }} />
+        {maxChars != null && (
+          <span style={{ fontSize: 11, fontWeight: 600, color: overLimit ? '#ef4444' : plainLen >= maxChars * 0.96 ? '#ef4444' : tFaint }}>
+            {plainLen} / {maxChars}
+          </span>
+        )}
         {onDiscard && (
           <button onClick={onDiscard} title="Discard draft"
             style={{ border: 'none', background: 'transparent', color: tFaint, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
