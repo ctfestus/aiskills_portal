@@ -7,25 +7,37 @@ import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { ImageLibrary } from '@/components/ImageLibrary';
 import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X, Code2, FileSpreadsheet, LayoutDashboard, Briefcase, ClipboardList, Eye, FileText, Images } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X, Briefcase, ClipboardList, Eye, Images } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const AssignmentExperiencePlayer = dynamic(() => import('@/components/AssignmentExperiencePlayer'), { ssr: false });
+const StandardAssignmentPlayer = dynamic(() => import('@/components/StandardAssignmentPlayer'), { ssr: false });
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { LessonEditor } from '@/components/lesson/LessonEditor';
 import { sanitizeRichText, sanitizePlainText } from '@/lib/sanitize';
+import { ScenariosEditor } from '@/components/create/ScenariosEditor';
+import type { AssignmentScenario } from '@/lib/assignment-scenarios';
+import { stripAnswerKeys, extractAnswerKeys, validateScenarioConfig } from '@/lib/assignment-scenarios';
+import type { LessonDoc } from '@/lib/lesson-doc';
 
 
 type AssignmentType = 'standard' | 'code_review' | 'excel_review' | 'dashboard_critique' | 'virtual_experience' | 'document_review';
 
+// The two types offered when creating a NEW assignment. A Standard assignment is now built
+// from scenarios + tasks (any mix of formats). The legacy single-purpose AI types below are
+// no longer offered up front, but existing assignments of those types stay fully editable.
 const ASSIGNMENT_TYPES: { value: AssignmentType; label: string; icon: React.ReactNode; description: string }[] = [
-  { value: 'standard',            label: 'Standard',           icon: <ClipboardList style={{ width: 15, height: 15 }}/>,    description: 'Text response, file uploads and links' },
-  { value: 'code_review',         label: 'Code Review',        icon: <Code2 style={{ width: 15, height: 15 }}/>,            description: 'AI reviews submitted code' },
-  { value: 'excel_review',        label: 'Excel Review',       icon: <FileSpreadsheet style={{ width: 15, height: 15 }}/>,  description: 'AI reviews uploaded spreadsheet' },
-  { value: 'dashboard_critique',  label: 'Dashboard',          icon: <LayoutDashboard style={{ width: 15, height: 15 }}/>,  description: 'AI critiques a dashboard screenshot' },
-  { value: 'document_review',     label: 'Document Review',    icon: <FileText style={{ width: 15, height: 15 }}/>,         description: 'AI reviews a submitted PDF or Word report' },
+  { value: 'standard',            label: 'Standard',           icon: <ClipboardList style={{ width: 15, height: 15 }}/>,    description: 'Build scenarios and tasks of any kind (written, upload, multiple choice, AI review)' },
   { value: 'virtual_experience',  label: 'Virtual Experience', icon: <Briefcase style={{ width: 15, height: 15 }}/>,        description: 'Embed a full virtual experience' },
 ];
+
+// Labels for every type, including the retired ones, so an existing legacy assignment still
+// shows a correct badge when edited.
+const LEGACY_TYPE_LABELS: Record<string, string> = {
+  code_review: 'Code Review', excel_review: 'Excel Review',
+  dashboard_critique: 'Dashboard', document_review: 'Document Review',
+};
 
 interface Resource {
   id: string;
@@ -79,6 +91,9 @@ export default function CreateAssignmentPage() {
   const [schema, setSchema]                 = useState('');        // for code_review
   const [context, setContext]               = useState('');        // for excel_review
   const [veFormId, setVeFormId]             = useState('');        // for virtual_experience
+  const [scenarios, setScenarios]           = useState<AssignmentScenario[]>([]); // for standard
+  const [introDoc, setIntroDoc]             = useState<LessonDoc | undefined>(undefined); // standard overview (interactive)
+  const [introBody, setIntroBody]           = useState('');   // HTML fallback of introDoc
 
   // Core fields
   const [title, setTitle]                         = useState('');
@@ -175,6 +190,17 @@ export default function CreateAssignmentPage() {
             if (cfg.schema) setSchema(cfg.schema);
             if (cfg.context) setContext(cfg.context);
             if (cfg.ve_form_id) setVeFormId(cfg.ve_form_id);
+            if (Array.isArray(cfg.scenarios)) {
+              // Answer keys live in a server-only table; re-inject them into the editor state.
+              const { data: keyRow } = await supabase.from('assignment_answer_keys').select('keys').eq('assignment_id', id).maybeSingle();
+              const keys = (keyRow?.keys ?? {}) as Record<string, string>;
+              setScenarios(cfg.scenarios.map((s: any) => ({
+                ...s,
+                tasks: (s.tasks ?? []).map((t: any) => (t.type === 'mcq' && keys[t.id] != null ? { ...t, correctAnswer: keys[t.id] } : t)),
+              })));
+            }
+            if (cfg.introDoc) setIntroDoc(cfg.introDoc);
+            if (cfg.introBody) setIntroBody(cfg.introBody);
           }
         }
         if (resData) setResources(resData.map((r: any) => ({ id: r.id, name: r.name, url: r.url, resource_type: r.resource_type })));
@@ -186,6 +212,7 @@ export default function CreateAssignmentPage() {
   function buildConfig(): Record<string, any> | null {
     const rubric = rubricText.split('\n').map(s => s.trim()).filter(Boolean);
     switch (assignmentType) {
+      case 'standard':           return scenarios.length ? { scenarios: stripAnswerKeys(scenarios), ...(introDoc ? { introDoc } : {}), ...(introBody.trim() ? { introBody: sanitizeRichText(introBody) } : {}) } : null;
       case 'code_review':        return { rubric, minScore, ...(schema.trim() ? { schema: schema.trim() } : {}) };
       case 'excel_review':       return { rubric, minScore, ...(context.trim() ? { context: context.trim() } : {}) };
       case 'dashboard_critique': return { rubric };
@@ -245,13 +272,24 @@ export default function CreateAssignmentPage() {
     if (assignmentType === 'virtual_experience' && !veFormId) {
       setError('Please select a Virtual Experience.'); return;
     }
+    // Block publishing an incomplete scenario assignment (drafts may stay incomplete).
+    if (assignmentType === 'standard' && status === 'published') {
+      const vErrs = validateScenarioConfig({ scenarios });
+      if (vErrs.length) { setError(vErrs.slice(0, 3).join(' ') + (vErrs.length > 3 ? ` (+${vErrs.length - 3} more)` : '')); return; }
+    }
 
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.replace('/auth'); return; }
 
-      const payload: any = {
+      const wantPublished = status === 'published';
+
+      // B-lite publish safety: a published assignment must never exist without its matching
+      // answer keys / resources. So always write the CONTENT as a draft first (creating, or
+      // flipping an already-published edit back to draft in the same atomic update), save keys
+      // and resources, and only THEN flip to published. If any step fails it stays a draft.
+      const draftPayload: any = {
         title:                    trimmedTitle,
         scenario:                 sanitizeRichText(scenario) || null,
         brief:                    sanitizeRichText(brief) || null,
@@ -260,7 +298,7 @@ export default function CreateAssignmentPage() {
         submission_instructions:  sanitizeRichText(submissionInstructions) || null,
         related_course:           relatedCourse || null,
         cover_image:              coverImage.trim() || null,
-        status,
+        status:                   'draft',
         cohort_ids:               audienceMode === 'cohorts' ? selectedCohortIds : [],
         group_ids:                audienceMode === 'groups'  ? selectedGroupIds  : [],
         deadline_date:            deadlineDate || null,
@@ -270,27 +308,40 @@ export default function CreateAssignmentPage() {
 
       let assignmentId = editId;
       if (editId) {
-        const { error: updateError } = await supabase.from('assignments').update(payload).eq('id', editId);
+        const { error: updateError } = await supabase.from('assignments').update(draftPayload).eq('id', editId);
         if (updateError) throw updateError;
         await supabase.from('assignment_resources').delete().eq('assignment_id', editId);
       } else {
         const { data: assignment, error: assignmentError } = await supabase
-          .from('assignments').insert({ ...payload, created_by: session.user.id }).select('id').single();
+          .from('assignments').insert({ ...draftPayload, created_by: session.user.id }).select('id').single();
         if (assignmentError) throw assignmentError;
         assignmentId = assignment.id;
       }
       if (!assignmentId) throw new Error('Assignment could not be resolved.');
+
+      // MCQ answer keys (server-only table). On failure the assignment stays a draft.
+      if (assignmentType === 'standard') {
+        const { error: keyErr } = await supabase.from('assignment_answer_keys')
+          .upsert({ assignment_id: assignmentId, keys: extractAnswerKeys(scenarios) }, { onConflict: 'assignment_id' });
+        if (keyErr) throw new Error('Could not save the answer keys. The assignment was left as a draft - please try saving again.');
+      }
 
       const validResources = resources.filter(r => r.name.trim() && r.url.trim());
       if (validResources.length > 0) {
         const { error: resourcesError } = await supabase.from('assignment_resources').insert(
           validResources.map(r => ({ assignment_id: assignmentId, name: r.name.trim(), url: r.url.trim(), resource_type: r.resource_type }))
         );
-        if (resourcesError) throw resourcesError;
+        if (resourcesError) throw new Error('Could not save resources. The assignment was left as a draft - please try saving again.');
       }
 
-      // Send notification emails before navigating away so the request is not cancelled.
-      if (status === 'published') {
+      // Flip to published only after content, keys, and resources all saved.
+      if (wantPublished) {
+        const { error: pubErr } = await supabase.from('assignments').update({ status: 'published' }).eq('id', assignmentId);
+        if (pubErr) throw new Error('Content saved, but publishing failed. The assignment is a draft - please try publishing again.');
+      }
+
+      // Send notification emails after publication succeeds (before navigating away).
+      if (wantPublished) {
         const isPublishingNow = !editId || originalStatus !== 'published';
         const cohortsToNotify = audienceMode === 'cohorts'
           ? (isPublishingNow ? selectedCohortIds : selectedCohortIds.filter(id => !originalCohortIds.includes(id)))
@@ -306,7 +357,7 @@ export default function CreateAssignmentPage() {
           });
           if (!notifyRes.ok) {
             const notifyJson = await notifyRes.json().catch(() => ({}));
-            throw new Error(notifyJson.error || 'Assignment saved but notification failed.');
+            throw new Error(notifyJson.error || 'Assignment published but notification failed.');
           }
         }
       }
@@ -360,7 +411,9 @@ export default function CreateAssignmentPage() {
     }
   }
 
+  const isLegacyType = !ASSIGNMENT_TYPES.some(t => t.value === assignmentType) && assignmentType !== 'standard';
   const showContentFields = assignmentType !== 'virtual_experience';
+  const isDark = C === DARK_C;
 
   const openPreview = async () => {
     if (assignmentType === 'virtual_experience' && veFormId) {
@@ -455,9 +508,14 @@ export default function CreateAssignmentPage() {
                 );
               })}
             </div>
-            {assignmentType !== 'standard' && (
+            {ASSIGNMENT_TYPES.find(t => t.value === assignmentType) && assignmentType !== 'standard' && (
               <p style={{ ...hintStyle(C), marginTop: 10 }}>
                 {ASSIGNMENT_TYPES.find(t => t.value === assignmentType)?.description}
+              </p>
+            )}
+            {isLegacyType && (
+              <p style={{ ...hintStyle(C), marginTop: 10 }}>
+                You are editing a legacy {LEGACY_TYPE_LABELS[assignmentType] ?? assignmentType} assignment. Its settings below still work. New assignments are built as Standard scenarios and tasks.
               </p>
             )}
           </section>
@@ -647,23 +705,41 @@ export default function CreateAssignmentPage() {
           {/* -- Section: Content (hidden for VE type) --- */}
           {showContentFields && (
             <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4, marginTop: 0 }}>Content</h2>
-              {assignmentType !== 'standard' && (
-                <p style={{ ...hintStyle(C), marginBottom: 16 }}>This text is shown to students as a briefing before they interact with the {ASSIGNMENT_TYPES.find(t => t.value === assignmentType)?.label} tool.</p>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4, marginTop: 0 }}>{assignmentType === 'standard' ? 'Overview' : 'Content'}</h2>
+              {isLegacyType && (
+                <p style={{ ...hintStyle(C), marginBottom: 16 }}>This text is shown to students as a briefing before they interact with the {LEGACY_TYPE_LABELS[assignmentType] ?? assignmentType} tool.</p>
               )}
 
-              {[
-                { label: 'Scenario', value: scenario, setter: setScenario, placeholder: 'Describe the background context…' },
-                { label: 'Brief', value: brief, setter: setBrief, placeholder: 'Summarise the assignment…' },
-                { label: 'Tasks', value: tasks, setter: setTasks, placeholder: 'List the tasks students must complete…' },
-                { label: 'Requirements', value: requirements, setter: setRequirements, placeholder: 'List any requirements or constraints…' },
-              ].map(({ label, value, setter, placeholder }) => (
-                <div key={label} style={{ marginBottom: 16 }}>
-                  <label style={labelStyle(C)}>{label}</label>
-                  <RichTextEditor value={value} onChange={setter} placeholder={placeholder} enableAiAssist />
+              {assignmentType === 'standard' ? (
+                <div style={{ marginTop: 12 }}>
+                  <label style={labelStyle(C)}>Overview <span style={{ fontSize: 12, fontWeight: 400, color: C.faint }}>(optional intro shown above the scenarios)</span></label>
+                  <LessonEditor
+                    doc={introDoc}
+                    bodyFallback={introBody}
+                    onChange={({ doc, body }) => { setIntroDoc(doc); setIntroBody(body); }}
+                    placeholder="Set the overall context. Add images, steps, callouts, tables..."
+                    isDark={isDark}
+                  />
                 </div>
-              ))}
+              ) : (
+                [
+                  { label: 'Scenario', value: scenario, setter: setScenario, placeholder: 'Describe the background context…' },
+                  { label: 'Brief', value: brief, setter: setBrief, placeholder: 'Summarise the assignment…' },
+                  { label: 'Tasks', value: tasks, setter: setTasks, placeholder: 'List the tasks students must complete…' },
+                  { label: 'Requirements', value: requirements, setter: setRequirements, placeholder: 'List any requirements or constraints…' },
+                ].map(({ label, value, setter, placeholder }) => (
+                  <div key={label} style={{ marginBottom: 16 }}>
+                    <label style={labelStyle(C)}>{label}</label>
+                    <RichTextEditor value={value} onChange={setter} placeholder={placeholder} enableAiAssist />
+                  </div>
+                ))
+              )}
             </section>
+          )}
+
+          {/* -- Section: Scenarios & Tasks (standard only) --- */}
+          {assignmentType === 'standard' && (
+            <ScenariosEditor scenarios={scenarios} onChange={setScenarios} C={C} />
           )}
 
           {/* -- Section: Resources --- */}
@@ -753,9 +829,12 @@ export default function CreateAssignmentPage() {
               <p style={hintStyle(C)}>Students will see a countdown on their assignment card until this date.</p>
             </div>
 
-            {assignmentType === 'standard' && (
+            {/* Submission Instructions is retired from the Standard flow (task instructions +
+                Overview cover it). Shown only when a legacy assignment already has content, so
+                editing does not silently drop it. */}
+            {submissionInstructions.trim() !== '' && (
               <div>
-                <label style={labelStyle(C)}>Submission Instructions</label>
+                <label style={labelStyle(C)}>Submission Instructions <span style={{ fontSize: 12, fontWeight: 400, color: C.faint }}>(legacy - not shown to students)</span></label>
                 <RichTextEditor value={submissionInstructions} onChange={setSubmissionInstructions} placeholder="How should students submit their work?" enableAiAssist />
               </div>
             )}
@@ -860,8 +939,25 @@ export default function CreateAssignmentPage() {
                 </div>
               )}
 
-              {/* Non-VE types: show assignment content */}
-              {assignmentType !== 'virtual_experience' && (
+              {/* Standard with scenarios: show the real plain player in preview mode */}
+              {assignmentType === 'standard' && scenarios.length > 0 && (
+                <div style={{ maxWidth: 760, margin: '0 auto' }}>
+                  <StandardAssignmentPlayer
+                    assignmentId={editId || 'preview'}
+                    config={{ scenarios, introDoc, introBody }}
+                    userId="preview"
+                    previewMode
+                    title={title || 'Untitled Assignment'}
+                    coverImage={coverImage}
+                    deadline={deadlineDate}
+                    courseTitle={courses.find(c => c.id === relatedCourse)?.title}
+                    resources={resources.filter(r => r.url.trim()).map(r => ({ id: r.id, name: r.name, url: r.url, resource_type: r.resource_type }))}
+                  />
+                </div>
+              )}
+
+              {/* Non-VE types (legacy AI + empty standard): show assignment content */}
+              {assignmentType !== 'virtual_experience' && !(assignmentType === 'standard' && scenarios.length > 0) && (
                 <div style={{ maxWidth: 680, margin: '0 auto' }}>
                   <div style={{ borderRadius: 16, overflow: 'hidden', background: C.card, border: `1px solid ${C.cardBorder}`, marginBottom: 16 }}>
                     {coverImage && (

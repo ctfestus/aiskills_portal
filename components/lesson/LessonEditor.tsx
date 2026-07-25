@@ -55,6 +55,9 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
   // Set on edits made inside the editor so the external-sync effect below skips them
   // (reloading on every keystroke would reset the caret).
   const skipNextSync = useRef(false);
+  // useEditor already initializes with `content`, so the first sync-effect run would call
+  // setContent redundantly -- and that mid-commit flushSync triggers a React warning. Skip it.
+  const syncedOnce = useRef(false);
 
   const editor = useEditor({
     extensions: [...lessonExtensions, Placeholder.configure({ placeholder })],
@@ -87,6 +90,7 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
   // replaces the lesson). Internal edits set skipNextSync so typing is not clobbered.
   useEffect(() => {
     if (!editor) return;
+    if (!syncedOnce.current) { syncedOnce.current = true; return; } // content already set at init
     if (skipNextSync.current) { skipNextSync.current = false; return; }
     editor.commands.setContent((doc ?? bodyFallback ?? '') as Record<string, unknown> | string, { emitUpdate: false });
   }, [editor, doc, bodyFallback]);

@@ -11,6 +11,7 @@ import { sanitizeRichText } from '@/lib/sanitize';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { ReviewReportView, REVIEW_TYPES } from '@/components/ReviewReportView';
 import { parseReviewNotes, inferReviewType } from '@/lib/reviewRecord';
+import { parseSubmissionRecord, TASK_TYPE_LABEL, isAiTaskType, type AssignmentSubmissionRecord, type TaskAnswer, type McqGrade } from '@/lib/assignment-scenarios';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { useTheme } from '@/components/ThemeProvider';
 import { LIGHT_C, cardStyle } from '@/lib/theme';
@@ -18,6 +19,64 @@ import { SYNC_ENABLED } from '@/lib/sync';
 import { exportAssignment, exportAllAssignments, exportCSV, exportGroupCSV } from '@/lib/dashboard-export';
 import { PushButton, PushAllButton, StudentAvatar } from '@/components/dashboard/primitives';
 import { ImportButton } from '@/components/dashboard/ImportButton';
+
+// Renders a scenario-based standard submission: each scenario, then each task's answer
+// (written / upload / MCQ with correctness / inline AI report). Read-only for grading.
+function ScenarioSubmissionView({ record, mcq, subtotal, C, isDark }: { record: AssignmentSubmissionRecord; mcq: Record<string, McqGrade>; subtotal: number | null; C: typeof LIGHT_C; isDark: boolean }) {
+  const order: string[] = [];
+  const byScenario: Record<string, { title: string; answers: TaskAnswer[] }> = {};
+  for (const a of record.answers) {
+    if (!byScenario[a.scenarioId]) { byScenario[a.scenarioId] = { title: a.scenarioTitle, answers: [] }; order.push(a.scenarioId); }
+    byScenario[a.scenarioId].answers.push(a);
+  }
+  return (
+    <div className="mb-3 space-y-4">
+      {subtotal != null && (
+        <p className="text-xs" style={{ color: C.faint }}>Multiple-choice auto-score: <span style={{ fontWeight: 700, color: C.text }}>{subtotal}%</span> (graded server-side; suggestion only). Set the final grade below.</p>
+      )}
+      {order.map((sid, i) => {
+        const group = byScenario[sid];
+        return (
+          <div key={sid}>
+            <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.green }}>Scenario {i + 1}{group.title ? ` · ${group.title}` : ''}</p>
+            <div className="space-y-3">
+              {group.answers.map(a => (
+                <div key={a.taskId} className="rounded-xl p-4" style={{ background: C.input }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-sm font-semibold" style={{ color: C.text }}>{a.taskTitle || 'Task'}</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: C.pill, color: C.muted }}>{TASK_TYPE_LABEL[a.type]}</span>
+                    {typeof a.score === 'number' && <span className="text-[11px] font-semibold ml-auto" style={{ color: a.score >= 50 ? '#16a34a' : '#ef4444' }}>{a.score}/100</span>}
+                  </div>
+                  {a.type === 'text' && (
+                    a.text ? <div className="rich-content text-sm" style={{ color: C.text }} dangerouslySetInnerHTML={{ __html: sanitizeRichText(a.text) }}/> : <p className="text-sm" style={{ color: C.faint }}>No response.</p>
+                  )}
+                  {a.type === 'upload' && (
+                    a.fileUrl
+                      ? <a href={a.fileUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold hover:opacity-70" style={{ color: C.green }}><Download className="w-3 h-3"/> {a.fileName || 'Download file'}</a>
+                      : <p className="text-sm" style={{ color: C.faint }}>No file uploaded.</p>
+                  )}
+                  {a.type === 'mcq' && (() => {
+                    const g = mcq[a.taskId];
+                    if (a.selectedOption == null) return <p className="text-sm" style={{ color: C.faint }}>Not answered.</p>;
+                    return <p className="text-sm" style={{ color: C.text }}>Selected: <span style={{ fontWeight: 600 }}>{a.selectedOption}</span> {g ? (g.isCorrect ? <span style={{ color: '#16a34a', fontWeight: 700 }}>(correct)</span> : <span style={{ color: '#ef4444', fontWeight: 700 }}>(incorrect{g.correctOption ? ` · correct: ${g.correctOption}` : ''})</span>) : null}</p>;
+                  })()}
+                  {isAiTaskType(a.type) && (
+                    a.report
+                      ? <div>
+                          <p className="text-[11px] mb-1.5" style={{ color: C.faint }}>AI feedback the student generated - not independently verified; confirm against the submitted work.</p>
+                          <ReviewReportView rec={{ type: a.type, report: a.report, imageUrl: a.imageUrl }} isDark={isDark}/>
+                        </div>
+                      : <p className="text-sm" style={{ color: C.faint }}>AI review not run.</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   const { theme } = useTheme();
@@ -36,6 +95,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [score, setScore]                   = useState('');
   const [feedback, setFeedback]             = useState('');
+  const [scenarioMcq, setScenarioMcq]       = useState<{ grades: Record<string, McqGrade>; subtotal: number | null } | null>(null);
   const [grading, setGrading]               = useState(false);
   const [gradeError, setGradeError]         = useState('');
   const [gradeSuccess, setGradeSuccess]     = useState(false);
@@ -116,6 +176,20 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     ]);
     if (files) setSubFiles(files);
 
+    // Scenario submissions: MCQ is graded server-side (the answer keys never reach the browser
+    // and the endpoint works for any authorized grader, not just the assignment owner).
+    if (selected?.type === 'standard' && parseSubmissionRecord(sub.response_text)) {
+      const { data: { session: gs } } = await supabase.auth.getSession();
+      const gr = await fetch(`/api/assignments/mcq-grade?submissionId=${sub.id}`, {
+        headers: gs ? { Authorization: `Bearer ${gs.access_token}` } : {},
+      });
+      const graded = gr.ok ? await gr.json() : { grades: {}, subtotal: null };
+      setScenarioMcq(graded);
+      if (sub.score == null && graded.subtotal != null) setScore(String(graded.subtotal));
+    } else {
+      setScenarioMcq(null);
+    }
+
     if (isVe && session?.data?.session?.access_token) {
       const res = await fetch(`/api/ve-attempt?veId=${veFormId}&studentId=${sub.student_id}`, {
         headers: { Authorization: `Bearer ${session.data.session.access_token}` },
@@ -179,6 +253,11 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
       );
     }
 
+    // Copy MCQ answer keys (stored in a separate server-only table), else the copy's MCQs lose
+    // their correct answers and can't be republished.
+    const { data: keyRow } = await supabase.from('assignment_answer_keys').select('keys').eq('assignment_id', a.id).maybeSingle();
+    if (keyRow) await supabase.from('assignment_answer_keys').upsert({ assignment_id: data.id, keys: keyRow.keys }, { onConflict: 'assignment_id' });
+
     setDuplicatingId(null);
     setAssignments(prev => [data, ...prev]);
   }
@@ -230,6 +309,10 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
           </div>
 
           {viewingSub.response_text ? (() => {
+            const scenarioRec = parseSubmissionRecord(viewingSub.response_text);
+            if (scenarioRec) {
+              return <ScenarioSubmissionView record={scenarioRec} mcq={scenarioMcq?.grades ?? {}} subtotal={scenarioMcq?.subtotal ?? null} C={C} isDark={isDark} />;
+            }
             const subAssignType = selected?.type ?? 'standard';
             if (REVIEW_TYPES.includes(subAssignType)) {
               const rec = parseReviewNotes(viewingSub.response_text);

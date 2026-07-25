@@ -452,6 +452,14 @@ CREATE TABLE public.assignment_group_workspaces (
   UNIQUE (assignment_id, group_id)
 );
 
+-- ── assignment_answer_keys (migration 142) ────────────────────
+-- Server-only MCQ correct answers, kept out of the student-readable assignments.config.
+CREATE TABLE public.assignment_answer_keys (
+  assignment_id uuid        PRIMARY KEY REFERENCES public.assignments(id) ON DELETE CASCADE,
+  keys          jsonb       NOT NULL DEFAULT '{}'::jsonb,  -- { "<taskId>": "<correct option text>" }
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+
 -- ── communities ───────────────────────────────────────────────
 CREATE TABLE public.communities (
   id            uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -923,6 +931,7 @@ ALTER TABLE public.assignment_resources       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_submissions     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_submission_files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_group_workspaces ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.assignment_answer_keys      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.communities                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.announcements              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.schedules                  ENABLE ROW LEVEL SECURITY;
@@ -1005,6 +1014,8 @@ CREATE TRIGGER trg_assignments_updated_at
   BEFORE UPDATE ON public.assignments FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_assignment_submissions_updated_at
   BEFORE UPDATE ON public.assignment_submissions FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE TRIGGER trg_assignment_answer_keys_updated_at
+  BEFORE UPDATE ON public.assignment_answer_keys FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_assignment_group_workspaces_updated_at
   BEFORE UPDATE ON public.assignment_group_workspaces FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
@@ -1013,15 +1024,20 @@ CREATE TRIGGER trg_assignment_group_workspaces_updated_at
 --       The role check lives inside the function body instead.
 DROP TRIGGER IF EXISTS trg_protect_submission_graded_fields ON public.assignment_submissions;
 
+-- Hardened by migration 142: guards INSERT + UPDATE. A student may never write score, feedback,
+-- status='graded', or grading metadata (a direct insert could otherwise self-grade or forge a
+-- score). score/feedback are grader-only; the AI-review auto-submit no longer writes a client
+-- score; the scenario endpoint runs as the service role (auth.uid() null) so this check skips it.
 CREATE OR REPLACE FUNCTION public.protect_submission_graded_fields()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   IF (SELECT role FROM public.students WHERE id = auth.uid()) = 'student' THEN
-    IF NEW.score     IS DISTINCT FROM OLD.score     OR
-       NEW.feedback  IS DISTINCT FROM OLD.feedback  OR
-       NEW.graded_by IS DISTINCT FROM OLD.graded_by OR
-       NEW.graded_at IS DISTINCT FROM OLD.graded_at THEN
-      RAISE EXCEPTION 'Students cannot modify graded fields';
+    IF NEW.status = 'graded'
+       OR NEW.graded_by IS NOT NULL
+       OR NEW.graded_at IS NOT NULL
+       OR NEW.score IS NOT NULL
+       OR NEW.feedback IS NOT NULL THEN
+      RAISE EXCEPTION 'Students cannot set graded fields';
     END IF;
   END IF;
   RETURN NEW;
@@ -1029,7 +1045,7 @@ END;
 $$;
 
 CREATE TRIGGER trg_protect_submission_graded_fields
-  BEFORE UPDATE ON public.assignment_submissions
+  BEFORE INSERT OR UPDATE ON public.assignment_submissions
   FOR EACH ROW EXECUTE FUNCTION public.protect_submission_graded_fields();
 CREATE TRIGGER trg_communities_updated_at
   BEFORE UPDATE ON public.communities FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
@@ -1824,6 +1840,13 @@ CREATE POLICY "assignment_resources: instructor manage"
   WITH CHECK (
     EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_id AND (a.created_by = (SELECT auth.uid()) OR (SELECT public.is_admin())))
   );
+
+-- ── assignment_answer_keys (migration 142) ────────────────────
+-- Owning instructor / admin only. No student policy -> RLS denies students all access.
+CREATE POLICY "assignment_answer_keys: instructor manage"
+  ON public.assignment_answer_keys FOR ALL
+  USING      (EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_id AND (a.created_by = (SELECT auth.uid()) OR (SELECT public.is_admin()))))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_id AND (a.created_by = (SELECT auth.uid()) OR (SELECT public.is_admin()))));
 
 -- ── groups (migration 093) ────────────────────────────────────
 ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;

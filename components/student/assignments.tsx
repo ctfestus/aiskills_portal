@@ -16,6 +16,7 @@ import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRe
 import { LIGHT_C } from '@/lib/theme';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { getStudentMode } from '@/lib/student-mode-client';
+import { isScenarioConfig } from '@/lib/assignment-scenarios';
 import { Sk, EmptyState, StatusBadge } from '@/components/student/shared';
 import {
   BookOpen, ClipboardList, Users, ChevronDown, X, CheckCircle, AlertCircle, Star,
@@ -28,6 +29,7 @@ const ExcelReviewPlayer       = dynamic(() => import('@/components/ExcelReviewPl
 const DashboardCritiquePlayer = dynamic(() => import('@/components/DashboardCritiquePlayer'), { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
 const DocumentReviewPlayer    = dynamic(() => import('@/components/DocumentReviewPlayer'),    { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
 const AssignmentExperiencePlayer = dynamic(() => import('@/components/AssignmentExperiencePlayer'), { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
+const StandardAssignmentPlayer = dynamic(() => import('@/components/StandardAssignmentPlayer'), { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
 
 function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, onBack }: { assignment: any; userId: string; studentName: string; studentEmail: string; C: typeof LIGHT_C; onBack: () => void }) {
   type ReadyFile = { name: string; url: string; status: 'uploading' | 'done' | 'error'; error?: string };
@@ -74,6 +76,9 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
   const assignmentType = assignment.type ?? 'standard';
   const isAiType = ['code_review', 'excel_review', 'dashboard_critique', 'document_review'].includes(assignmentType);
   const isVeType = assignmentType === 'virtual_experience';
+  // A "standard" assignment authored as scenarios + tasks; old standard assignments (no
+  // config.scenarios) fall back to the legacy brief + free-submission panel.
+  const isScenarioStandard = assignmentType === 'standard' && isScenarioConfig(assignment.config);
 
   useEffect(() => {
     const load = async () => {
@@ -383,6 +388,26 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
     }
   }
 
+  // Insert-or-update a submission WITHOUT upsert. The table's unique indexes are PARTIAL
+  // (WHERE group_id IS / IS NOT NULL), which ON CONFLICT cannot match by column names alone
+  // ("no unique or exclusion constraint matching the ON CONFLICT specification"). Update the
+  // already-loaded row by id when present, otherwise insert; identity columns are set only on
+  // insert. `fields` are the mutable columns.
+  async function persistSubmission(fields: Record<string, any>): Promise<any> {
+    if (submission?.id) {
+      const { data, error } = await supabase.from('assignment_submissions')
+        .update(fields).eq('id', submission.id).select().single();
+      if (error) throw new Error(error.message || 'Could not save. Please try again.');
+      return data;
+    }
+    const insertPayload: any = { assignment_id: assignment.id, student_id: userId, ...fields };
+    if (isGroupAssignment && myGroupId) insertPayload.group_id = myGroupId;
+    const { data, error } = await supabase.from('assignment_submissions')
+      .insert(insertPayload).select().single();
+    if (error) throw new Error(error.message || 'Could not save. Please try again.');
+    return data;
+  }
+
   async function autoSubmit(aiScore: number | null, summaryText: string) {
     if (inStudentMode) { setSubmitError('Submitting on a student behalf is disabled in Student Mode.'); return; }
     const participantIds = Array.from(new Set(selectedParticipants));
@@ -390,31 +415,53 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
       setSubmitError('Select at least one participant before submitting.');
       return;
     }
-
-    const score = aiScore != null ? Math.round(aiScore) : null;
-    const payload: any = {
-      assignment_id: assignment.id,
-      student_id: userId,
-      response_text: summaryText,
-      status: 'submitted',
-      submitted_at: new Date().toISOString(),
-    };
-    if (score != null) payload.score = score;
-    if (isGroupAssignment && myGroupId) {
-      payload.group_id = myGroupId;
-      payload.submitted_by = userId;
-      payload.participants = participantIds;
+    // Score is grader-only now (the DB trigger forbids student-written scores). The AI report
+    // stays in response_text; the instructor sets the grade. aiScore is intentionally ignored.
+    void aiScore;
+    const fields: any = { response_text: summaryText, status: 'submitted', submitted_at: new Date().toISOString() };
+    if (isGroupAssignment && myGroupId) { fields.submitted_by = userId; fields.participants = participantIds; }
+    try {
+      const data = await persistSubmission(fields);
+      if (data) setSubmission(data);
+    } catch (err: any) {
+      setSubmitError(err?.message || 'Failed to submit. Please try again.');
     }
-    const conflictCol = isGroupAssignment && myGroupId ? 'group_id,assignment_id' : 'student_id,assignment_id';
-    const { data, error } = await supabase.from('assignment_submissions')
-      .upsert(payload, { onConflict: conflictCol })
-      .select().single();
-    if (error) {
-      setSubmitError(error.message || 'Failed to submit. Please try again.');
-      return;
-    }
-    if (data) setSubmission(data);
   }
+
+  // Scenario submit/draft go through the server endpoint, which grades MCQ from the server-only
+  // key, builds the stored record, and owns status/score (the client never writes those). The
+  // player passes RAW answers only.
+  async function postScenario(answers: any[], asDraft: boolean): Promise<any> {
+    if (inStudentMode) throw new Error(`${asDraft ? 'Saving' : 'Submitting'} on a student behalf is disabled in Student Mode.`);
+    if (!asDraft && isGroupAssignment && myGroupId && Array.from(new Set(selectedParticipants)).length === 0) {
+      throw new Error('Select at least one participant before submitting.');
+    }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Not authenticated');
+    const res = await fetch('/api/assignments/submit-scenario', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({
+        assignmentId: assignment.id,
+        answers,
+        asDraft,
+        groupId: isGroupAssignment && myGroupId ? myGroupId : undefined,
+        participants: isGroupAssignment ? Array.from(new Set(selectedParticipants)) : undefined,
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || `Failed to ${asDraft ? 'save' : 'submit'}. Please try again.`);
+    if (json.submission) setSubmission(json.submission);
+    if (!asDraft) {
+      fetch('/api/assignments/submit-confirm', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignment_id: assignment.id }),
+      }).catch(() => {});
+    }
+    return json.submission;
+  }
+  const submitScenarios   = (answers: any[]) => postScenario(answers, false);
+  const saveScenarioDraft = (answers: any[]) => postScenario(answers, true);
 
   const isParticipant = !isGroupAssignment
     || !submission
@@ -426,12 +473,17 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
   const hasContent = responseText.trim() || readyFiles.some(f => f.status === 'done') || links.some(l => l.trim()) || savedFiles.length > 0;
 
   return (
-    <div>
+    // Scenario-based standard assignments use Google Sans throughout (matching the VE look),
+    // so the brief card, group panel, and the player all share one typeface. The scoped style
+    // overrides .rich-content, which otherwise pins Inter via --font-sans.
+    <div className={isScenarioStandard ? 'sa-scenario-font' : undefined} style={isScenarioStandard ? { fontFamily: "'Google Sans Text', 'Inter', sans-serif" } : undefined}>
+      {isScenarioStandard && <style>{`.sa-scenario-font .rich-content { font-family: 'Google Sans Text', 'Inter', sans-serif; }`}</style>}
       <button onClick={onBack} className="flex items-center gap-1.5 mb-3 text-xs font-medium"
         style={{ color: C.muted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
         <ArrowLeft className="w-3.5 h-3.5"/> Back to assignments
       </button>
-      <h1 className="text-[22px] font-bold tracking-tight mb-5" style={{ color: C.text }}>{assignment.title}</h1>
+      {/* Scenario-based standard assignments show the title inside the player's right pane. */}
+      {!isScenarioStandard && <h1 className="text-[22px] font-bold tracking-tight mb-5" style={{ color: C.text }}>{assignment.title}</h1>}
 
       {submitSuccess && (
         <div className="flex items-center gap-3 rounded-2xl px-5 py-4 mb-5"
@@ -444,8 +496,10 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
         </div>
       )}
 
-      {/* Assignment brief -- only render card if there is content to show */}
-      {(assignment.cover_image || (submission && isParticipant) || assignment._course_title || assignment.scenario || assignment.brief || assignment.tasks || assignment.requirements || resources.length > 0) && (
+      {/* Assignment brief -- only render card if there is content to show. Scenario-based
+          standard assignments render cover / related course / resources in the player's panes
+          instead, so the legacy brief card is suppressed for them. */}
+      {!isScenarioStandard && (assignment.cover_image || (submission && isParticipant) || assignment._course_title || assignment.scenario || assignment.brief || assignment.tasks || assignment.requirements || resources.length > 0) && (
       <div className="rounded-2xl mb-4 overflow-hidden" style={{ background: C.card }}>
         {/* Cover image */}
         {assignment.cover_image && (
@@ -991,8 +1045,60 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
         </div>
       )}
 
-      {/* Submission panel -- standard type only */}
-      {assignmentType === 'standard' && (
+      {/* Scenario-based standard assignment -- plain, open, per-task */}
+      {!loadingSub && isScenarioStandard && (
+        <div className="mb-4">
+          {isGraded && (() => {
+            const passed = submission.score != null && submission.score >= 85;
+            const failed = submission.score != null && submission.score < 85;
+            return (
+              <div className="rounded-2xl p-5 mb-4" style={{ background: C.card }}>
+                <div className="flex items-center gap-3 flex-wrap mb-2">
+                  <StatusBadge status="graded"/>
+                  {submission.score != null && <span className="text-sm font-semibold" style={{ color: passed ? '#10b981' : '#ef4444' }}>Score: {submission.score}</span>}
+                  {passed && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>Passed</span>}
+                  {failed && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.10)', color: '#ef4444' }}>Failed</span>}
+                </div>
+                {submission.feedback && (
+                  <div className="rounded-xl p-4" style={{ background: passed ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.07)', border: `1px solid ${passed ? 'rgba(16,185,129,0.22)' : 'rgba(239,68,68,0.22)'}` }}>
+                    <p className="text-xs font-semibold mb-1" style={{ color: passed ? '#10b981' : '#ef4444' }}>Instructor Feedback</p>
+                    <div className="rich-content text-sm" dangerouslySetInnerHTML={{ __html: sanitizeRichText(submission.feedback) }}/>
+                  </div>
+                )}
+                {failed && (
+                  <button onClick={handleResubmit} disabled={submitting}
+                    className="mt-3 w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+                    style={{ background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1.5px solid rgba(239,68,68,0.25)' }}>
+                    {submitting ? <Loader2 className="w-4 h-4 animate-spin"/> : <RefreshCw className="w-4 h-4"/>}
+                    Resubmit Assignment
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+          <StandardAssignmentPlayer
+            assignmentId={assignment.id}
+            config={assignment.config}
+            userId={userId}
+            initialSubmission={submission}
+            graded={isGraded}
+            submitted={isSubmitted}
+            canSubmit={(!isGroupAssignment || isLeader) && !inStudentMode}
+            disabledReason={inStudentMode ? 'Submitting is disabled in Student Mode.' : undefined}
+            onSubmit={submitScenarios}
+            onSaveDraft={saveScenarioDraft}
+            title={assignment.title}
+            coverImage={assignment.cover_image}
+            deadline={assignment.deadline_date}
+            courseTitle={assignment._course_title}
+            courseHref={(assignment._course_slug || assignment.related_course) ? `/${assignment._course_slug || assignment.related_course}` : undefined}
+            resources={resources}
+          />
+        </div>
+      )}
+
+      {/* Submission panel -- legacy standard type only (no scenarios) */}
+      {assignmentType === 'standard' && !isScenarioStandard && (
       <div className="rounded-2xl p-6" style={{ background: C.card }}>
         <h3 className="text-sm font-bold mb-4" style={{ color: C.text }}>
           {isGroupAssignment ? 'Group Submission' : 'Your Submission'}
