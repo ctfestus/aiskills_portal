@@ -119,10 +119,37 @@ async function safeFetch(url, maxHops = 5) {
 async function downloadFile(url, destPath) {
   const res = await safeFetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.length > MAX_FILE_BYTES) throw new Error('too large');
-  fs.writeFileSync(destPath, buf);
-  return buf.length;
+
+  // Reject early on a declared oversize, then stream to disk with a running cap: a large (or
+  // chunked, unknown-length) response is aborted at MAX_FILE_BYTES instead of being fully buffered.
+  const declared = Number(res.headers.get('content-length') || '0');
+  if (declared && declared > MAX_FILE_BYTES) throw new Error('too large');
+
+  const reader = res.body?.getReader?.();
+  if (!reader) { // no stream available: buffer with the same cap
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > MAX_FILE_BYTES) throw new Error('too large');
+    fs.writeFileSync(destPath, buf);
+    return buf.length;
+  }
+
+  const out = fs.createWriteStream(destPath);
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > MAX_FILE_BYTES) { await reader.cancel(); throw new Error('too large'); }
+      if (!out.write(Buffer.from(value))) await new Promise(r => out.once('drain', r));
+    }
+    await new Promise((resolve, reject) => out.end(err => (err ? reject(err) : resolve())));
+  } catch (e) {
+    out.destroy();
+    try { fs.unlinkSync(destPath); } catch { /* nothing to clean up */ }
+    throw e;
+  }
+  return total;
 }
 
 // Read a zip's central directory to sum uncompressed size + entry count WITHOUT extracting, so a zip

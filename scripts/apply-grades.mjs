@@ -124,7 +124,14 @@ async function main() {
   console.log(`Target DB: ${host}  (${mode}, env: ${path.basename(envPath)})`);
   console.log(expectedAssignmentId
     ? `Bound to assignment ${expectedAssignmentId}`
-    : 'Warning: assignment.json not found next to the grades file; cross-assignment match not enforced.');
+    : 'assignment.json not found next to the grades file; cross-assignment match cannot be enforced.');
+
+  // Fail closed: never write grades that cannot be bound to a specific assignment, unless the
+  // operator explicitly overrides. A dry run is still allowed so the plan can be inspected.
+  if (apply && !expectedAssignmentId && !hasFlag('allow-any-assignment')) {
+    console.error('Refusing to --apply without assignment.json (grades could hit another assignment). Re-run the review kit for this assignment, or pass --allow-any-assignment to override.');
+    process.exit(1);
+  }
 
   // Plan each row: scenario (has taskGrades) or legacy (has numeric score).
   let ready = [];
