@@ -56,6 +56,9 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   const [cohortFilter, setCohortFilter]     = useState<string>('all');
   const [cohorts, setCohorts]               = useState<{ id: string; name: string }[]>([]);
   const openToken = useRef(0);
+  // Separate guard for openSubmission, so its slower fetches (files, MCQ marking, VE progress)
+  // cannot land after a different submission has been opened and grade it against the wrong one.
+  const subToken = useRef(0);
 
   useEffect(() => {
     supabase.from('assignments').select('*').order('created_at', { ascending: false })
@@ -132,9 +135,16 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   }
 
   async function openSubmission(sub: any) {
+    // Guard against out-of-order fetches when submissions are clicked in quick succession: only the
+    // latest call's data is applied, so one submission's grades can never bleed into another's.
+    const token = ++subToken.current;
     setViewingSub(sub); setSubFiles([]); setScore(sub.score != null ? String(sub.score) : '');
     setFeedback(sub.feedback ?? ''); setGradeError(''); setGradeWarning(''); setGradeSuccess(false);
     setVeAttemptProgress(null);
+    // Clear per-task grading state up front. Until this call's fetches resolve, a stale draft from a
+    // previously open submission must not linger (it also feeds the auto-computed final grade), so
+    // hold scoreTouched=true meanwhile to keep the average effect from acting on empty/old drafts.
+    setScenarioMcq(null); setTaskDrafts({}); setScoreTouched(true);
     const veFormId = selected?.config?.ve_form_id;
     const isVe = selected?.type === 'virtual_experience' && veFormId && sub.student_id;
 
@@ -142,6 +152,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
       supabase.from('assignment_submission_files').select('*').eq('submission_id', sub.id).order('uploaded_at'),
       isVe ? supabase.auth.getSession() : Promise.resolve({ data: { session: null } }),
     ]);
+    if (subToken.current !== token) return;
     if (files) setSubFiles(files);
 
     // Scenario submissions: MCQ is graded server-side (the answer keys never reach the browser
@@ -153,6 +164,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
         headers: gs ? { Authorization: `Bearer ${gs.access_token}` } : {},
       });
       const graded: { grades: Record<string, McqGrade>; subtotal: number | null } = gr.ok ? await gr.json() : { grades: {}, subtotal: null };
+      if (subToken.current !== token) return;
       setScenarioMcq(graded);
       // Seed one draft per task. On a first pass MCQ prefills from the server-side marking
       // (authoritative) so only the human-judged tasks need typing. Once grades have been saved
@@ -168,16 +180,13 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
       setTaskDrafts(drafts);
       // An existing grade is treated as deliberate, so the task average does not overwrite it.
       setScoreTouched(sub.score != null);
-    } else {
-      setScenarioMcq(null);
-      setTaskDrafts({});
-      setScoreTouched(true);
     }
 
     if (isVe && session?.data?.session?.access_token) {
       const res = await fetch(`/api/ve-attempt?veId=${veFormId}&studentId=${sub.student_id}`, {
         headers: { Authorization: `Bearer ${session.data.session.access_token}` },
       });
+      if (subToken.current !== token) return;
       if (res.ok) {
         const json = await res.json();
         if (json.progress) setVeAttemptProgress(json.progress);
