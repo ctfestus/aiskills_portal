@@ -378,17 +378,24 @@ export default function CreateAssignmentPage() {
         config:                   buildConfig(),
       };
 
+      // Resources/solutions are replaced by inserting the new rows first and deleting the old ones
+      // only afterwards (see below). Capture the existing ids here but do NOT delete yet, so a
+      // failure mid-save can never leave the draft with its old data already gone.
+      const oldResourceIds: string[] = [];
+      const oldSolutionIds: string[] = [];
       let assignmentId = editId;
       if (editId) {
         const { error: updateError } = await supabase.from('assignments').update(draftPayload).eq('id', editId);
         if (updateError) throw updateError;
-        const { error: delErr } = await supabase.from('assignment_resources').delete().eq('assignment_id', editId);
-        if (delErr) throw new Error('Could not update resources. The assignment was left as a draft - please try saving again.');
+        const { data: oldRes, error: oldResErr } = await supabase.from('assignment_resources').select('id').eq('assignment_id', editId);
+        if (oldResErr) throw new Error('Could not read existing resources. The assignment was left as a draft - please try saving again.');
+        oldResourceIds.push(...(oldRes ?? []).map((r: any) => r.id));
         // Tolerated when the table itself is missing (a tenant that has not applied migration 144
         // yet): editing an assignment must not break there. A real save of solutions still errors
         // loudly below.
-        const { error: delSolErr } = await supabase.from('assignment_solutions').delete().eq('assignment_id', editId);
-        if (delSolErr && !isMissingSolutionsTable(delSolErr)) throw new Error('Could not update the solution files. The assignment was left as a draft - please try saving again.');
+        const { data: oldSol, error: oldSolErr } = await supabase.from('assignment_solutions').select('id').eq('assignment_id', editId);
+        if (oldSolErr && !isMissingSolutionsTable(oldSolErr)) throw new Error('Could not read existing solution files. The assignment was left as a draft - please try saving again.');
+        oldSolutionIds.push(...(oldSol ?? []).map((s: any) => s.id));
       } else {
         const { data: assignment, error: assignmentError } = await supabase
           .from('assignments').insert({ ...draftPayload, created_by: session.user.id }).select('id').single();
@@ -430,6 +437,18 @@ export default function CreateAssignmentPage() {
             ? 'Solution files need database migration 144 on this environment. The assignment was left as a draft.'
             : 'Could not save the solution files. The assignment was left as a draft - please try saving again.');
         }
+      }
+
+      // The new rows are in, so now remove the ones this edit replaced. Deleting AFTER the inserts
+      // means any failure above left the originals intact (the draft never loses its data); the
+      // worst case here is old + new both lingering on a draft, which the instructor can re-save.
+      if (editId && oldResourceIds.length) {
+        const { error: delErr } = await supabase.from('assignment_resources').delete().in('id', oldResourceIds);
+        if (delErr) throw new Error('Saved the new resources but could not remove the previous ones. The assignment was left as a draft - please try saving again.');
+      }
+      if (editId && oldSolutionIds.length) {
+        const { error: delSolErr } = await supabase.from('assignment_solutions').delete().in('id', oldSolutionIds);
+        if (delSolErr && !isMissingSolutionsTable(delSolErr)) throw new Error('Saved the new solution files but could not remove the previous ones. The assignment was left as a draft - please try saving again.');
       }
 
       // Flip to published only after content, keys, resources, and solutions all saved.
