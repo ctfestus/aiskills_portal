@@ -19,10 +19,19 @@ function sanitizeFilename(raw: string): string {
   return base.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, 'file');
 }
 
+// The only repo directories this endpoint is allowed to write to and delete from. Everything the
+// app stores on GitHub lives under one of these roots (see lib/uploadToGithub + create/edit flows).
+// Both POST and DELETE are confined to these roots so an instructor can never plant a file at an
+// arbitrary repo path, nor delete source/workflow/other-content files by passing a crafted URL.
+const MANAGED_ROOTS = new Set(['assignment-resources', 'sql-datasets', 'python-datasets']);
+const DEFAULT_ROOT = 'assignment-resources';
+
 const SAFE_FOLDER = /^[a-zA-Z0-9_\-/]+$/;
 function sanitizeFolder(raw: string | null): string {
-  const f = (raw ?? 'assignment-resources').replace(/^\/+|\/+$/g, '');
-  if (!f || !SAFE_FOLDER.test(f) || f.includes('..')) return 'assignment-resources';
+  const f = (raw ?? DEFAULT_ROOT).replace(/^\/+|\/+$/g, '');
+  if (!f || !SAFE_FOLDER.test(f) || f.includes('..')) return DEFAULT_ROOT;
+  // The first path segment must be one of the managed roots; otherwise fall back to the default.
+  if (!MANAGED_ROOTS.has(f.split('/')[0])) return DEFAULT_ROOT;
   return f;
 }
 
@@ -105,8 +114,16 @@ export async function DELETE(req: NextRequest) {
 
   const [, mOwner, mRepo, mBranch, rawPath] = m;
   if (mOwner !== owner || mRepo !== repo) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  const filePath = rawPath.split('/').map(decodeURIComponent).join('/');
-  if (filePath.includes('..')) return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+  const segments = rawPath.split('/').map(decodeURIComponent);
+  const filePath = segments.join('/');
+  if (segments.some(s => s === '' || s === '.' || s === '..')) {
+    return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+  }
+  // Confine deletion to the folders this endpoint manages. Without this, any instructor could
+  // delete arbitrary files anywhere in the repo by passing a crafted raw URL.
+  if (!MANAGED_ROOTS.has(segments[0])) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`;
   const ghHeaders = {
