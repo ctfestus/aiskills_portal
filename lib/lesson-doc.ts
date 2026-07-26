@@ -29,6 +29,25 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * Whether two lesson contents (a `doc` object or an HTML string) are the same content.
+ *
+ * Used by the editor/renderer to skip a `setContent` when a re-render hands them a NEW doc object
+ * holding the SAME document -- the common case, since parent state updates rebuild the objects
+ * around it. Reloading needlessly resets the caret and re-renders every node view. ProseMirror JSON
+ * is plain data, so stringify is a fair structural comparison and far cheaper than the reload it
+ * avoids. Key order is stable here because both sides come from the same producer.
+ */
+export function sameContent(
+  a: LessonDoc | Record<string, unknown> | string | null | undefined,
+  b: LessonDoc | Record<string, unknown> | string | null | undefined,
+): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  if (typeof a === 'string' || typeof b === 'string') return a === b;
+  try { return JSON.stringify(a) === JSON.stringify(b); } catch { return false; }
+}
+
+/**
  * Walk a lesson doc and collect every uploaded image URL referenced by an
  * `image` node (attrs.src). Used by the asset-cleanup path so inline images
  * stored inside `lesson.doc` are deleted from Cloudinary along with the
