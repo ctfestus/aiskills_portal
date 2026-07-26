@@ -263,36 +263,51 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
       .single();
     if (error) { setDuplicatingId(null); window.alert(error.message); return; }
 
+    // The copy is a series of non-atomic inserts; collect anything that fails to copy so the
+    // instructor is told rather than being shown a false "duplicated" success.
+    const copyIssues: string[] = [];
+
     // Copy resources
-    const { data: resources } = await supabase
+    const { data: resources, error: rSelErr } = await supabase
       .from('assignment_resources')
       .select('name, url, resource_type')
       .eq('assignment_id', a.id);
-    if (resources?.length) {
-      await supabase.from('assignment_resources').insert(
+    if (rSelErr) copyIssues.push('resources');
+    else if (resources?.length) {
+      const { error: rErr } = await supabase.from('assignment_resources').insert(
         resources.map(r => ({ ...r, assignment_id: data.id }))
       );
+      if (rErr) copyIssues.push('resources');
     }
 
     // Copy solution files. The rows point at the same private storage objects (immutable, and a
     // deleted row never deletes the object), so the copy releases the same model answer.
-    const { data: sols } = await supabase
+    const { data: sols, error: sSelErr } = await supabase
       .from('assignment_solutions')
       .select('name, kind, storage_path, url')
       .eq('assignment_id', a.id);
-    if (sols?.length) {
-      await supabase.from('assignment_solutions').insert(
+    if (sSelErr) copyIssues.push('solution files');
+    else if (sols?.length) {
+      const { error: sErr } = await supabase.from('assignment_solutions').insert(
         sols.map(s => ({ ...s, assignment_id: data.id }))
       );
+      if (sErr) copyIssues.push('solution files');
     }
 
     // Copy MCQ answer keys (stored in a separate server-only table), else the copy's MCQs lose
     // their correct answers and can't be republished.
-    const { data: keyRow } = await supabase.from('assignment_answer_keys').select('keys').eq('assignment_id', a.id).maybeSingle();
-    if (keyRow) await supabase.from('assignment_answer_keys').upsert({ assignment_id: data.id, keys: keyRow.keys }, { onConflict: 'assignment_id' });
+    const { data: keyRow, error: kSelErr } = await supabase.from('assignment_answer_keys').select('keys').eq('assignment_id', a.id).maybeSingle();
+    if (kSelErr) copyIssues.push('MCQ answer keys');
+    else if (keyRow) {
+      const { error: kErr } = await supabase.from('assignment_answer_keys').upsert({ assignment_id: data.id, keys: keyRow.keys }, { onConflict: 'assignment_id' });
+      if (kErr) copyIssues.push('MCQ answer keys');
+    }
 
     setDuplicatingId(null);
     setAssignments(prev => [data, ...prev]);
+    if (copyIssues.length) {
+      window.alert(`The copy was created as a draft, but these did not carry over: ${copyIssues.join(', ')}. Open the copy and re-add them before publishing.`);
+    }
   }
 
   async function deleteAssignment(id: string) {
