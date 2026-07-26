@@ -1891,6 +1891,7 @@ CREATE POLICY "assignments: staff published select"
   USING ((SELECT public.is_staff()) AND status = 'published');
 
 -- ── assignment_resources ──────────────────────────────────────
+-- Students see resources only for a PUBLISHED assignment (migration 148); owner/admin see drafts too.
 CREATE POLICY "assignment_resources: select"
   ON public.assignment_resources FOR SELECT
   USING (
@@ -1898,9 +1899,12 @@ CREATE POLICY "assignment_resources: select"
       SELECT 1 FROM public.assignments a
       WHERE a.id = assignment_id AND (
         a.created_by = (SELECT auth.uid()) OR (SELECT public.is_admin())
-        OR EXISTS (
-          SELECT 1 FROM public.students s
-          WHERE s.id = (SELECT auth.uid()) AND s.cohort_id = ANY(a.cohort_ids)
+        OR (
+          a.status = 'published'
+          AND EXISTS (
+            SELECT 1 FROM public.students s
+            WHERE s.id = (SELECT auth.uid()) AND s.cohort_id = ANY(a.cohort_ids)
+          )
         )
       )
     )
@@ -2031,10 +2035,12 @@ CREATE POLICY "assignment_submissions: student insert"
 -- Protection of graded fields (score, feedback, graded_by, graded_at) is enforced by
 -- trg_protect_submission_graded_fields instead.
 DROP POLICY IF EXISTS "assignment_submissions: student update" ON public.assignment_submissions;
+-- migration 148: student may update only while the assignment is published.
 CREATE POLICY "assignment_submissions: student update"
   ON public.assignment_submissions FOR UPDATE
   USING (
     status IN ('draft','submitted')
+    AND EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_submissions.assignment_id AND a.status = 'published')
     AND (
       (group_id IS NULL AND student_id = (SELECT auth.uid()))
       OR EXISTS (
@@ -2047,6 +2053,7 @@ CREATE POLICY "assignment_submissions: student update"
   )
   WITH CHECK (
     status IN ('draft','submitted')
+    AND EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_submissions.assignment_id AND a.status = 'published')
     AND (
       (group_id IS NULL AND student_id = (SELECT auth.uid()))
       OR EXISTS (
