@@ -1051,9 +1051,21 @@ DROP TRIGGER IF EXISTS trg_protect_submission_graded_fields ON public.assignment
 -- score; the scenario endpoint runs as the service role (auth.uid() null) so this check skips it.
 -- Migration 143 added task_grades (per-task scores/comments), compared against OLD on UPDATE so a
 -- student editing a reset draft is not blocked by a value the grader left behind.
+-- Migration 146 also makes the identity columns immutable on UPDATE.
 CREATE OR REPLACE FUNCTION public.protect_submission_graded_fields()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
+  -- Identity columns never change after insert. Service-role endpoints (auth.uid() null) are exempt;
+  -- they only re-save the same ids. This stops a client repointing a submission at another
+  -- assignment, student, or group.
+  IF TG_OP = 'UPDATE' AND auth.uid() IS NOT NULL THEN
+    IF NEW.assignment_id IS DISTINCT FROM OLD.assignment_id
+       OR NEW.student_id  IS DISTINCT FROM OLD.student_id
+       OR NEW.group_id    IS DISTINCT FROM OLD.group_id THEN
+      RAISE EXCEPTION 'assignment_id, student_id and group_id cannot be changed';
+    END IF;
+  END IF;
+
   IF (SELECT role FROM public.students WHERE id = auth.uid()) = 'student' THEN
     IF NEW.status = 'graded'
        OR NEW.graded_by IS NOT NULL
@@ -1799,17 +1811,22 @@ CREATE POLICY "certifications: staff published select"
   ON public.certifications FOR SELECT
   USING ((SELECT public.is_staff()) AND status = 'published');
 
--- ── assignments (migration 097: use my_group_ids() helper for group check) ──
+-- ── assignments (migration 097: my_group_ids() helper; 146: students see only published) ──
 CREATE POLICY "assignments: select"
   ON public.assignments FOR SELECT
   USING (
     (SELECT public.is_instructor_or_admin())
     OR created_by = (SELECT auth.uid())
-    OR EXISTS (
-      SELECT 1 FROM public.students s
-      WHERE s.id = (SELECT auth.uid()) AND s.cohort_id = ANY(cohort_ids)
+    OR (
+      status = 'published'
+      AND (
+        EXISTS (
+          SELECT 1 FROM public.students s
+          WHERE s.id = (SELECT auth.uid()) AND s.cohort_id = ANY(cohort_ids)
+        )
+        OR (group_ids && public.my_group_ids())
+      )
     )
-    OR (group_ids && public.my_group_ids())
   );
 
 CREATE POLICY "assignments: instructor insert"
@@ -1953,6 +1970,7 @@ CREATE POLICY "assignment_submissions: student insert"
         SELECT 1 FROM public.assignments a
         JOIN public.students s ON s.id = (SELECT auth.uid())
         WHERE a.id = assignment_submissions.assignment_id
+          AND a.status = 'published'
           AND s.cohort_id = ANY(a.cohort_ids)
           AND assignment_submissions.group_id IS NULL
       )
@@ -1961,6 +1979,7 @@ CREATE POLICY "assignment_submissions: student insert"
         SELECT 1 FROM public.group_members gm
         JOIN public.assignments a ON a.id = assignment_submissions.assignment_id
         WHERE gm.student_id = (SELECT auth.uid())
+          AND a.status = 'published'
           AND gm.group_id = assignment_submissions.group_id
           AND gm.group_id = ANY(a.group_ids)
           AND gm.is_leader = true
