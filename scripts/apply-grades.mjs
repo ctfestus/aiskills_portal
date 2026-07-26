@@ -19,6 +19,7 @@ import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 
 const PASS_MARK = 85;
+const MAX_FEEDBACK = 8000; // matches MAX_TASK_FEEDBACK in lib/assignment-scenarios.ts
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function loadEnv(envPath) {
@@ -68,11 +69,15 @@ async function getDb() {
 const validScore = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 100;
 const clamp = (n) => Math.round(Math.min(100, Math.max(0, n)) * 100) / 100;
 
-// Plain text -> safe minimal HTML (task feedback is rendered as rich text).
+// Plain text -> safe minimal HTML (task feedback is rendered as rich text). Capped at MAX_FEEDBACK so
+// a write can't exceed the length the app + DB constraint allow (a dangling tag is harmless: the app
+// sanitizes feedback on render).
 function toHtml(text) {
   if (typeof text !== 'string' || !text.trim()) return '';
-  const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return esc.split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+  const src = text.length > MAX_FEEDBACK ? text.slice(0, MAX_FEEDBACK) : text;
+  const esc = src.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const html = esc.split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+  return html.length > MAX_FEEDBACK ? html.slice(0, MAX_FEEDBACK) : html;
 }
 
 // Turn a kit row's taskGrades into the stored task_grades jsonb + the mean submission score.
@@ -106,12 +111,23 @@ async function main() {
   catch (e) { console.error('Could not read grades file:', e.message); process.exit(1); }
   if (!Array.isArray(rows)) { console.error('Grades file must be a JSON array.'); process.exit(1); }
 
+  // The kit is per-assignment (review/<id>/assignment.json sits next to _grades.json). Bind writes to
+  // that assignment so a stray or hand-edited submissionId from another assignment can't be graded.
+  let expectedAssignmentId = null;
+  try {
+    const aj = JSON.parse(fs.readFileSync(path.join(path.dirname(path.resolve(file)), 'assignment.json'), 'utf8'));
+    if (aj && typeof aj.id === 'string') expectedAssignmentId = aj.id;
+  } catch { /* kit without assignment.json -> cross-assignment match not enforced */ }
+
   const { db, mode, host, userId } = await getDb();
   const graderId = grader || userId;
   console.log(`Target DB: ${host}  (${mode}, env: ${path.basename(envPath)})`);
+  console.log(expectedAssignmentId
+    ? `Bound to assignment ${expectedAssignmentId}`
+    : 'Warning: assignment.json not found next to the grades file; cross-assignment match not enforced.');
 
   // Plan each row: scenario (has taskGrades) or legacy (has numeric score).
-  const ready = [];
+  let ready = [];
   const skipped = [];
   for (const r of rows) {
     if (!r || typeof r.submissionId !== 'string') { skipped.push({ r, why: 'no submissionId' }); continue; }
@@ -125,6 +141,26 @@ async function main() {
     } else {
       skipped.push({ r, why: 'score not 0-100 and no taskGrades' });
     }
+  }
+
+  // Validate each planned row against the live submission: it must exist, belong to this kit's
+  // assignment, be still 'submitted' (not reset to draft by a resubmit), and not already graded.
+  if (ready.length) {
+    const ids = ready.map(it => it.r.submissionId);
+    const { data: liveRows, error } = await db.from('assignment_submissions')
+      .select('id, status, assignment_id, graded_at').in('id', ids);
+    if (error) { console.error('Failed to load submissions for validation:', error.message); process.exit(1); }
+    const live = new Map((liveRows ?? []).map(x => [x.id, x]));
+    const stillReady = [];
+    for (const it of ready) {
+      const row = live.get(it.r.submissionId);
+      if (!row) { skipped.push({ r: it.r, why: 'submission not found' }); continue; }
+      if (expectedAssignmentId && row.assignment_id !== expectedAssignmentId) { skipped.push({ r: it.r, why: 'belongs to a different assignment' }); continue; }
+      if (row.graded_at) { skipped.push({ r: it.r, why: 'already graded' }); continue; }
+      if (row.status !== 'submitted') { skipped.push({ r: it.r, why: `status is '${row.status}', not submitted` }); continue; }
+      stillReady.push(it);
+    }
+    ready = stillReady;
   }
 
   console.log(`${apply ? 'APPLY' : 'DRY RUN'} - ${ready.length} ready, ${skipped.length} skipped`);
@@ -145,12 +181,14 @@ async function main() {
     const patch = it.kind === 'scenario'
       ? { task_grades: it.built.taskGrades, score: it.built.avg, status: 'graded', graded_by: graderId, graded_at: new Date().toISOString() }
       : { score: it.r.score, feedback: typeof it.r.feedback === 'string' ? it.r.feedback : null, status: 'graded', graded_by: graderId, graded_at: new Date().toISOString() };
-    const { data, error } = await db
+    let upd = db
       .from('assignment_submissions')
       .update(patch)
       .eq('id', it.r.submissionId)
-      .is('graded_at', null)   // never overwrite an existing grade
-      .select('id');
+      .eq('status', 'submitted')  // never grade a draft/reset submission
+      .is('graded_at', null);     // never overwrite an existing grade
+    if (expectedAssignmentId) upd = upd.eq('assignment_id', expectedAssignmentId);
+    const { data, error } = await upd.select('id');
     if (error) { console.error(`  ERROR ${it.r.submissionId}: ${error.message}`); continue; }
     if (Array.isArray(data) && data.length) written += 1; else untouched += 1;
   }
