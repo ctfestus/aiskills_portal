@@ -103,6 +103,7 @@ export async function DELETE(req: NextRequest) {
   const token = process.env.GITHUB_TOKEN;
   const owner = process.env.GITHUB_REPO_OWNER;
   const repo  = process.env.GITHUB_REPO_NAME;
+  const branch = process.env.GITHUB_REPO_BRANCH ?? 'main';
   if (!token || !owner || !repo) {
     return NextResponse.json({ error: 'GitHub integration not configured.' }, { status: 500 });
   }
@@ -112,7 +113,10 @@ export async function DELETE(req: NextRequest) {
   const m = url.match(/^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/);
   if (!m) return NextResponse.json({ error: 'Invalid GitHub URL' }, { status: 400 });
 
-  const [, mOwner, mRepo, mBranch, rawPath] = m;
+  // Ignore the owner/repo/branch encoded in the URL for the write: they are attacker-controlled.
+  // Only the file path is taken from the URL, and the delete runs against the server-configured repo
+  // and branch (the URL's owner/repo must still match, else it is not one of ours).
+  const [, mOwner, mRepo, , rawPath] = m;
   if (mOwner !== owner || mRepo !== repo) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const segments = rawPath.split('/').map(decodeURIComponent);
   const filePath = segments.join('/');
@@ -133,7 +137,7 @@ export async function DELETE(req: NextRequest) {
   };
 
   // Look up the file SHA (required to delete via the Contents API)
-  const metaRes = await fetch(`${apiUrl}?ref=${encodeURIComponent(mBranch)}`, { headers: ghHeaders });
+  const metaRes = await fetch(`${apiUrl}?ref=${encodeURIComponent(branch)}`, { headers: ghHeaders });
   if (metaRes.status === 404) return NextResponse.json({ ok: true }); // already gone
   if (!metaRes.ok) return NextResponse.json({ error: `GitHub API error ${metaRes.status}` }, { status: 502 });
   const meta = await metaRes.json();
@@ -143,7 +147,7 @@ export async function DELETE(req: NextRequest) {
   const delRes = await fetch(apiUrl, {
     method: 'DELETE',
     headers: { ...ghHeaders, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: `Delete ${filePath}`, sha, branch: mBranch }),
+    body: JSON.stringify({ message: `Delete ${filePath}`, sha, branch }),
   });
   if (!delRes.ok) {
     const err = await delRes.json().catch(() => ({}));

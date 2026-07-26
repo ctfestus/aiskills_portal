@@ -22,24 +22,29 @@ export async function POST(req: NextRequest) {
   const auth = await requireRole(req, ['admin', 'instructor']);
   if (isAuthError(auth)) return auth.error;
 
-  let body: { submissionId?: string; assignmentTitle?: string };
+  let body: { submissionId?: string };
   try { body = await req.json(); } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { submissionId, assignmentTitle } = body;
-  if (!submissionId || !assignmentTitle) {
-    return NextResponse.json({ error: 'submissionId and assignmentTitle required' }, { status: 400 });
+  const { submissionId } = body;
+  if (!submissionId) {
+    return NextResponse.json({ error: 'submissionId required' }, { status: 400 });
   }
 
-  // Fetch the submission including the participants array
+  // Fetch the submission (with participants) and the assignment title through the real relationship.
+  // The title is NOT taken from the request body: a client could otherwise put arbitrary text into a
+  // "your assignment was graded" email.
   const { data: sub } = await adminClient()
     .from('assignment_submissions')
-    .select('id, score, feedback, student_id, participants')
+    .select('id, score, feedback, student_id, participants, assignment:assignments!assignment_id(title)')
     .eq('id', submissionId)
     .maybeSingle();
 
   if (!sub) return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+
+  const assignmentTitle = (Array.isArray(sub.assignment) ? sub.assignment[0]?.title : (sub.assignment as any)?.title) as string | undefined;
+  if (!assignmentTitle) return NextResponse.json({ ok: true });
 
   // Resolve the set of student IDs to notify: participants array if present, otherwise just the submitter
   const participantIds: string[] = Array.isArray(sub.participants) && sub.participants.length > 0
