@@ -5,6 +5,7 @@ import {
   TASK_TYPE_LABEL, AI_TASK_TYPES,
   validateScenarioConfig, extractAnswerKeys, stripAnswerKeys, buildScenarioRecord, gradeMcq, isAllowedUpload,
   parseTaskGrades, taskGradeStats, mcqTaskScore, aiTaskScoreSuggestion, hasRichText, clampTaskScore,
+  passMarkOf, DEFAULT_PASS_MARK,
   type ScenarioConfig, type AssignmentSubmissionRecord, type TaskAnswer,
 } from '@/lib/assignment-scenarios';
 
@@ -282,5 +283,30 @@ describe('mcqTaskScore / aiTaskScoreSuggestion', () => {
     expect(aiTaskScoreSuggestion(ans({ taskId: 'a', type: 'dashboard_critique', report: { audit: { overallScore: 64 } } }))).toBe(64);
     expect(aiTaskScoreSuggestion(ans({ taskId: 'a', type: 'code_review' }))).toBeNull();
     expect(aiTaskScoreSuggestion(ans({ taskId: 'a', type: 'code_review', report: { summary: 'x' } }))).toBeNull();
+  });
+});
+
+describe('passMarkOf', () => {
+  it('defaults to 85 when passingScore is absent, null, or the config is missing', () => {
+    expect(passMarkOf(undefined)).toBe(DEFAULT_PASS_MARK);
+    expect(passMarkOf(null)).toBe(DEFAULT_PASS_MARK);
+    expect(passMarkOf({})).toBe(85);
+    expect(passMarkOf({ passingScore: null })).toBe(85);
+  });
+
+  it('uses a valid in-range number', () => {
+    expect(passMarkOf({ passingScore: 70 })).toBe(70);
+    expect(passMarkOf({ passingScore: 90 })).toBe(90);
+    expect(passMarkOf({ passingScore: 1 })).toBe(1);
+    expect(passMarkOf({ passingScore: 100 })).toBe(100);
+  });
+
+  it('falls back to 85 for out-of-range, wrong-type, or non-finite values', () => {
+    expect(passMarkOf({ passingScore: 0 })).toBe(85);
+    expect(passMarkOf({ passingScore: 101 })).toBe(85);
+    expect(passMarkOf({ passingScore: -5 })).toBe(85);
+    expect(passMarkOf({ passingScore: 'invalid' })).toBe(85);
+    expect(passMarkOf({ passingScore: '70' })).toBe(85);
+    expect(passMarkOf({ passingScore: NaN })).toBe(85);
   });
 });

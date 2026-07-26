@@ -114,9 +114,12 @@ async function main() {
   // The kit is per-assignment (review/<id>/assignment.json sits next to _grades.json). Bind writes to
   // that assignment so a stray or hand-edited submissionId from another assignment can't be graded.
   let expectedAssignmentId = null;
+  let passMark = PASS_MARK; // this assignment's configured pass mark (mirrors passMarkOf: 1-100 else 85)
   try {
     const aj = JSON.parse(fs.readFileSync(path.join(path.dirname(path.resolve(file)), 'assignment.json'), 'utf8'));
     if (aj && typeof aj.id === 'string') expectedAssignmentId = aj.id;
+    const ps = aj?.config?.passingScore;
+    if (typeof ps === 'number' && Number.isFinite(ps) && ps >= 1 && ps <= 100) passMark = ps;
   } catch { /* kit without assignment.json -> cross-assignment match not enforced */ }
 
   const { db, mode, host, userId } = await getDb();
@@ -174,9 +177,9 @@ async function main() {
   for (const it of ready) {
     if (it.kind === 'scenario') {
       const avg = it.built.avg;
-      console.log(`  ${it.r.student ?? it.r.submissionId}: ${it.built.scoredCount} task(s) scored, avg ${avg ?? 'n/a'}${avg != null ? ` [${avg >= PASS_MARK ? 'PASS' : 'FAIL'}]` : ''}`);
+      console.log(`  ${it.r.student ?? it.r.submissionId}: ${it.built.scoredCount} task(s) scored, avg ${avg ?? 'n/a'}${avg != null ? ` [${avg >= passMark ? 'PASS' : 'FAIL'}]` : ''}`);
     } else {
-      console.log(`  ${it.r.student ?? it.r.submissionId}: ${it.r.score}/100 [${it.r.score >= PASS_MARK ? 'PASS' : 'FAIL'}]  (legacy)`);
+      console.log(`  ${it.r.student ?? it.r.submissionId}: ${it.r.score}/100 [${it.r.score >= passMark ? 'PASS' : 'FAIL'}]  (legacy)`);
     }
   }
   for (const s of skipped) console.log(`  skip ${s.r?.student ?? s.r?.submissionId ?? '?'} (${s.why})`);

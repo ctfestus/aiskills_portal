@@ -491,7 +491,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
         <div className="rounded-2xl p-5" style={{ ...cardStyle(C) }}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold" style={{ color: C.text }}>{scenarioRec ? 'Final grade' : 'Grade Submission'}</h3>
-            <span className="text-xs" style={{ color: C.faint }}>Passmark: 85%</span>
+            <span className="text-xs" style={{ color: C.faint }}>Passmark: {passMark}%</span>
           </div>
 
           <div className="mb-4">

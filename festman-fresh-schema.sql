@@ -1116,6 +1116,20 @@ ALTER TABLE public.assignment_submissions
 ALTER TABLE public.assignment_submissions
   ADD  CONSTRAINT assignment_submissions_task_grades_valid
   CHECK (public.valid_task_grades(task_grades));
+
+-- Submission passing grade from config.passingScore (migration 150), validated exactly like
+-- passMarkOf() in lib/assignment-scenarios.ts: a JSON number in [1,100] is used, anything else -> 85.
+-- The nested CASE guarantees the ::numeric cast only runs on a JSON number, so it can never throw.
+CREATE OR REPLACE FUNCTION public.assignment_pass_mark(config jsonb)
+RETURNS numeric LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE
+    WHEN jsonb_typeof(config->'passingScore') = 'number' THEN
+      CASE WHEN (config->>'passingScore')::numeric BETWEEN 1 AND 100
+           THEN (config->>'passingScore')::numeric
+           ELSE 85 END
+    ELSE 85
+  END;
+$$;
 CREATE TRIGGER trg_communities_updated_at
   BEFORE UPDATE ON public.communities FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_announcements_updated_at
@@ -1934,9 +1948,9 @@ CREATE POLICY "assignment_solutions: staff read"
   ));
 
 -- Students see solutions only once their work is FINAL: graded AND at/above the assignment's passing
--- score (config.passingScore, default 85 -- the same rule resubmit / solution-file / grade-notify use,
--- so a failing grade that can still be reset to draft never releases the answer). Group release is
--- limited to the submitter or a member in participants[], never every group member. (migrations 145, 149)
+-- score (assignment_pass_mark validates config.passingScore -> [1,100] else 85, matching passMarkOf so
+-- a failing grade that can still be reset to draft never releases the answer). Group release is limited
+-- to the submitter or a member in participants[], never every group member. (migrations 145, 149, 150)
 CREATE POLICY "assignment_solutions: released select"
   ON public.assignment_solutions FOR SELECT
   USING (EXISTS (
@@ -1945,7 +1959,7 @@ CREATE POLICY "assignment_solutions: released select"
     WHERE s.assignment_id = assignment_solutions.assignment_id
       AND s.status = 'graded'
       AND s.score IS NOT NULL
-      AND s.score >= COALESCE(NULLIF(a.config->>'passingScore','')::numeric, 85)
+      AND s.score >= public.assignment_pass_mark(a.config)
       AND (
         s.student_id = (SELECT auth.uid())
         OR (
