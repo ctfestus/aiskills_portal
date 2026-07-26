@@ -15,6 +15,11 @@ export const dynamic = 'force-dynamic';
 
 const SIGNED_URL_TTL = 60; // seconds
 
+// Release only once the student's work is FINAL. A graded submission scoring below the pass mark can
+// still be reset to draft and resubmitted (see /api/assignments/resubmit), so releasing the model
+// answer then would hand it over mid-attempt. Keep in lockstep with PASS_MARK in the resubmit route.
+const PASS_MARK = 85;
+
 export async function GET(req: NextRequest) {
   const authRes = await requireUser(req);
   if (isAuthError(authRes)) return authRes.error;
@@ -36,24 +41,26 @@ export async function GET(req: NextRequest) {
   const isGrader = !!me && ['admin', 'instructor', 'staff'].includes(me.role);
 
   if (!isGrader) {
-    // Released to this student? Their own graded submission, or their group's.
+    // Released to this student? Their own graded+passed submission, or a group submission they were
+    // actually part of. Mirrors the "assignment_solutions: released select" RLS policy.
     const { data: groupRows } = await supabase.from('group_members')
       .select('group_id').eq('student_id', user.id);
     const groupIds = (groupRows ?? []).map(r => r.group_id).filter(Boolean);
 
     const { data: own } = await supabase.from('assignment_submissions')
       .select('id').eq('assignment_id', solution.assignment_id).eq('student_id', user.id)
-      .eq('status', 'graded').limit(1);
+      .eq('status', 'graded').gte('score', PASS_MARK).limit(1);
 
     let released = (own ?? []).length > 0;
     if (!released && groupIds.length > 0) {
+      // Only a group submission that includes this student (they are one of its participants).
       const { data: group } = await supabase.from('assignment_submissions')
         .select('id').eq('assignment_id', solution.assignment_id).in('group_id', groupIds)
-        .eq('status', 'graded').limit(1);
+        .eq('status', 'graded').gte('score', PASS_MARK).contains('participants', [user.id]).limit(1);
       released = (group ?? []).length > 0;
     }
     if (!released) {
-      return NextResponse.json({ error: 'The solution is released once your submission has been graded.' }, { status: 403 });
+      return NextResponse.json({ error: 'The solution is released once your submission passes.' }, { status: 403 });
     }
   }
 

@@ -1880,16 +1880,25 @@ CREATE POLICY "assignment_solutions: staff read"
     WHERE id = (SELECT auth.uid()) AND role IN ('admin','instructor','staff')
   ));
 
--- Students see solutions only once their own (or their group's) submission is graded.
+-- Students see solutions only once their work is FINAL: graded AND passed (score >= 85, matching
+-- PASS_MARK in /api/assignments/resubmit -- a failing grade can still be reset to draft and
+-- resubmitted). Group release is limited to the submitter or a member in participants[], never every
+-- group member. (migration 145)
 CREATE POLICY "assignment_solutions: released select"
   ON public.assignment_solutions FOR SELECT
   USING (EXISTS (
     SELECT 1 FROM public.assignment_submissions s
     WHERE s.assignment_id = assignment_solutions.assignment_id
       AND s.status = 'graded'
+      AND s.score IS NOT NULL
+      AND s.score >= 85
       AND (
         s.student_id = (SELECT auth.uid())
-        OR (s.group_id IS NOT NULL AND s.group_id = ANY(public.my_group_ids()))
+        OR (
+          s.group_id IS NOT NULL
+          AND s.group_id = ANY(public.my_group_ids())
+          AND (SELECT auth.uid()) = ANY(s.participants)
+        )
       )
   ));
 
