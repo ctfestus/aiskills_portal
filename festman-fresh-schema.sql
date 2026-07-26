@@ -401,6 +401,23 @@ CREATE TABLE public.group_members (
   UNIQUE (student_id)
 );
 
+-- ── assignment_solutions (migration 144) ──────────────────────
+-- Instructor model answers, released to a student only after their submission is graded.
+-- Files live in the PRIVATE 'assignment-solutions' bucket and are served as short-lived signed
+-- URLs by /api/assignments/solution-file; RLS below hides the metadata until release.
+CREATE TABLE public.assignment_solutions (
+  id            uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  assignment_id uuid        NOT NULL REFERENCES public.assignments(id) ON DELETE CASCADE,
+  name          text        NOT NULL,
+  kind          text        NOT NULL DEFAULT 'file' CHECK (kind IN ('file','link')),
+  storage_path  text,
+  url           text,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT assignment_solutions_target CHECK (
+    (kind = 'file' AND storage_path IS NOT NULL) OR (kind = 'link' AND url IS NOT NULL)
+  )
+);
+
 -- ── assignment_submissions ────────────────────────────────────
 CREATE TABLE public.assignment_submissions (
   id            uuid         PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -415,6 +432,9 @@ CREATE TABLE public.assignment_submissions (
   submitted_at  timestamptz,
   score         numeric(5,2) CHECK (score IS NULL OR score >= 0),
   feedback      text,
+  -- Migration 143: per-task grading for scenario assignments.
+  -- { "<taskId>": { "score": 0-100, "feedback": "..." } }, grader-only.
+  task_grades   jsonb,
   graded_by     uuid         REFERENCES auth.users(id) ON DELETE SET NULL,
   graded_at     timestamptz,
   created_at    timestamptz  NOT NULL DEFAULT now(),
@@ -928,6 +948,7 @@ ALTER TABLE public.virtual_experiences        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.data_center_datasets       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignments                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_resources       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.assignment_solutions       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_submissions     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_submission_files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_group_workspaces ENABLE ROW LEVEL SECURITY;
@@ -1028,6 +1049,8 @@ DROP TRIGGER IF EXISTS trg_protect_submission_graded_fields ON public.assignment
 -- status='graded', or grading metadata (a direct insert could otherwise self-grade or forge a
 -- score). score/feedback are grader-only; the AI-review auto-submit no longer writes a client
 -- score; the scenario endpoint runs as the service role (auth.uid() null) so this check skips it.
+-- Migration 143 added task_grades (per-task scores/comments), compared against OLD on UPDATE so a
+-- student editing a reset draft is not blocked by a value the grader left behind.
 CREATE OR REPLACE FUNCTION public.protect_submission_graded_fields()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
@@ -1036,7 +1059,9 @@ BEGIN
        OR NEW.graded_by IS NOT NULL
        OR NEW.graded_at IS NOT NULL
        OR NEW.score IS NOT NULL
-       OR NEW.feedback IS NOT NULL THEN
+       OR NEW.feedback IS NOT NULL
+       OR (TG_OP = 'INSERT' AND NEW.task_grades IS NOT NULL)
+       OR (TG_OP = 'UPDATE' AND NEW.task_grades IS DISTINCT FROM OLD.task_grades) THEN
       RAISE EXCEPTION 'Students cannot set graded fields';
     END IF;
   END IF;
@@ -1841,6 +1866,33 @@ CREATE POLICY "assignment_resources: instructor manage"
     EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_id AND (a.created_by = (SELECT auth.uid()) OR (SELECT public.is_admin())))
   );
 
+-- ── assignment_solutions (migration 144) ──────────────────────
+CREATE POLICY "assignment_solutions: instructor manage"
+  ON public.assignment_solutions FOR ALL
+  USING      (EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_id AND (a.created_by = (SELECT auth.uid()) OR (SELECT public.is_admin()))))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_id AND (a.created_by = (SELECT auth.uid()) OR (SELECT public.is_admin()))));
+
+-- Any grader (non-owning instructor / staff) may read the model answer while marking.
+CREATE POLICY "assignment_solutions: staff read"
+  ON public.assignment_solutions FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM public.students
+    WHERE id = (SELECT auth.uid()) AND role IN ('admin','instructor','staff')
+  ));
+
+-- Students see solutions only once their own (or their group's) submission is graded.
+CREATE POLICY "assignment_solutions: released select"
+  ON public.assignment_solutions FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM public.assignment_submissions s
+    WHERE s.assignment_id = assignment_solutions.assignment_id
+      AND s.status = 'graded'
+      AND (
+        s.student_id = (SELECT auth.uid())
+        OR (s.group_id IS NOT NULL AND s.group_id = ANY(public.my_group_ids()))
+      )
+  ));
+
 -- ── assignment_answer_keys (migration 142) ────────────────────
 -- Owning instructor / admin only. No student policy -> RLS denies students all access.
 CREATE POLICY "assignment_answer_keys: instructor manage"
@@ -2532,8 +2584,9 @@ CREATE INDEX idx_assignments_cohort_ids     ON public.assignments USING GIN (coh
 CREATE INDEX idx_groups_cohort_id         ON public.groups(cohort_id);
 CREATE INDEX idx_group_members_group_id   ON public.group_members(group_id);
 
--- assignment_resources / submissions
+-- assignment_resources / solutions / submissions
 CREATE INDEX idx_assignment_resources_assignment ON public.assignment_resources(assignment_id);
+CREATE INDEX idx_assignment_solutions_assignment ON public.assignment_solutions(assignment_id);
 CREATE INDEX idx_assignment_submissions_student    ON public.assignment_submissions(student_id);
 CREATE INDEX idx_assignment_submissions_assignment ON public.assignment_submissions(assignment_id);
 CREATE INDEX idx_assignment_submissions_status     ON public.assignment_submissions(status);
@@ -2625,14 +2678,17 @@ CREATE INDEX idx_meeting_integrations_user ON public.meeting_integrations(user_i
 
 
 -- ─────────────────────────────────────────────────────────────
---  11. STORAGE BUCKETS + POLICIES (migration 008 + 044)
+--  11. STORAGE BUCKETS + POLICIES (migration 008 + 044 + 144)
 -- ─────────────────────────────────────────────────────────────
 
--- Create buckets
+-- Create buckets. 'assignment-solutions' is PRIVATE (migration 144) and deliberately has no
+-- storage.objects policy: instructor uploads and released-student downloads both go through API
+-- routes on the service role, so no authenticated client can reach a model answer directly.
 INSERT INTO storage.buckets (id, name, public) VALUES
-  ('form-assets', 'form-assets', true),
-  ('cert-assets', 'cert-assets', true),
-  ('datasets',    'datasets',    true)
+  ('form-assets',          'form-assets',          true),
+  ('cert-assets',          'cert-assets',          true),
+  ('datasets',             'datasets',             true),
+  ('assignment-solutions', 'assignment-solutions', false)
 ON CONFLICT (id) DO NOTHING;
 
 -- ── form-assets ───────────────────────────────────────────────

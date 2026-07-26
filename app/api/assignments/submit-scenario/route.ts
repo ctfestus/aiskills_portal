@@ -57,14 +57,21 @@ export async function POST(req: NextRequest) {
   }
 
   // Validate every uploaded file server-side (the client `accept` attribute is not a control):
-  // both fields present, allowed extension, and the URL must live under THIS submitter's own
-  // submissions path -- so a student can't attach an arbitrary/other user's object.
-  const pathPrefix = `/submissions/${assignmentId}/${user.id}/`;
+  // both fields present, allowed extension, the URL must be a real object in OUR form-assets
+  // bucket under THIS submitter's own path (a full-prefix startsWith, not a substring `includes`
+  // that an external URL could satisfy), and the object must actually exist.
+  const publicBase = `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''}/storage/v1/object/public/form-assets/`;
+  const ownerPrefix = `submissions/${assignmentId}/${user.id}/`;
   for (const a of answers) {
     if (!a || (!a.fileUrl && !a.fileName)) continue;
     if (!a.fileUrl || !a.fileName) return NextResponse.json({ error: 'Incomplete file upload.' }, { status: 400 });
     if (!isAllowedUpload(a.fileName)) return NextResponse.json({ error: `File type not allowed: ${a.fileName}` }, { status: 400 });
-    if (!a.fileUrl.includes(pathPrefix)) return NextResponse.json({ error: 'Uploaded file is not in your submission path.' }, { status: 403 });
+    if (!a.fileUrl.startsWith(publicBase + ownerPrefix)) {
+      return NextResponse.json({ error: 'Uploaded file is not in your submission path.' }, { status: 403 });
+    }
+    const objectPath = a.fileUrl.slice(publicBase.length).split('?')[0].split('#')[0];
+    const { error: existErr } = await supabase.storage.from('form-assets').createSignedUrl(objectPath, 60);
+    if (existErr) return NextResponse.json({ error: 'Uploaded file could not be verified.' }, { status: 400 });
   }
 
   const record = buildScenarioRecord(assignment.config, answers, (html) => sanitizeRichText(html));

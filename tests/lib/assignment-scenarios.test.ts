@@ -4,6 +4,7 @@ import {
   isScenarioConfig, isAiTaskType, flattenTasks, computePendingScore, parseSubmissionRecord,
   TASK_TYPE_LABEL, AI_TASK_TYPES,
   validateScenarioConfig, extractAnswerKeys, stripAnswerKeys, buildScenarioRecord, gradeMcq, isAllowedUpload,
+  parseTaskGrades, taskGradeStats, mcqTaskScore, aiTaskScoreSuggestion, hasRichText, clampTaskScore,
   type ScenarioConfig, type AssignmentSubmissionRecord, type TaskAnswer,
 } from '@/lib/assignment-scenarios';
 
@@ -207,5 +208,79 @@ describe('isAllowedUpload', () => {
     for (const ok of ['a.pdf', 'b.xlsx', 'c.csv', 'd.png', 'e.docx', 'f.pbip', 'g.PDF']) expect(isAllowedUpload(ok)).toBe(true);
     for (const bad of ['x.exe', 'x.svg', 'x.html', 'x.js', 'x.sh', 'noext']) expect(isAllowedUpload(bad)).toBe(false);
     expect(isAllowedUpload('report.pdf?token=abc')).toBe(true); // query string tolerated
+  });
+});
+
+// -- per-task grading -------------------------------------------------------------------
+
+const ans = (over: Partial<TaskAnswer> & { taskId: string }): TaskAnswer =>
+  ({ scenarioId: 's', scenarioTitle: 'S', taskTitle: 'T', type: 'text', ...over });
+
+describe('hasRichText', () => {
+  it('treats empty markup as empty and media as content', () => {
+    expect(hasRichText('')).toBe(false);
+    expect(hasRichText(undefined)).toBe(false);
+    expect(hasRichText('<p></p>')).toBe(false);
+    expect(hasRichText('<p>&nbsp;</p>')).toBe(false);
+    expect(hasRichText('<p>Good work</p>')).toBe(true);
+    expect(hasRichText('<p><img src="x.png"></p>')).toBe(true);
+  });
+});
+
+describe('clampTaskScore', () => {
+  it('clamps to 0-100 at 2dp', () => {
+    expect(clampTaskScore(-5)).toBe(0);
+    expect(clampTaskScore(140)).toBe(100);
+    expect(clampTaskScore(87.456)).toBe(87.46);
+  });
+});
+
+describe('parseTaskGrades', () => {
+  it('reads a jsonb object or a JSON string, dropping empty entries', () => {
+    const raw = { a: { score: 80, feedback: '<p>Nice</p>' }, b: { score: null, feedback: '<p></p>' }, c: { feedback: '<p>See note</p>' } };
+    const parsed = parseTaskGrades(raw);
+    expect(parsed.a).toEqual({ score: 80, feedback: '<p>Nice</p>' });
+    expect(parsed.b).toBeUndefined();          // neither score nor comment
+    expect(parsed.c).toEqual({ score: null, feedback: '<p>See note</p>' });
+    expect(parseTaskGrades(JSON.stringify(raw)).a.score).toBe(80);
+  });
+  it('is tolerant of junk', () => {
+    expect(parseTaskGrades(null)).toEqual({});
+    expect(parseTaskGrades('not json')).toEqual({});
+    expect(parseTaskGrades([1, 2])).toEqual({});
+    expect(parseTaskGrades({ a: 5, b: { score: 'x' } })).toEqual({});
+    expect(parseTaskGrades({ a: { score: 250 } }).a.score).toBe(100); // clamped
+  });
+});
+
+describe('taskGradeStats', () => {
+  it('averages only the scored tasks that exist in the submission', () => {
+    const answers = [ans({ taskId: 'a' }), ans({ taskId: 'b' }), ans({ taskId: 'c' })];
+    const stats = taskGradeStats(answers, {
+      a: { score: 90, feedback: '<p>x</p>' },
+      b: { score: 60 },
+      gone: { score: 0 },              // stale task id from an edited assignment
+    });
+    expect(stats).toEqual({ total: 3, scored: 2, commented: 1, average: 75 });
+  });
+  it('average is null when nothing is scored', () => {
+    expect(taskGradeStats([ans({ taskId: 'a' })], { a: { score: null, feedback: '<p>note</p>' } }).average).toBeNull();
+  });
+});
+
+describe('mcqTaskScore / aiTaskScoreSuggestion', () => {
+  it('prefills MCQ from the server-side marking only', () => {
+    const mcq = ans({ taskId: 'm', type: 'mcq' });
+    expect(mcqTaskScore(mcq, { taskId: 'm', isCorrect: true, answered: true })).toBe(100);
+    expect(mcqTaskScore(mcq, { taskId: 'm', isCorrect: false, answered: true })).toBe(0);
+    expect(mcqTaskScore(mcq, { taskId: 'm', isCorrect: false, answered: false })).toBe(0);
+    expect(mcqTaskScore(mcq, undefined)).toBeNull();
+    expect(mcqTaskScore(ans({ taskId: 't' }), { taskId: 't', isCorrect: true, answered: true })).toBeNull();
+  });
+  it('suggests the AI overall score from either report shape', () => {
+    expect(aiTaskScoreSuggestion(ans({ taskId: 'a', type: 'excel_review', report: { overallScore: 72 } }))).toBe(72);
+    expect(aiTaskScoreSuggestion(ans({ taskId: 'a', type: 'dashboard_critique', report: { audit: { overallScore: 64 } } }))).toBe(64);
+    expect(aiTaskScoreSuggestion(ans({ taskId: 'a', type: 'code_review' }))).toBeNull();
+    expect(aiTaskScoreSuggestion(ans({ taskId: 'a', type: 'code_review', report: { summary: 'x' } }))).toBeNull();
   });
 });

@@ -33,7 +33,7 @@ import { useTenant } from '@/components/TenantProvider';
 import { ImageLibrary } from '@/components/ImageLibrary';
 import { AudioPicker } from '@/components/lesson/AudioPicker';
 import { sanitizeRichText } from '@/lib/sanitize';
-import { collectRunnableSetup, inlineGlossaryDefinitions, type LessonDoc } from '@/lib/lesson-doc';
+import { collectRunnableSetup, inlineGlossaryDefinitions, sameContent, type LessonDoc } from '@/lib/lesson-doc';
 
 interface LessonEditorProps {
   doc?: LessonDoc;
@@ -86,13 +86,32 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
     return () => { editor.off('transaction', update); };
   }, [editor]);
 
+  // The last content handed in from outside, so a re-render that rebuilds an IDENTICAL doc object
+  // is not mistaken for an external edit (see the effect below).
+  const lastExternal = useRef<Record<string, unknown> | string | null>(null);
+
   // Reload when content changes from OUTSIDE the editor (e.g. AI "Generate lesson"
   // replaces the lesson). Internal edits set skipNextSync so typing is not clobbered.
+  //
+  // Two guards, both needed:
+  //  * `doc` is an object, so a parent re-render hands us a NEW reference with the SAME content
+  //    (state updates rebuild the objects around it). Syncing then is pointless work, and in a list
+  //    of editors it reset the caret in every sibling on each keystroke elsewhere -- so compare the
+  //    content and bail when it has not actually changed.
+  //  * setContent re-renders the React node views synchronously (flushSync), which React forbids
+  //    while it is already rendering. Run it on a task after this commit instead of inline.
   useEffect(() => {
     if (!editor) return;
-    if (!syncedOnce.current) { syncedOnce.current = true; return; } // content already set at init
-    if (skipNextSync.current) { skipNextSync.current = false; return; }
-    editor.commands.setContent((doc ?? bodyFallback ?? '') as Record<string, unknown> | string, { emitUpdate: false });
+    const next = (doc ?? bodyFallback ?? '') as Record<string, unknown> | string;
+    if (!syncedOnce.current) { syncedOnce.current = true; lastExternal.current = next; return; } // content already set at init
+    if (skipNextSync.current) { skipNextSync.current = false; lastExternal.current = next; return; }
+    if (sameContent(lastExternal.current, next)) return;
+    lastExternal.current = next;
+    const id = setTimeout(() => {
+      if (editor.isDestroyed) return;
+      editor.commands.setContent(next, { emitUpdate: false });
+    }, 0);
+    return () => clearTimeout(id);
   }, [editor, doc, bodyFallback]);
 
   const handleLink = useCallback(() => {

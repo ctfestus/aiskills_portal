@@ -24,8 +24,8 @@ import {
   Calendar, BookOpen, Layers, ListChecks, Download, ExternalLink,
 } from 'lucide-react';
 import {
-  type ScenarioConfig, type AssignmentTask, type RawTaskAnswer,
-  TASK_TYPE_LABEL, isAiTaskType, flattenTasks, parseSubmissionRecord, isAllowedUpload,
+  type ScenarioConfig, type AssignmentTask, type RawTaskAnswer, type TaskGradeMap,
+  TASK_TYPE_LABEL, isAiTaskType, flattenTasks, parseSubmissionRecord, isAllowedUpload, hasRichText,
 } from '@/lib/assignment-scenarios';
 
 type AnswerState = {
@@ -48,6 +48,9 @@ interface Props {
   canSubmit?: boolean;
   disabledReason?: string;
   previewMode?: boolean;
+  // Per-task score + comment the instructor left (assignment_submissions.task_grades). Shown
+  // beside the student's own answer for the task it belongs to.
+  taskGrades?: TaskGradeMap;
   onSubmit?: (answers: RawTaskAnswer[]) => Promise<any>;
   onSaveDraft?: (answers: RawTaskAnswer[]) => Promise<any>;
   // Left-pane display metadata (assignment-level)
@@ -78,7 +81,8 @@ const RESOURCES_TAB = '__resources__';
 
 export default function StandardAssignmentPlayer({
   assignmentId, config, userId, initialSubmission,
-  graded = false, submitted = false, canSubmit = true, disabledReason, previewMode = false, onSubmit, onSaveDraft,
+  graded = false, submitted = false, canSubmit = true, disabledReason, previewMode = false, taskGrades,
+  onSubmit, onSaveDraft,
   title, coverImage, deadline, courseTitle, courseHref, resources = [],
 }: Props) {
   const { theme } = useTheme();
@@ -302,6 +306,28 @@ export default function StandardAssignmentPlayer({
     return null;
   }
 
+  // The instructor's mark for this task, once the submission has been graded. The comment is
+  // rich text (sanitized on save, and again here before it is rendered).
+  function renderTaskGrade(task: AssignmentTask) {
+    const g = taskGrades?.[task.id];
+    const hasComment = hasRichText(g?.feedback);
+    if (!g || (g.score == null && !hasComment)) return null;
+    return (
+      <div style={{ marginTop: 14, borderRadius: 12, padding: '12px 14px', background: isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.25)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: hasComment ? 6 : 0 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#10b981' }}>Instructor feedback</span>
+          {g.score != null && (
+            <span style={{ marginLeft: 'auto', fontSize: 12.5, fontWeight: 800, color: C.text }}>{g.score}/100</span>
+          )}
+        </div>
+        {hasComment && (
+          <div className="rich-content" style={{ fontSize: 13.5, lineHeight: 1.6, color: C.text }}
+            dangerouslySetInnerHTML={{ __html: sanitizeRichText(g.feedback as string) }}/>
+        )}
+      </div>
+    );
+  }
+
   const totalTasks = flat.length;
   const scenarioCount = config.scenarios.length;
   const activeScenario = config.scenarios.find(s => s.id === activeTab);
@@ -366,6 +392,7 @@ export default function StandardAssignmentPlayer({
                 <div style={{ marginBottom: 12, fontSize: 14, color: C.muted }}>{renderRich(task.doc, task.description)}</div>
               )}
               {renderTaskBody(task)}
+              {renderTaskGrade(task)}
             </div>
           );
         })}

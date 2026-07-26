@@ -16,7 +16,9 @@ import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRe
 import { LIGHT_C } from '@/lib/theme';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { getStudentMode } from '@/lib/student-mode-client';
-import { isScenarioConfig } from '@/lib/assignment-scenarios';
+import { isScenarioConfig, parseTaskGrades } from '@/lib/assignment-scenarios';
+import type { AssignmentSolution } from '@/lib/assignment-solutions';
+import { SolutionFilesList } from '@/components/SolutionFilesList';
 import { Sk, EmptyState, StatusBadge } from '@/components/student/shared';
 import {
   BookOpen, ClipboardList, Users, ChevronDown, X, CheckCircle, AlertCircle, Star,
@@ -41,6 +43,9 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
   const [submission, setSubmission] = useState<any>(null);
   const [savedFiles, setSavedFiles] = useState<any[]>([]);
   const [resources, setResources] = useState<any[]>([]);
+  // Instructor solution files. RLS only returns these once this student's (or their group's)
+  // submission is graded, so an empty list is the pre-release state.
+  const [solutions, setSolutions] = useState<AssignmentSolution[]>([]);
   const [responseText, setResponseText] = useState('');
   const [links, setLinks] = useState<string[]>(['']);
   const [readyFiles, setReadyFiles] = useState<ReadyFile[]>([]);
@@ -127,10 +132,13 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
         : supabase.from('assignment_submissions')
             .select('*').eq('assignment_id', assignment.id).eq('student_id', userId).maybeSingle();
 
-      const [{ data: sub }, { data: res }] = await Promise.all([
+      const [{ data: sub }, { data: res }, { data: sol }] = await Promise.all([
         subQuery,
         supabase.from('assignment_resources')
           .select('id, name, url, resource_type').eq('assignment_id', assignment.id).order('created_at'),
+        // Solution files: gated by RLS to a graded submission, so this returns [] until release.
+        supabase.from('assignment_solutions')
+          .select('id, name, kind, url').eq('assignment_id', assignment.id).order('created_at'),
       ]);
       if (sub) {
         setSubmission(sub);
@@ -142,6 +150,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
         setSavedFiles(files ?? []);
       }
       setResources(res ?? []);
+      setSolutions((sol ?? []) as AssignmentSolution[]);
       setLoadingSub(false);
 
       // Load VE data if this is a virtual_experience assignment
@@ -380,7 +389,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to resubmit');
-      setSubmission((prev: any) => ({ ...prev, status: 'draft', score: null, feedback: null, graded_by: null, graded_at: null }));
+      setSubmission((prev: any) => ({ ...prev, status: 'draft', score: null, feedback: null, task_grades: null, graded_by: null, graded_at: null }));
     } catch (err: any) {
       setSubmitError(err?.message || 'Failed to resubmit. Please try again.');
     } finally {
@@ -1051,6 +1060,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
           {isGraded && (() => {
             const passed = submission.score != null && submission.score >= 85;
             const failed = submission.score != null && submission.score < 85;
+            const perTask = Object.keys(parseTaskGrades(submission.task_grades)).length;
             return (
               <div className="rounded-2xl p-5 mb-4" style={{ background: C.card }}>
                 <div className="flex items-center gap-3 flex-wrap mb-2">
@@ -1059,6 +1069,9 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
                   {passed && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>Passed</span>}
                   {failed && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.10)', color: '#ef4444' }}>Failed</span>}
                 </div>
+                {perTask > 0 && (
+                  <p className="text-xs mb-2" style={{ color: C.muted }}>Your instructor marked {perTask} {perTask === 1 ? 'task' : 'tasks'} individually. Each score and comment is shown with that task below.</p>
+                )}
                 {submission.feedback && (
                   <div className="rounded-xl p-4" style={{ background: passed ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.07)', border: `1px solid ${passed ? 'rgba(16,185,129,0.22)' : 'rgba(239,68,68,0.22)'}` }}>
                     <p className="text-xs font-semibold mb-1" style={{ color: passed ? '#10b981' : '#ef4444' }}>Instructor Feedback</p>
@@ -1082,6 +1095,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
             userId={userId}
             initialSubmission={submission}
             graded={isGraded}
+            taskGrades={isGraded ? parseTaskGrades(submission?.task_grades) : undefined}
             submitted={isSubmitted}
             canSubmit={(!isGroupAssignment || isLeader) && !inStudentMode}
             disabledReason={inStudentMode ? 'Submitting is disabled in Student Mode.' : undefined}
@@ -1323,6 +1337,21 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
           </div>
         )}
       </div>
+      )}
+
+      {/* Solution files -- the instructor's model answer, LAST on the page so the student reads
+          their own work and feedback first. RLS releases these only once this student's (or their
+          group's) submission is graded, so their presence here IS the release; renders for every
+          assignment type. */}
+      {!loadingSub && solutions.length > 0 && (
+        <div className="rounded-2xl p-5 mt-4" style={{ background: C.card }}>
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <h3 className="text-sm font-bold" style={{ color: C.text }}>Solution files</h3>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>Released</span>
+          </div>
+          <p className="text-xs mb-3" style={{ color: C.faint }}>The model answer for this assignment, unlocked now that your work has been graded.</p>
+          <SolutionFilesList solutions={solutions} C={C}/>
+        </div>
       )}
     </div>
   );

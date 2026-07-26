@@ -253,6 +253,7 @@ export function isAllowedUpload(name: string): boolean {
 
 // -- Instructor-side MCQ grading (uses the server-only keys) ------------------------------
 export interface McqGrade { taskId: string; selected?: string; correctOption?: string; isCorrect: boolean; answered: boolean; }
+
 export function gradeMcq(record: AssignmentSubmissionRecord, keys: Record<string, string>): { grades: Record<string, McqGrade>; subtotal: number | null } {
   const grades: Record<string, McqGrade> = {};
   const scores: number[] = [];
@@ -266,4 +267,91 @@ export function gradeMcq(record: AssignmentSubmissionRecord, keys: Record<string
   }
   const subtotal = scores.length ? Math.round(scores.reduce((x, y) => x + y, 0) / scores.length) : null;
   return { grades, subtotal };
+}
+
+// -- Per-task grading (instructor-set) ----------------------------------------------------
+// A scenario assignment is graded task by task: the instructor scores each task out of 100 and
+// leaves a comment on it. Stored on assignment_submissions.task_grades (migration 143) as
+// { "<taskId>": { score, feedback } }; grader-only (the DB trigger blocks student writes). The
+// final grade on the submission is the mean of the scored tasks unless the instructor overrides
+// it, and the student sees each task's score + comment beside their own answer.
+
+export interface TaskGrade {
+  score: number | null;   // 0-100, null = not scored
+  feedback?: string;      // rich-text comment for this task (sanitized HTML)
+}
+export type TaskGradeMap = Record<string, TaskGrade>;
+
+// Cap on a single task comment, counted in HTML characters (markup included).
+export const MAX_TASK_FEEDBACK = 8000;
+
+// Whether a rich-text value carries anything: text, or a media/table node that strips to nothing.
+export function hasRichText(html?: string | null): boolean {
+  if (!html) return false;
+  const text = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+  return text.length > 0 || /<(img|iframe|table|video|hr)\b/i.test(html);
+}
+
+// Clamp to the 0-100 range the score input allows, at 2dp (score is numeric(5,2)).
+export function clampTaskScore(n: number): number {
+  return Math.round(Math.min(100, Math.max(0, n)) * 100) / 100;
+}
+
+// Tolerant read of the stored column (jsonb object, or a JSON string on older rows). Entries with
+// neither a score nor a comment are dropped so "has this task been graded" stays meaningful.
+export function parseTaskGrades(raw: any): TaskGradeMap {
+  if (!raw) return {};
+  let p: any = raw;
+  if (typeof raw === 'string') { try { p = JSON.parse(raw); } catch { return {}; } }
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return {};
+  const out: TaskGradeMap = {};
+  for (const [taskId, v] of Object.entries<any>(p)) {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
+    const score = typeof v.score === 'number' && Number.isFinite(v.score) ? clampTaskScore(v.score) : null;
+    const feedback = typeof v.feedback === 'string' ? v.feedback : '';
+    if (score == null && !hasRichText(feedback)) continue;
+    out[taskId] = hasRichText(feedback) ? { score, feedback } : { score };
+  }
+  return out;
+}
+
+// Grading progress + the suggested final grade: the mean of the scored tasks, counting only tasks
+// that are actually in this submission (a stale taskId from an edited assignment is ignored).
+export function taskGradeStats(answers: TaskAnswer[], grades: TaskGradeMap): {
+  total: number; scored: number; commented: number; average: number | null;
+} {
+  const list = answers ?? [];
+  const scores: number[] = [];
+  let commented = 0;
+  for (const a of list) {
+    const g = grades[a.taskId];
+    if (!g) continue;
+    if (typeof g.score === 'number') scores.push(g.score);
+    if (hasRichText(g.feedback)) commented++;
+  }
+  return {
+    total: list.length,
+    scored: scores.length,
+    commented,
+    average: scores.length ? Math.round(scores.reduce((x, y) => x + y, 0) / scores.length) : null,
+  };
+}
+
+// MCQ is graded server-side from the answer key, so its per-task score is authoritative and
+// prefills the input (an unanswered MCQ scores 0).
+export function mcqTaskScore(answer: TaskAnswer, grade?: McqGrade): number | null {
+  if (answer.type !== 'mcq' || !grade) return null;
+  if (!grade.answered) return 0;
+  return grade.isCorrect ? 100 : 0;
+}
+
+// An AI report's overall score is advisory only, so it is offered as a suggestion the instructor
+// applies deliberately rather than prefilled.
+export function aiTaskScoreSuggestion(answer: TaskAnswer): number | null {
+  const r: any = answer.report;
+  if (!r) return null;
+  const n = typeof r.overallScore === 'number' ? r.overallScore
+    : typeof r?.audit?.overallScore === 'number' ? r.audit.overallScore
+    : null;
+  return n == null || !Number.isFinite(n) ? null : clampTaskScore(n);
 }

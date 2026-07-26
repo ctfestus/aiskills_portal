@@ -7,7 +7,7 @@ import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { ImageLibrary } from '@/components/ImageLibrary';
 import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X, Briefcase, ClipboardList, Eye, Images } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X, Briefcase, ClipboardList, Eye, Images, FileText } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const AssignmentExperiencePlayer = dynamic(() => import('@/components/AssignmentExperiencePlayer'), { ssr: false });
 const StandardAssignmentPlayer = dynamic(() => import('@/components/StandardAssignmentPlayer'), { ssr: false });
@@ -19,6 +19,7 @@ import { sanitizeRichText, sanitizePlainText } from '@/lib/sanitize';
 import { ScenariosEditor } from '@/components/create/ScenariosEditor';
 import type { AssignmentScenario } from '@/lib/assignment-scenarios';
 import { stripAnswerKeys, extractAnswerKeys, validateScenarioConfig } from '@/lib/assignment-scenarios';
+import { ALLOWED_SOLUTION_EXTENSIONS, isAllowedSolutionFile, isCompleteSolution, requestSolutionCleanup } from '@/lib/assignment-solutions';
 import type { LessonDoc } from '@/lib/lesson-doc';
 
 
@@ -46,6 +47,16 @@ interface Resource {
   resource_type: 'link' | 'file';
 }
 
+// A solution entry being authored. Files are uploaded to the private solutions bucket as soon as
+// they are picked (`storage_path` is what gets stored); links carry a URL instead.
+interface SolutionDraft {
+  id: string;
+  name: string;
+  kind: 'file' | 'link';
+  storage_path?: string;
+  url?: string;
+}
+
 interface Course {
   id: string;
   title: string;
@@ -55,6 +66,13 @@ interface VEForm {
   id: string;
   title: string;
   slug: string;
+}
+
+// "relation does not exist" / "not in the schema cache" -- the solutions table (migration 144) has
+// not been applied on this environment.
+function isMissingSolutionsTable(err: any): boolean {
+  const code = err?.code ?? '';
+  return code === '42P01' || code === 'PGRST205' || /schema cache/i.test(err?.message ?? '');
 }
 
 function inputStyle(C: typeof LIGHT_C) {
@@ -108,6 +126,13 @@ export default function CreateAssignmentPage() {
   const [status, setStatus]                       = useState<'draft' | 'published'>('draft');
   const [originalStatus, setOriginalStatus]       = useState<'draft' | 'published'>('draft');
   const [resources, setResources]                 = useState<Resource[]>([]);
+  const [solutions, setSolutions]                 = useState<SolutionDraft[]>([]);
+  const [solutionUploading, setSolutionUploading] = useState(false);
+  // Every solution file this assignment referenced when the editor opened, plus anything uploaded
+  // since. After a successful save these are offered for cleanup: whatever the saved assignment no
+  // longer references gets removed from the private bucket (the server re-checks, so a file another
+  // assignment still uses is kept).
+  const uploadedSolutionPaths = useRef<Set<string>>(new Set());
   const [cohorts, setCohorts]                     = useState<{ id: string; name: string }[]>([]);
   const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
   const [originalCohortIds, setOriginalCohortIds] = useState<string[]>([]);
@@ -123,6 +148,7 @@ export default function CreateAssignmentPage() {
   const [previewVeConfig, setPreviewVeConfig]     = useState<any>(null);
   const [loadingPreviewVe, setLoadingPreviewVe]   = useState(false);
   const coverRef = useRef<HTMLInputElement>(null);
+  const solutionFileRef = useRef<HTMLInputElement>(null);
   const resourceFileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const rubricFileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const toggleCohort = (id: string) =>
@@ -156,9 +182,10 @@ export default function CreateAssignmentPage() {
       if (groupsRes?.groups) setGroups(groupsRes.groups.map((g: any) => ({ id: g.id, name: g.name, cohort_id: g.cohort_id })));
 
       if (id) {
-        const [{ data }, { data: resData }] = await Promise.all([
+        const [{ data }, { data: resData }, { data: solData }] = await Promise.all([
           supabase.from('assignments').select('*').eq('id', id).single(),
           supabase.from('assignment_resources').select('*').eq('assignment_id', id),
+          supabase.from('assignment_solutions').select('*').eq('assignment_id', id).order('created_at'),
         ]);
         if (data) {
           setTitle(data.title ?? '');
@@ -204,6 +231,10 @@ export default function CreateAssignmentPage() {
           }
         }
         if (resData) setResources(resData.map((r: any) => ({ id: r.id, name: r.name, url: r.url, resource_type: r.resource_type })));
+        if (solData) {
+          setSolutions(solData.map((s: any) => ({ id: s.id, name: s.name, kind: s.kind, storage_path: s.storage_path ?? undefined, url: s.url ?? undefined })));
+          for (const s of solData) if (s.storage_path) uploadedSolutionPaths.current.add(s.storage_path);
+        }
       }
     };
     init();
@@ -219,6 +250,47 @@ export default function CreateAssignmentPage() {
       case 'document_review':    return { rubric, minScore, ...(context.trim() ? { context: context.trim() } : {}) };
       case 'virtual_experience': return veFormId ? { ve_form_id: veFormId } : null;
       default:                   return null;
+    }
+  }
+
+  // -- Solution files (released to a student only after their submission is graded) ---
+  function addSolutionLink() {
+    setSolutions(prev => [...prev, { id: crypto.randomUUID(), name: '', kind: 'link', url: '' }]);
+  }
+  function removeSolution(id: string) { setSolutions(prev => prev.filter(s => s.id !== id)); }
+  function updateSolution(id: string, field: 'name' | 'url', value: string) {
+    setSolutions(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
+  }
+
+  // Files upload immediately (like resource files) so the editor only ever holds a storage path.
+  // The object goes to the PRIVATE solutions bucket via the service-role route -- there is no
+  // public URL, so nothing is exposed before the assignment is even saved.
+  async function handleSolutionFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (files.length === 0) return;
+    setSolutionUploading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      for (const file of files) {
+        if (!isAllowedSolutionFile(file.name)) throw new Error(`File type not allowed: ${file.name}`);
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch('/api/assignments/solution-upload', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          body: fd,
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Solution upload failed.');
+        uploadedSolutionPaths.current.add(json.path);
+        setSolutions(prev => [...prev, { id: crypto.randomUUID(), name: file.name, kind: 'file', storage_path: json.path }]);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Solution upload failed.');
+    } finally {
+      setSolutionUploading(false);
     }
   }
 
@@ -310,7 +382,13 @@ export default function CreateAssignmentPage() {
       if (editId) {
         const { error: updateError } = await supabase.from('assignments').update(draftPayload).eq('id', editId);
         if (updateError) throw updateError;
-        await supabase.from('assignment_resources').delete().eq('assignment_id', editId);
+        const { error: delErr } = await supabase.from('assignment_resources').delete().eq('assignment_id', editId);
+        if (delErr) throw new Error('Could not update resources. The assignment was left as a draft - please try saving again.');
+        // Tolerated when the table itself is missing (a tenant that has not applied migration 144
+        // yet): editing an assignment must not break there. A real save of solutions still errors
+        // loudly below.
+        const { error: delSolErr } = await supabase.from('assignment_solutions').delete().eq('assignment_id', editId);
+        if (delSolErr && !isMissingSolutionsTable(delSolErr)) throw new Error('Could not update the solution files. The assignment was left as a draft - please try saving again.');
       } else {
         const { data: assignment, error: assignmentError } = await supabase
           .from('assignments').insert({ ...draftPayload, created_by: session.user.id }).select('id').single();
@@ -334,7 +412,27 @@ export default function CreateAssignmentPage() {
         if (resourcesError) throw new Error('Could not save resources. The assignment was left as a draft - please try saving again.');
       }
 
-      // Flip to published only after content, keys, and resources all saved.
+      // Solution files: instructor-only until a student's submission is graded (RLS + private
+      // bucket, migration 144). Same draft-first safety as resources.
+      const validSolutions = solutions.filter(isCompleteSolution);
+      if (validSolutions.length > 0) {
+        const { error: solutionsError } = await supabase.from('assignment_solutions').insert(
+          validSolutions.map(s => ({
+            assignment_id: assignmentId,
+            name: s.name.trim(),
+            kind: s.kind,
+            storage_path: s.kind === 'file' ? s.storage_path : null,
+            url: s.kind === 'link' ? s.url!.trim() : null,
+          }))
+        );
+        if (solutionsError) {
+          throw new Error(isMissingSolutionsTable(solutionsError)
+            ? 'Solution files need database migration 144 on this environment. The assignment was left as a draft.'
+            : 'Could not save the solution files. The assignment was left as a draft - please try saving again.');
+        }
+      }
+
+      // Flip to published only after content, keys, resources, and solutions all saved.
       if (wantPublished) {
         const { error: pubErr } = await supabase.from('assignments').update({ status: 'published' }).eq('id', assignmentId);
         if (pubErr) throw new Error('Content saved, but publishing failed. The assignment is a draft - please try publishing again.');
@@ -360,6 +458,13 @@ export default function CreateAssignmentPage() {
             throw new Error(notifyJson.error || 'Assignment published but notification failed.');
           }
         }
+      }
+
+      // Bin any solution file this assignment no longer references (a removed entry, or one
+      // uploaded and then taken out before saving). Fire-and-forget after the save succeeded; the
+      // server keeps anything another assignment still points at.
+      if (uploadedSolutionPaths.current.size > 0) {
+        requestSolutionCleanup([...uploadedSolutionPaths.current], session.access_token);
       }
 
       router.push('/dashboard#assignments');
@@ -795,6 +900,62 @@ export default function CreateAssignmentPage() {
                 </div>
               ))}
             </div>
+          </section>
+
+          {/* -- Section: Solution files (released after grading) --- */}
+          <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+              <div>
+                <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0 }}>Solution files</h2>
+                <p style={{ ...hintStyle(C), marginTop: 4 }}>
+                  The model answer. A student can only see and download these once their own submission has been graded.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <input type="file" multiple style={{ display: 'none' }} ref={solutionFileRef}
+                  accept={[...ALLOWED_SOLUTION_EXTENSIONS].join(',')}
+                  onChange={handleSolutionFileUpload}/>
+                <button type="button" onClick={() => solutionFileRef.current?.click()} disabled={solutionUploading}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: 'none', background: C.cta, color: C.ctaText, fontSize: 13, fontWeight: 600, cursor: solutionUploading ? 'not-allowed' : 'pointer', opacity: solutionUploading ? 0.6 : 1, whiteSpace: 'nowrap' }}>
+                  {solutionUploading ? <Loader2 style={{ width: 14, height: 14 }} className="animate-spin"/> : <Upload style={{ width: 14, height: 14 }}/>}
+                  {solutionUploading ? 'Uploading...' : 'Upload files'}
+                </button>
+                <button type="button" onClick={addSolutionLink}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.cardBorder}`, background: C.pill, color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  <LinkIcon style={{ width: 14, height: 14 }}/> Add link
+                </button>
+              </div>
+            </div>
+
+            {solutions.length === 0 ? (
+              <p style={{ textAlign: 'center', color: C.faint, fontSize: 14, padding: '24px 0' }}>
+                No solution files yet. Upload the worked answer (Excel, SQL, Power BI, PDF) or link a walkthrough.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {solutions.map(s => (
+                  <div key={s.id} style={{ display: 'grid', gridTemplateColumns: s.kind === 'link' ? '1fr 1fr auto auto' : '1fr auto auto', gap: 10, alignItems: 'center', padding: 14, borderRadius: 10, background: C.page, border: `1px solid ${C.divider}` }}>
+                    <input type="text" placeholder="Solution name" value={s.name}
+                      onChange={e => updateSolution(s.id, 'name', sanitizePlainText(e.target.value))}
+                      style={{ ...inputStyle(C), background: C.page === DARK_C.page ? C.input : C.card, width: '100%' }} maxLength={200}/>
+                    {s.kind === 'link' && (
+                      <input type="url" placeholder="https://" value={s.url ?? ''}
+                        onChange={e => updateSolution(s.id, 'url', e.target.value)}
+                        style={{ ...inputStyle(C), background: C.page === DARK_C.page ? C.input : C.card, width: '100%' }}/>
+                    )}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 7, background: C.input, color: C.muted, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      {s.kind === 'file'
+                        ? <><FileText style={{ width: 11, height: 11 }}/> Private file</>
+                        : <><LinkIcon style={{ width: 11, height: 11 }}/> Link</>}
+                    </span>
+                    <button type="button" onClick={() => removeSolution(s.id)}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 8, border: `1px solid ${C.cardBorder}`, background: C.input, color: C.faint, cursor: 'pointer', flexShrink: 0 }}>
+                      <Trash2 style={{ width: 14, height: 14 }}/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* -- Section: Settings --- */}

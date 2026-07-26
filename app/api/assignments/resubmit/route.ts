@@ -67,11 +67,12 @@ export async function POST(req: NextRequest) {
   const { error: updateErr } = await db
     .from('assignment_submissions')
     .update({
-      status:     'draft',
-      score:      null,
-      feedback:   null,
-      graded_by:  null,
-      graded_at:  null,
+      status:      'draft',
+      score:       null,
+      feedback:    null,
+      task_grades: null,   // per-task scores/comments belong to the graded attempt
+      graded_by:   null,
+      graded_at:   null,
     })
     .eq('id', submissionId);
 
