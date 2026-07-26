@@ -77,22 +77,26 @@ export async function POST(req: NextRequest) {
   const record = buildScenarioRecord(assignment.config, answers, (html) => sanitizeRichText(html));
 
   // Update the existing row in place, else insert. Never overwrite a graded row.
-  const existingQuery = isGroupAssignment && groupId
+  const loadExisting = () => (isGroupAssignment && groupId
     ? supabase.from('assignment_submissions').select('id, status').eq('assignment_id', assignmentId).eq('group_id', groupId).maybeSingle()
-    : supabase.from('assignment_submissions').select('id, status').eq('assignment_id', assignmentId).eq('student_id', user.id).is('group_id', null).maybeSingle();
-  const { data: existing } = await existingQuery;
+    : supabase.from('assignment_submissions').select('id, status').eq('assignment_id', assignmentId).eq('student_id', user.id).is('group_id', null).maybeSingle());
+  const { data: existing } = await loadExisting();
   if (existing?.status === 'graded') return NextResponse.json({ error: 'This has been graded. Reset it to resubmit.' }, { status: 409 });
 
   const status = asDraft ? 'draft' : 'submitted';
   const responseText = JSON.stringify(record);
   const now = new Date().toISOString();
 
-  let saved: any;
-  if (existing?.id) {
+  const applyUpdate = (id: string) => {
     const upd: any = { response_text: responseText, status };
     if (!asDraft) upd.submitted_at = now;
     if (isGroupAssignment && groupId) { upd.submitted_by = user.id; upd.participants = participantIds; }
-    const { data, error } = await supabase.from('assignment_submissions').update(upd).eq('id', existing.id).select().single();
+    return supabase.from('assignment_submissions').update(upd).eq('id', id).select().single();
+  };
+
+  let saved: any;
+  if (existing?.id) {
+    const { data, error } = await applyUpdate(existing.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     saved = data;
   } else {
@@ -100,8 +104,22 @@ export async function POST(req: NextRequest) {
     if (!asDraft) ins.submitted_at = now;
     if (isGroupAssignment && groupId) { ins.group_id = groupId; ins.submitted_by = user.id; ins.participants = participantIds; }
     const { data, error } = await supabase.from('assignment_submissions').insert(ins).select().single();
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    saved = data;
+    if (error) {
+      // Lost an insert race against a concurrent submit (the partial unique index rejected this one).
+      // Fall back to updating the row that won, so a double-click does not surface a raw DB error.
+      if (error.code === '23505') {
+        const { data: raced } = await loadExisting();
+        if (raced?.status === 'graded') return NextResponse.json({ error: 'This has been graded. Reset it to resubmit.' }, { status: 409 });
+        if (!raced?.id) return NextResponse.json({ error: 'Could not save your submission. Please try again.' }, { status: 409 });
+        const { data: udata, error: uerr } = await applyUpdate(raced.id);
+        if (uerr) return NextResponse.json({ error: uerr.message }, { status: 500 });
+        saved = udata;
+      } else {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+    } else {
+      saved = data;
+    }
   }
 
   return NextResponse.json({ submission: saved });
