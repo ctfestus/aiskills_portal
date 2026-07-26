@@ -18,7 +18,7 @@ import { LessonEditor } from '@/components/lesson/LessonEditor';
 import { sanitizeRichText, sanitizePlainText } from '@/lib/sanitize';
 import { ScenariosEditor } from '@/components/create/ScenariosEditor';
 import type { AssignmentScenario } from '@/lib/assignment-scenarios';
-import { stripAnswerKeys, extractAnswerKeys, validateScenarioConfig } from '@/lib/assignment-scenarios';
+import { stripAnswerKeys, extractAnswerKeys, validateScenarioConfig, DEFAULT_PASS_MARK } from '@/lib/assignment-scenarios';
 import { ALLOWED_SOLUTION_EXTENSIONS, isAllowedSolutionFile, isCompleteSolution, requestSolutionCleanup } from '@/lib/assignment-solutions';
 import type { LessonDoc } from '@/lib/lesson-doc';
 
@@ -106,6 +106,7 @@ export default function CreateAssignmentPage() {
   const [assignmentType, setAssignmentType] = useState<AssignmentType>('standard');
   const [rubricText, setRubricText]         = useState('');        // one criterion per line
   const [minScore, setMinScore]             = useState<number>(70);
+  const [passingScore, setPassingScore]     = useState<number>(DEFAULT_PASS_MARK); // submission pass grade
   const [schema, setSchema]                 = useState('');        // for code_review
   const [context, setContext]               = useState('');        // for excel_review
   const [veFormId, setVeFormId]             = useState('');        // for virtual_experience
@@ -214,6 +215,7 @@ export default function CreateAssignmentPage() {
             const cfg = data.config;
             if (cfg.rubric?.length) setRubricText(cfg.rubric.join('\n'));
             if (cfg.minScore != null) setMinScore(cfg.minScore);
+            if (cfg.passingScore != null) setPassingScore(cfg.passingScore);
             if (cfg.schema) setSchema(cfg.schema);
             if (cfg.context) setContext(cfg.context);
             if (cfg.ve_form_id) setVeFormId(cfg.ve_form_id);
@@ -242,15 +244,21 @@ export default function CreateAssignmentPage() {
 
   function buildConfig(): Record<string, any> | null {
     const rubric = rubricText.split('\n').map(s => s.trim()).filter(Boolean);
-    switch (assignmentType) {
-      case 'standard':           return scenarios.length ? { scenarios: stripAnswerKeys(scenarios), ...(introDoc ? { introDoc } : {}), ...(introBody.trim() ? { introBody: sanitizeRichText(introBody) } : {}) } : null;
-      case 'code_review':        return { rubric, minScore, ...(schema.trim() ? { schema: schema.trim() } : {}) };
-      case 'excel_review':       return { rubric, minScore, ...(context.trim() ? { context: context.trim() } : {}) };
-      case 'dashboard_critique': return { rubric };
-      case 'document_review':    return { rubric, minScore, ...(context.trim() ? { context: context.trim() } : {}) };
-      case 'virtual_experience': return veFormId ? { ve_form_id: veFormId } : null;
-      default:                   return null;
-    }
+    const base: Record<string, any> | null = (() => {
+      switch (assignmentType) {
+        case 'standard':           return scenarios.length ? { scenarios: stripAnswerKeys(scenarios), ...(introDoc ? { introDoc } : {}), ...(introBody.trim() ? { introBody: sanitizeRichText(introBody) } : {}) } : null;
+        case 'code_review':        return { rubric, minScore, ...(schema.trim() ? { schema: schema.trim() } : {}) };
+        case 'excel_review':       return { rubric, minScore, ...(context.trim() ? { context: context.trim() } : {}) };
+        case 'dashboard_critique': return { rubric };
+        case 'document_review':    return { rubric, minScore, ...(context.trim() ? { context: context.trim() } : {}) };
+        case 'virtual_experience': return veFormId ? { ve_form_id: veFormId } : null;
+        default:                   return null;
+      }
+    })();
+    if (!base) return null;
+    // The submission passing grade applies to every assignment type (resubmit / solution release /
+    // grade notifications / pass-fail all read it). Clamp to a sane 1-100.
+    return { ...base, passingScore: Math.min(100, Math.max(1, Math.round(passingScore))) };
   }
 
   // -- Solution files (released to a student only after their submission is graded) ---
@@ -1007,6 +1015,20 @@ export default function CreateAssignmentPage() {
                 )}
               </div>
               <p style={hintStyle(C)}>Students will see a countdown on their assignment card until this date.</p>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={labelStyle(C)}>Passing score</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="number" min={1} max={100}
+                  value={passingScore}
+                  onChange={e => setPassingScore(Math.min(100, Math.max(1, Math.round(Number(e.target.value) || DEFAULT_PASS_MARK))))}
+                  style={{ ...inputStyle(C), width: 'auto' }}
+                />
+                <span style={{ fontSize: 13, color: C.faint }}>/ 100</span>
+              </div>
+              <p style={hintStyle(C)}>The grade a submission needs to pass. Below it the student can resubmit; at or above it the work is passed{assignmentType === 'standard' ? ' and the solution files are released' : ''}. Defaults to {DEFAULT_PASS_MARK}.</p>
             </div>
 
             {/* Submission Instructions is retired from the Standard flow (task instructions +

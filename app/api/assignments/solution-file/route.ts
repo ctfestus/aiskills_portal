@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminClient } from '@/lib/admin-client';
 import { requireUser, isAuthError } from '@/lib/api-auth';
 import { SOLUTION_BUCKET } from '@/lib/assignment-solutions';
+import { passMarkOf } from '@/lib/assignment-scenarios';
 
 // GET /api/assignments/solution-file?id=<assignment_solutions.id>
 //
@@ -14,11 +15,6 @@ import { SOLUTION_BUCKET } from '@/lib/assignment-solutions';
 export const dynamic = 'force-dynamic';
 
 const SIGNED_URL_TTL = 60; // seconds
-
-// Release only once the student's work is FINAL. A graded submission scoring below the pass mark can
-// still be reset to draft and resubmitted (see /api/assignments/resubmit), so releasing the model
-// answer then would hand it over mid-attempt. Keep in lockstep with PASS_MARK in the resubmit route.
-const PASS_MARK = 85;
 
 export async function GET(req: NextRequest) {
   const authRes = await requireUser(req);
@@ -41,6 +37,14 @@ export async function GET(req: NextRequest) {
   const isGrader = !!me && ['admin', 'instructor', 'staff'].includes(me.role);
 
   if (!isGrader) {
+    // Release only once the student's work is FINAL: graded AND at/above this assignment's passing
+    // score (a failing grade can still be reset to draft and resubmitted, so releasing then would
+    // hand over the model answer mid-attempt). The pass mark is the assignment's configured value,
+    // defaulting to DEFAULT_PASS_MARK -- the same rule the RLS release policy applies.
+    const { data: assignment } = await supabase.from('assignments')
+      .select('config').eq('id', solution.assignment_id).maybeSingle();
+    const passMark = passMarkOf(assignment?.config);
+
     // Released to this student? Their own graded+passed submission, or a group submission they were
     // actually part of. Mirrors the "assignment_solutions: released select" RLS policy.
     const { data: groupRows } = await supabase.from('group_members')
@@ -49,14 +53,14 @@ export async function GET(req: NextRequest) {
 
     const { data: own } = await supabase.from('assignment_submissions')
       .select('id').eq('assignment_id', solution.assignment_id).eq('student_id', user.id)
-      .eq('status', 'graded').gte('score', PASS_MARK).limit(1);
+      .eq('status', 'graded').gte('score', passMark).limit(1);
 
     let released = (own ?? []).length > 0;
     if (!released && groupIds.length > 0) {
       // Only a group submission that includes this student (they are one of its participants).
       const { data: group } = await supabase.from('assignment_submissions')
         .select('id').eq('assignment_id', solution.assignment_id).in('group_id', groupIds)
-        .eq('status', 'graded').gte('score', PASS_MARK).contains('participants', [user.id]).limit(1);
+        .eq('status', 'graded').gte('score', passMark).contains('participants', [user.id]).limit(1);
       released = (group ?? []).length > 0;
     }
     if (!released) {

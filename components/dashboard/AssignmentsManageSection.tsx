@@ -11,7 +11,7 @@ import { sanitizeRichText } from '@/lib/sanitize';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { ReviewReportView, REVIEW_TYPES } from '@/components/ReviewReportView';
 import { parseReviewNotes, inferReviewType } from '@/lib/reviewRecord';
-import { parseSubmissionRecord, parseTaskGrades, taskGradeStats, mcqTaskScore, MAX_TASK_FEEDBACK, type McqGrade } from '@/lib/assignment-scenarios';
+import { parseSubmissionRecord, parseTaskGrades, taskGradeStats, mcqTaskScore, MAX_TASK_FEEDBACK, passMarkOf, type McqGrade } from '@/lib/assignment-scenarios';
 import { ScenarioGradingPanel, draftsToTaskGrades, taskScoreValue, taskScoreValid, type TaskGradeDraft } from '@/components/dashboard/ScenarioGradingPanel';
 import { SolutionFilesList } from '@/components/SolutionFilesList';
 import { requestSolutionCleanup, type AssignmentSolution } from '@/lib/assignment-solutions';
@@ -71,6 +71,8 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     const scores = Object.values(draftGrades).map(g => g.score).filter((n): n is number => n != null);
     return scores.length ? Math.round(scores.reduce((x, y) => x + y, 0) / scores.length) : null;
   }, [draftGrades]);
+  // The selected assignment's configured passing grade (default 85), used for every pass/fail readout.
+  const passMark = passMarkOf(selected?.config);
 
   // Keep the final grade in step with the task scores while the instructor has not overridden it.
   useEffect(() => {
@@ -343,7 +345,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     const scenarioRec = parseSubmissionRecord(viewingSub.response_text);
     const stats = scenarioRec ? taskGradeStats(scenarioRec.answers, draftGrades) : null;
     const scorePct = score.trim() === '' ? null : parseFloat(score);
-    const scoreIsPass = scorePct != null && Number.isFinite(scorePct) && scorePct >= 85;
+    const scoreIsPass = scorePct != null && Number.isFinite(scorePct) && scorePct >= passMark;
     return (
       <div>
         <button onClick={() => { setViewingSub(null); setVeAttemptProgress(null); }} className="flex items-center gap-2 mb-6 text-sm font-medium hover:opacity-70 transition-opacity" style={{ color: C.muted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
@@ -631,8 +633,8 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
       : submissions.filter(s => s.status === 'graded');
     const graded    = gradedSubs.length;
     const passed    = isGroupAssignment
-      ? gradedSubs.filter((r: any) => (r.sub?.score ?? 0) >= 85).length
-      : submissions.filter(s => s.status === 'graded' && s.score >= 85).length;
+      ? gradedSubs.filter((r: any) => (r.sub?.score ?? 0) >= passMark).length
+      : submissions.filter(s => s.status === 'graded' && s.score >= passMark).length;
     const passRate  = graded > 0 ? Math.round((passed / graded) * 100) : 0;
 
     return (
@@ -747,7 +749,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                     {presentStatuses.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
                   </select>
                 </div>
-                <button onClick={() => isGroupAssignment ? exportGroupCSV(visibleRows, selected.title) : exportCSV(visibleRows, selected.title)}
+                <button onClick={() => isGroupAssignment ? exportGroupCSV(visibleRows, selected.title, passMark) : exportCSV(visibleRows, selected.title, passMark)}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold hover:opacity-80 transition-opacity"
                   style={{ background: C.pill, color: C.muted, border: `1px solid ${C.divider}` }}>
                   <Download className="w-3.5 h-3.5"/> Export CSV
@@ -782,7 +784,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                 {visibleRows.map((row: any, i: number) => {
                   const sub = row.sub;
                   const sc = sub?.score ?? null;
-                  const isPassed = sc != null && sc >= 85;
+                  const isPassed = sc != null && sc >= passMark;
                   const isExpanded = expandedGroups.has(row.id);
                   const statusInfo = statusCfg(row._status, row._pct);
                   return (
@@ -882,7 +884,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                 {visibleRows.map((row: any, i: number) => {
                   const sub     = row.sub;
                   const sc      = sub?.score ?? null;
-                  const isPassed = sc != null && sc >= 85;
+                  const isPassed = sc != null && sc >= passMark;
                   const statusInfo = statusCfg(row._status, row._pct);
                   return (
                     <div key={row.id} className="grid px-5 py-3.5 items-center" style={{ gridTemplateColumns: '1fr 110px 70px 80px 80px', background: i % 2 === 0 ? C.card : C.page, borderTop: `1px solid ${C.divider}` }}>

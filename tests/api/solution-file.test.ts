@@ -76,6 +76,7 @@ describe('GET /api/assignments/solution-file', () => {
     mockAdminClient.mockReturnValue(db({
       assignment_solutions: { data: FILE_ROW, error: null },
       students: { data: { role: 'student' }, error: null },
+      assignments: { data: { config: null }, error: null },
       group_members: { data: [], error: null },
       assignment_submissions: { data: [], error: null },
     }));
@@ -89,6 +90,7 @@ describe('GET /api/assignments/solution-file', () => {
     mockAdminClient.mockReturnValue(db({
       assignment_solutions: { data: FILE_ROW, error: null },
       students: { data: { role: 'student' }, error: null },
+      assignments: { data: { config: null }, error: null },
       group_members: { data: [], error: null },
       assignment_submissions: { data: [{ id: 'sub1' }], error: null },
     }));
@@ -104,6 +106,7 @@ describe('GET /api/assignments/solution-file', () => {
     mockAdminClient.mockReturnValue(db({
       assignment_solutions: { data: FILE_ROW, error: null },
       students: { data: { role: 'student' }, error: null },
+      assignments: { data: { config: null }, error: null },
       group_members: { data: [{ group_id: 'g1' }], error: null },
       // own lookup first (none), then the group lookup (graded)
       assignment_submissions: [{ data: [], error: null }, { data: [{ id: 'sub9' }], error: null }],

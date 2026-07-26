@@ -285,6 +285,17 @@ export type TaskGradeMap = Record<string, TaskGrade>;
 // Cap on a single task comment, counted in HTML characters (markup included).
 export const MAX_TASK_FEEDBACK = 8000;
 
+// The submission passing grade (0-100). Instructors set it per assignment via config.passingScore;
+// it falls back to DEFAULT_PASS_MARK when unset. This is the ONE authoritative rule for "did the
+// submission pass" -- used by resubmit, solution release, grade notifications, the RLS release policy
+// (which reads config->>'passingScore' with the same default), and pass/fail display. NOTE: this is
+// distinct from a task's minScore, which is the per-AI-review threshold inside the review players.
+export const DEFAULT_PASS_MARK = 85;
+export function passMarkOf(config: any): number {
+  const v = config?.passingScore;
+  return typeof v === 'number' && Number.isFinite(v) && v >= 1 && v <= 100 ? v : DEFAULT_PASS_MARK;
+}
+
 // Whether a rich-text value carries anything: text, or a media/table node that strips to nothing.
 export function hasRichText(html?: string | null): boolean {
   if (!html) return false;

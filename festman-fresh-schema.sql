@@ -1933,18 +1933,19 @@ CREATE POLICY "assignment_solutions: staff read"
     WHERE id = (SELECT auth.uid()) AND role IN ('admin','instructor','staff')
   ));
 
--- Students see solutions only once their work is FINAL: graded AND passed (score >= 85, matching
--- PASS_MARK in /api/assignments/resubmit -- a failing grade can still be reset to draft and
--- resubmitted). Group release is limited to the submitter or a member in participants[], never every
--- group member. (migration 145)
+-- Students see solutions only once their work is FINAL: graded AND at/above the assignment's passing
+-- score (config.passingScore, default 85 -- the same rule resubmit / solution-file / grade-notify use,
+-- so a failing grade that can still be reset to draft never releases the answer). Group release is
+-- limited to the submitter or a member in participants[], never every group member. (migrations 145, 149)
 CREATE POLICY "assignment_solutions: released select"
   ON public.assignment_solutions FOR SELECT
   USING (EXISTS (
     SELECT 1 FROM public.assignment_submissions s
+    JOIN public.assignments a ON a.id = s.assignment_id
     WHERE s.assignment_id = assignment_solutions.assignment_id
       AND s.status = 'graded'
       AND s.score IS NOT NULL
-      AND s.score >= 85
+      AND s.score >= COALESCE(NULLIF(a.config->>'passingScore','')::numeric, 85)
       AND (
         s.student_id = (SELECT auth.uid())
         OR (

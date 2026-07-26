@@ -16,7 +16,7 @@ import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRe
 import { LIGHT_C } from '@/lib/theme';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { getStudentMode } from '@/lib/student-mode-client';
-import { isScenarioConfig, parseTaskGrades } from '@/lib/assignment-scenarios';
+import { isScenarioConfig, parseTaskGrades, passMarkOf } from '@/lib/assignment-scenarios';
 import type { AssignmentSolution } from '@/lib/assignment-solutions';
 import { SolutionFilesList } from '@/components/SolutionFilesList';
 import { Sk, EmptyState, StatusBadge } from '@/components/student/shared';
@@ -84,6 +84,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
   // A "standard" assignment authored as scenarios + tasks; old standard assignments (no
   // config.scenarios) fall back to the legacy brief + free-submission panel.
   const isScenarioStandard = assignmentType === 'standard' && isScenarioConfig(assignment.config);
+  const passMark = passMarkOf(assignment.config); // this assignment's configured passing grade
 
   useEffect(() => {
     const load = async () => {
@@ -917,8 +918,8 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
           {isGraded && (
             <div className="rounded-2xl p-5 mb-4" style={{ background: C.card }}>
               {(() => {
-                const passed = submission.score != null && submission.score >= 85;
-                const failed = submission.score != null && submission.score < 85;
+                const passed = submission.score != null && submission.score >= passMark;
+                const failed = submission.score != null && submission.score < passMark;
                 return (
                   <>
                     <div className="flex items-center gap-3 flex-wrap mb-2">
@@ -1058,8 +1059,8 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
       {!loadingSub && isScenarioStandard && (
         <div className="mb-4">
           {isGraded && (() => {
-            const passed = submission.score != null && submission.score >= 85;
-            const failed = submission.score != null && submission.score < 85;
+            const passed = submission.score != null && submission.score >= passMark;
+            const failed = submission.score != null && submission.score < passMark;
             const perTask = Object.keys(parseTaskGrades(submission.task_grades)).length;
             return (
               <div className="rounded-2xl p-5 mb-4" style={{ background: C.card }}>
@@ -1182,8 +1183,8 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               </div>
             )}
             {(() => {
-              const passed = submission.score != null && submission.score >= 85;
-              const failed = submission.score != null && submission.score < 85;
+              const passed = submission.score != null && submission.score >= passMark;
+              const failed = submission.score != null && submission.score < passMark;
               return (
                 <>
                   <div className="flex items-center gap-3 flex-wrap">
@@ -1458,6 +1459,7 @@ export function AssignmentsSection({ userId, studentName, studentEmail, C }: { u
       : daysLeft < 0  ? '#ef4444'
       : daysLeft <= 3 ? '#f59e0b'
       : '#6b7280';
+    const passMark = passMarkOf(item.config); // this assignment's configured passing grade
 
     return (
     <motion.button key={item.id} onClick={() => setSelected(item)}
@@ -1481,8 +1483,8 @@ export function AssignmentsSection({ userId, studentName, studentEmail, C }: { u
           <div className="absolute top-2 right-2">
             {item._sub.status === 'graded'
               ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: item._sub.score >= 85 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)', color: item._sub.score >= 85 ? '#10b981' : '#ef4444', border: `1px solid ${item._sub.score >= 85 ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
-                  {item._sub.score >= 85 ? 'Passed' : 'Failed'}
+                  style={{ background: item._sub.score >= passMark ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)', color: item._sub.score >= passMark ? '#10b981' : '#ef4444', border: `1px solid ${item._sub.score >= passMark ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
+                  {item._sub.score >= passMark ? 'Passed' : 'Failed'}
                 </span>
               : item._sub.status === 'submitted'
               ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
@@ -1510,7 +1512,7 @@ export function AssignmentsSection({ userId, studentName, studentEmail, C }: { u
           {!item._sub
             ? <span className="text-[11px] font-medium" style={{ color: C.muted }}>Not Submitted</span>
             : item._sub.status === 'graded'
-            ? <span className="text-[11px] font-semibold" style={{ color: item._sub.score >= 85 ? '#10b981' : '#ef4444' }}>Graded · {item._sub.score}%</span>
+            ? <span className="text-[11px] font-semibold" style={{ color: item._sub.score >= passMark ? '#10b981' : '#ef4444' }}>Graded · {item._sub.score}%</span>
             : item._sub.status === 'submitted'
             ? <span className="text-[11px] font-semibold" style={{ color: '#7c3aed' }}>Submitted</span>
             : <span className="text-[11px] font-medium" style={{ color: C.muted }}>Not Submitted</span>}
