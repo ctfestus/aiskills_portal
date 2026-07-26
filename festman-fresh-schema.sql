@@ -430,7 +430,7 @@ CREATE TABLE public.assignment_submissions (
   status        text         NOT NULL DEFAULT 'draft'
                                CHECK (status IN ('draft','submitted','graded')),
   submitted_at  timestamptz,
-  score         numeric(5,2) CHECK (score IS NULL OR score >= 0),
+  score         numeric(5,2) CHECK (score IS NULL OR (score >= 0 AND score <= 100)),
   feedback      text,
   -- Migration 143: per-task grading for scenario assignments.
   -- { "<taskId>": { "score": 0-100, "feedback": "..." } }, grader-only.
@@ -1084,6 +1084,38 @@ $$;
 CREATE TRIGGER trg_protect_submission_graded_fields
   BEFORE INSERT OR UPDATE ON public.assignment_submissions
   FOR EACH ROW EXECUTE FUNCTION public.protect_submission_graded_fields();
+
+-- task_grades shape constraint (migration 147): object of { <taskId>: { score 0-100?, feedback? } }.
+CREATE OR REPLACE FUNCTION public.valid_task_grades(tg jsonb)
+RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
+  SELECT tg IS NULL OR (
+    jsonb_typeof(tg) = 'object'
+    AND NOT EXISTS (
+      SELECT 1 FROM jsonb_each(tg) AS e(k, val)
+      WHERE jsonb_typeof(val) <> 'object'
+        OR CASE
+             WHEN jsonb_typeof(val->'score') = 'number'
+               THEN (val->>'score')::numeric < 0 OR (val->>'score')::numeric > 100
+             WHEN val ? 'score' AND jsonb_typeof(val->'score') <> 'null'
+               THEN true
+             ELSE false
+           END
+        OR CASE
+             WHEN jsonb_typeof(val->'feedback') = 'string'
+               THEN length(val->>'feedback') > 8000
+             WHEN val ? 'feedback' AND jsonb_typeof(val->'feedback') <> 'null'
+               THEN true
+             ELSE false
+           END
+    )
+  );
+$$;
+
+ALTER TABLE public.assignment_submissions
+  DROP CONSTRAINT IF EXISTS assignment_submissions_task_grades_valid;
+ALTER TABLE public.assignment_submissions
+  ADD  CONSTRAINT assignment_submissions_task_grades_valid
+  CHECK (public.valid_task_grades(task_grades));
 CREATE TRIGGER trg_communities_updated_at
   BEFORE UPDATE ON public.communities FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_announcements_updated_at
