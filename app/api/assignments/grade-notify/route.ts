@@ -9,10 +9,9 @@ import { adminClient } from '@/lib/admin-client';
 import { requireRole, isAuthError } from '@/lib/api-auth';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { assignmentGradedEmail } from '@/lib/email-templates';
+import { passMarkOf } from '@/lib/assignment-scenarios';
 
 export const dynamic = 'force-dynamic';
-
-const PASS_MARK = 85;
 
 
 export async function POST(req: NextRequest) {
@@ -22,24 +21,30 @@ export async function POST(req: NextRequest) {
   const auth = await requireRole(req, ['admin', 'instructor']);
   if (isAuthError(auth)) return auth.error;
 
-  let body: { submissionId?: string; assignmentTitle?: string };
+  let body: { submissionId?: string };
   try { body = await req.json(); } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { submissionId, assignmentTitle } = body;
-  if (!submissionId || !assignmentTitle) {
-    return NextResponse.json({ error: 'submissionId and assignmentTitle required' }, { status: 400 });
+  const { submissionId } = body;
+  if (!submissionId) {
+    return NextResponse.json({ error: 'submissionId required' }, { status: 400 });
   }
 
-  // Fetch the submission including the participants array
+  // Fetch the submission (with participants) and the assignment title through the real relationship.
+  // The title is NOT taken from the request body: a client could otherwise put arbitrary text into a
+  // "your assignment was graded" email.
   const { data: sub } = await adminClient()
     .from('assignment_submissions')
-    .select('id, score, feedback, student_id, participants')
+    .select('id, score, feedback, student_id, participants, assignment:assignments!assignment_id(title, config)')
     .eq('id', submissionId)
     .maybeSingle();
 
   if (!sub) return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+
+  const assignmentRow = (Array.isArray(sub.assignment) ? sub.assignment[0] : sub.assignment) as { title?: string; config?: any } | undefined;
+  const assignmentTitle = assignmentRow?.title;
+  if (!assignmentTitle) return NextResponse.json({ ok: true });
 
   // Resolve the set of student IDs to notify: participants array if present, otherwise just the submitter
   const participantIds: string[] = Array.isArray(sub.participants) && sub.participants.length > 0
@@ -61,7 +66,7 @@ export async function POST(req: NextRequest) {
     const t        = await getTenantSettings();
     const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
     const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
-    const passed   = sub.score != null && sub.score >= PASS_MARK;
+    const passed   = sub.score != null && sub.score >= passMarkOf(assignmentRow?.config);
 
     const resend = new Resend(process.env.RESEND_API_KEY);
     await Promise.all(recipients.map((student: any) => {

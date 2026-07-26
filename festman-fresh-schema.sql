@@ -401,6 +401,23 @@ CREATE TABLE public.group_members (
   UNIQUE (student_id)
 );
 
+-- ── assignment_solutions (migration 144) ──────────────────────
+-- Instructor model answers, released to a student only after their submission is graded.
+-- Files live in the PRIVATE 'assignment-solutions' bucket and are served as short-lived signed
+-- URLs by /api/assignments/solution-file; RLS below hides the metadata until release.
+CREATE TABLE public.assignment_solutions (
+  id            uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  assignment_id uuid        NOT NULL REFERENCES public.assignments(id) ON DELETE CASCADE,
+  name          text        NOT NULL,
+  kind          text        NOT NULL DEFAULT 'file' CHECK (kind IN ('file','link')),
+  storage_path  text,
+  url           text,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT assignment_solutions_target CHECK (
+    (kind = 'file' AND storage_path IS NOT NULL) OR (kind = 'link' AND url IS NOT NULL)
+  )
+);
+
 -- ── assignment_submissions ────────────────────────────────────
 CREATE TABLE public.assignment_submissions (
   id            uuid         PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -413,8 +430,11 @@ CREATE TABLE public.assignment_submissions (
   status        text         NOT NULL DEFAULT 'draft'
                                CHECK (status IN ('draft','submitted','graded')),
   submitted_at  timestamptz,
-  score         numeric(5,2) CHECK (score IS NULL OR score >= 0),
+  score         numeric(5,2) CHECK (score IS NULL OR (score >= 0 AND score <= 100)),
   feedback      text,
+  -- Migration 143: per-task grading for scenario assignments.
+  -- { "<taskId>": { "score": 0-100, "feedback": "..." } }, grader-only.
+  task_grades   jsonb,
   graded_by     uuid         REFERENCES auth.users(id) ON DELETE SET NULL,
   graded_at     timestamptz,
   created_at    timestamptz  NOT NULL DEFAULT now(),
@@ -450,6 +470,14 @@ CREATE TABLE public.assignment_group_workspaces (
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now(),
   UNIQUE (assignment_id, group_id)
+);
+
+-- ── assignment_answer_keys (migration 142) ────────────────────
+-- Server-only MCQ correct answers, kept out of the student-readable assignments.config.
+CREATE TABLE public.assignment_answer_keys (
+  assignment_id uuid        PRIMARY KEY REFERENCES public.assignments(id) ON DELETE CASCADE,
+  keys          jsonb       NOT NULL DEFAULT '{}'::jsonb,  -- { "<taskId>": "<correct option text>" }
+  updated_at    timestamptz NOT NULL DEFAULT now()
 );
 
 -- ── communities ───────────────────────────────────────────────
@@ -920,9 +948,11 @@ ALTER TABLE public.virtual_experiences        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.data_center_datasets       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignments                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_resources       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.assignment_solutions       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_submissions     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_submission_files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_group_workspaces ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.assignment_answer_keys      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.communities                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.announcements              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.schedules                  ENABLE ROW LEVEL SECURITY;
@@ -1005,6 +1035,8 @@ CREATE TRIGGER trg_assignments_updated_at
   BEFORE UPDATE ON public.assignments FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_assignment_submissions_updated_at
   BEFORE UPDATE ON public.assignment_submissions FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE TRIGGER trg_assignment_answer_keys_updated_at
+  BEFORE UPDATE ON public.assignment_answer_keys FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_assignment_group_workspaces_updated_at
   BEFORE UPDATE ON public.assignment_group_workspaces FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
@@ -1013,15 +1045,36 @@ CREATE TRIGGER trg_assignment_group_workspaces_updated_at
 --       The role check lives inside the function body instead.
 DROP TRIGGER IF EXISTS trg_protect_submission_graded_fields ON public.assignment_submissions;
 
+-- Hardened by migration 142: guards INSERT + UPDATE. A student may never write score, feedback,
+-- status='graded', or grading metadata (a direct insert could otherwise self-grade or forge a
+-- score). score/feedback are grader-only; the AI-review auto-submit no longer writes a client
+-- score; the scenario endpoint runs as the service role (auth.uid() null) so this check skips it.
+-- Migration 143 added task_grades (per-task scores/comments), compared against OLD on UPDATE so a
+-- student editing a reset draft is not blocked by a value the grader left behind.
+-- Migration 146 also makes the identity columns immutable on UPDATE.
 CREATE OR REPLACE FUNCTION public.protect_submission_graded_fields()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
+  -- Identity columns never change after insert. Service-role endpoints (auth.uid() null) are exempt;
+  -- they only re-save the same ids. This stops a client repointing a submission at another
+  -- assignment, student, or group.
+  IF TG_OP = 'UPDATE' AND auth.uid() IS NOT NULL THEN
+    IF NEW.assignment_id IS DISTINCT FROM OLD.assignment_id
+       OR NEW.student_id  IS DISTINCT FROM OLD.student_id
+       OR NEW.group_id    IS DISTINCT FROM OLD.group_id THEN
+      RAISE EXCEPTION 'assignment_id, student_id and group_id cannot be changed';
+    END IF;
+  END IF;
+
   IF (SELECT role FROM public.students WHERE id = auth.uid()) = 'student' THEN
-    IF NEW.score     IS DISTINCT FROM OLD.score     OR
-       NEW.feedback  IS DISTINCT FROM OLD.feedback  OR
-       NEW.graded_by IS DISTINCT FROM OLD.graded_by OR
-       NEW.graded_at IS DISTINCT FROM OLD.graded_at THEN
-      RAISE EXCEPTION 'Students cannot modify graded fields';
+    IF NEW.status = 'graded'
+       OR NEW.graded_by IS NOT NULL
+       OR NEW.graded_at IS NOT NULL
+       OR NEW.score IS NOT NULL
+       OR NEW.feedback IS NOT NULL
+       OR (TG_OP = 'INSERT' AND NEW.task_grades IS NOT NULL)
+       OR (TG_OP = 'UPDATE' AND NEW.task_grades IS DISTINCT FROM OLD.task_grades) THEN
+      RAISE EXCEPTION 'Students cannot set graded fields';
     END IF;
   END IF;
   RETURN NEW;
@@ -1029,8 +1082,54 @@ END;
 $$;
 
 CREATE TRIGGER trg_protect_submission_graded_fields
-  BEFORE UPDATE ON public.assignment_submissions
+  BEFORE INSERT OR UPDATE ON public.assignment_submissions
   FOR EACH ROW EXECUTE FUNCTION public.protect_submission_graded_fields();
+
+-- task_grades shape constraint (migration 147): object of { <taskId>: { score 0-100?, feedback? } }.
+CREATE OR REPLACE FUNCTION public.valid_task_grades(tg jsonb)
+RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
+  SELECT tg IS NULL OR (
+    jsonb_typeof(tg) = 'object'
+    AND NOT EXISTS (
+      SELECT 1 FROM jsonb_each(tg) AS e(k, val)
+      WHERE jsonb_typeof(val) <> 'object'
+        OR CASE
+             WHEN jsonb_typeof(val->'score') = 'number'
+               THEN (val->>'score')::numeric < 0 OR (val->>'score')::numeric > 100
+             WHEN val ? 'score' AND jsonb_typeof(val->'score') <> 'null'
+               THEN true
+             ELSE false
+           END
+        OR CASE
+             WHEN jsonb_typeof(val->'feedback') = 'string'
+               THEN length(val->>'feedback') > 8000
+             WHEN val ? 'feedback' AND jsonb_typeof(val->'feedback') <> 'null'
+               THEN true
+             ELSE false
+           END
+    )
+  );
+$$;
+
+ALTER TABLE public.assignment_submissions
+  DROP CONSTRAINT IF EXISTS assignment_submissions_task_grades_valid;
+ALTER TABLE public.assignment_submissions
+  ADD  CONSTRAINT assignment_submissions_task_grades_valid
+  CHECK (public.valid_task_grades(task_grades));
+
+-- Submission passing grade from config.passingScore (migration 150), validated exactly like
+-- passMarkOf() in lib/assignment-scenarios.ts: a JSON number in [1,100] is used, anything else -> 85.
+-- The nested CASE guarantees the ::numeric cast only runs on a JSON number, so it can never throw.
+CREATE OR REPLACE FUNCTION public.assignment_pass_mark(config jsonb)
+RETURNS numeric LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE
+    WHEN jsonb_typeof(config->'passingScore') = 'number' THEN
+      CASE WHEN (config->>'passingScore')::numeric BETWEEN 1 AND 100
+           THEN (config->>'passingScore')::numeric
+           ELSE 85 END
+    ELSE 85
+  END;
+$$;
 CREATE TRIGGER trg_communities_updated_at
   BEFORE UPDATE ON public.communities FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_announcements_updated_at
@@ -1758,17 +1857,22 @@ CREATE POLICY "certifications: staff published select"
   ON public.certifications FOR SELECT
   USING ((SELECT public.is_staff()) AND status = 'published');
 
--- ── assignments (migration 097: use my_group_ids() helper for group check) ──
+-- ── assignments (migration 097: my_group_ids() helper; 146: students see only published) ──
 CREATE POLICY "assignments: select"
   ON public.assignments FOR SELECT
   USING (
     (SELECT public.is_instructor_or_admin())
     OR created_by = (SELECT auth.uid())
-    OR EXISTS (
-      SELECT 1 FROM public.students s
-      WHERE s.id = (SELECT auth.uid()) AND s.cohort_id = ANY(cohort_ids)
+    OR (
+      status = 'published'
+      AND (
+        EXISTS (
+          SELECT 1 FROM public.students s
+          WHERE s.id = (SELECT auth.uid()) AND s.cohort_id = ANY(cohort_ids)
+        )
+        OR (group_ids && public.my_group_ids())
+      )
     )
-    OR (group_ids && public.my_group_ids())
   );
 
 CREATE POLICY "assignments: instructor insert"
@@ -1801,6 +1905,7 @@ CREATE POLICY "assignments: staff published select"
   USING ((SELECT public.is_staff()) AND status = 'published');
 
 -- ── assignment_resources ──────────────────────────────────────
+-- Students see resources only for a PUBLISHED assignment (migration 148); owner/admin see drafts too.
 CREATE POLICY "assignment_resources: select"
   ON public.assignment_resources FOR SELECT
   USING (
@@ -1808,9 +1913,12 @@ CREATE POLICY "assignment_resources: select"
       SELECT 1 FROM public.assignments a
       WHERE a.id = assignment_id AND (
         a.created_by = (SELECT auth.uid()) OR (SELECT public.is_admin())
-        OR EXISTS (
-          SELECT 1 FROM public.students s
-          WHERE s.id = (SELECT auth.uid()) AND s.cohort_id = ANY(a.cohort_ids)
+        OR (
+          a.status = 'published'
+          AND EXISTS (
+            SELECT 1 FROM public.students s
+            WHERE s.id = (SELECT auth.uid()) AND s.cohort_id = ANY(a.cohort_ids)
+          )
         )
       )
     )
@@ -1824,6 +1932,50 @@ CREATE POLICY "assignment_resources: instructor manage"
   WITH CHECK (
     EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_id AND (a.created_by = (SELECT auth.uid()) OR (SELECT public.is_admin())))
   );
+
+-- ── assignment_solutions (migration 144) ──────────────────────
+CREATE POLICY "assignment_solutions: instructor manage"
+  ON public.assignment_solutions FOR ALL
+  USING      (EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_id AND (a.created_by = (SELECT auth.uid()) OR (SELECT public.is_admin()))))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_id AND (a.created_by = (SELECT auth.uid()) OR (SELECT public.is_admin()))));
+
+-- Any grader (non-owning instructor / staff) may read the model answer while marking.
+CREATE POLICY "assignment_solutions: staff read"
+  ON public.assignment_solutions FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM public.students
+    WHERE id = (SELECT auth.uid()) AND role IN ('admin','instructor','staff')
+  ));
+
+-- Students see solutions only once their work is FINAL: graded AND at/above the assignment's passing
+-- score (assignment_pass_mark validates config.passingScore -> [1,100] else 85, matching passMarkOf so
+-- a failing grade that can still be reset to draft never releases the answer). Group release is limited
+-- to the submitter or a member in participants[], never every group member. (migrations 145, 149, 150)
+CREATE POLICY "assignment_solutions: released select"
+  ON public.assignment_solutions FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM public.assignment_submissions s
+    JOIN public.assignments a ON a.id = s.assignment_id
+    WHERE s.assignment_id = assignment_solutions.assignment_id
+      AND s.status = 'graded'
+      AND s.score IS NOT NULL
+      AND s.score >= public.assignment_pass_mark(a.config)
+      AND (
+        s.student_id = (SELECT auth.uid())
+        OR (
+          s.group_id IS NOT NULL
+          AND s.group_id = ANY(public.my_group_ids())
+          AND (SELECT auth.uid()) = ANY(s.participants)
+        )
+      )
+  ));
+
+-- ── assignment_answer_keys (migration 142) ────────────────────
+-- Owning instructor / admin only. No student policy -> RLS denies students all access.
+CREATE POLICY "assignment_answer_keys: instructor manage"
+  ON public.assignment_answer_keys FOR ALL
+  USING      (EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_id AND (a.created_by = (SELECT auth.uid()) OR (SELECT public.is_admin()))))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_id AND (a.created_by = (SELECT auth.uid()) OR (SELECT public.is_admin()))));
 
 -- ── groups (migration 093) ────────────────────────────────────
 ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;
@@ -1869,6 +2021,7 @@ CREATE POLICY "assignment_submissions: student insert"
         SELECT 1 FROM public.assignments a
         JOIN public.students s ON s.id = (SELECT auth.uid())
         WHERE a.id = assignment_submissions.assignment_id
+          AND a.status = 'published'
           AND s.cohort_id = ANY(a.cohort_ids)
           AND assignment_submissions.group_id IS NULL
       )
@@ -1877,6 +2030,7 @@ CREATE POLICY "assignment_submissions: student insert"
         SELECT 1 FROM public.group_members gm
         JOIN public.assignments a ON a.id = assignment_submissions.assignment_id
         WHERE gm.student_id = (SELECT auth.uid())
+          AND a.status = 'published'
           AND gm.group_id = assignment_submissions.group_id
           AND gm.group_id = ANY(a.group_ids)
           AND gm.is_leader = true
@@ -1896,10 +2050,12 @@ CREATE POLICY "assignment_submissions: student insert"
 -- Protection of graded fields (score, feedback, graded_by, graded_at) is enforced by
 -- trg_protect_submission_graded_fields instead.
 DROP POLICY IF EXISTS "assignment_submissions: student update" ON public.assignment_submissions;
+-- migration 148: student may update only while the assignment is published.
 CREATE POLICY "assignment_submissions: student update"
   ON public.assignment_submissions FOR UPDATE
   USING (
     status IN ('draft','submitted')
+    AND EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_submissions.assignment_id AND a.status = 'published')
     AND (
       (group_id IS NULL AND student_id = (SELECT auth.uid()))
       OR EXISTS (
@@ -1912,6 +2068,7 @@ CREATE POLICY "assignment_submissions: student update"
   )
   WITH CHECK (
     status IN ('draft','submitted')
+    AND EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_submissions.assignment_id AND a.status = 'published')
     AND (
       (group_id IS NULL AND student_id = (SELECT auth.uid()))
       OR EXISTS (
@@ -2509,8 +2666,9 @@ CREATE INDEX idx_assignments_cohort_ids     ON public.assignments USING GIN (coh
 CREATE INDEX idx_groups_cohort_id         ON public.groups(cohort_id);
 CREATE INDEX idx_group_members_group_id   ON public.group_members(group_id);
 
--- assignment_resources / submissions
+-- assignment_resources / solutions / submissions
 CREATE INDEX idx_assignment_resources_assignment ON public.assignment_resources(assignment_id);
+CREATE INDEX idx_assignment_solutions_assignment ON public.assignment_solutions(assignment_id);
 CREATE INDEX idx_assignment_submissions_student    ON public.assignment_submissions(student_id);
 CREATE INDEX idx_assignment_submissions_assignment ON public.assignment_submissions(assignment_id);
 CREATE INDEX idx_assignment_submissions_status     ON public.assignment_submissions(status);
@@ -2602,14 +2760,17 @@ CREATE INDEX idx_meeting_integrations_user ON public.meeting_integrations(user_i
 
 
 -- ─────────────────────────────────────────────────────────────
---  11. STORAGE BUCKETS + POLICIES (migration 008 + 044)
+--  11. STORAGE BUCKETS + POLICIES (migration 008 + 044 + 144)
 -- ─────────────────────────────────────────────────────────────
 
--- Create buckets
+-- Create buckets. 'assignment-solutions' is PRIVATE (migration 144) and deliberately has no
+-- storage.objects policy: instructor uploads and released-student downloads both go through API
+-- routes on the service role, so no authenticated client can reach a model answer directly.
 INSERT INTO storage.buckets (id, name, public) VALUES
-  ('form-assets', 'form-assets', true),
-  ('cert-assets', 'cert-assets', true),
-  ('datasets',    'datasets',    true)
+  ('form-assets',          'form-assets',          true),
+  ('cert-assets',          'cert-assets',          true),
+  ('datasets',             'datasets',             true),
+  ('assignment-solutions', 'assignment-solutions', false)
 ON CONFLICT (id) DO NOTHING;
 
 -- ── form-assets ───────────────────────────────────────────────

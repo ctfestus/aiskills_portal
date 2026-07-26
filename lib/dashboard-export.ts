@@ -104,13 +104,13 @@ function statusLabel(row: any): string {
   return 'Not Started';
 }
 
-export function exportCSV(rows: any[], title: string) {
+export function exportCSV(rows: any[], title: string, passMark = 85) {
   const headers = ['Name', 'Email', 'Status', 'Score', 'Result', 'Submitted At'];
   const csvRows = rows.map(row => {
     const sub = row.sub;
     const status = statusLabel(row);
     const score  = sub?.score != null ? sub.score : '';
-    const result = sub?.score != null ? (sub.score >= 85 ? 'Passed' : 'Failed') : '';
+    const result = sub?.score != null ? (sub.score >= passMark ? 'Passed' : 'Failed') : '';
     const date   = sub?.updated_at ? new Date(sub.updated_at).toLocaleDateString() : '';
     return [row.full_name || '', row.email || '', status, score, result, date]
       .map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
@@ -123,13 +123,13 @@ export function exportCSV(rows: any[], title: string) {
   URL.revokeObjectURL(url);
 }
 
-export function exportGroupCSV(rows: any[], title: string) {
+export function exportGroupCSV(rows: any[], title: string, passMark = 85) {
   const headers = ['Group', 'Leader', 'Members', 'Participants', 'Status', 'Score', 'Result', 'Submitted By', 'Submitted At'];
   const csvRows = rows.map(row => {
     const sub = row.sub;
     const status = statusLabel(row);
     const score  = sub?.score != null ? sub.score : '';
-    const result = sub?.score != null ? (sub.score >= 85 ? 'Passed' : 'Failed') : '';
+    const result = sub?.score != null ? (sub.score >= passMark ? 'Passed' : 'Failed') : '';
     const date   = sub?.updated_at ? new Date(sub.updated_at).toLocaleDateString() : '';
     return [
       row.name || '',

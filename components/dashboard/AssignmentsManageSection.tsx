@@ -2,15 +2,19 @@
 
 // Extracted verbatim from app/dashboard/page.tsx -- no behavior or styling changes.
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { motion } from 'motion/react';
-import { ArrowLeft, CheckCircle2, ChevronDown, ClipboardList, Copy, Download, Edit2, ExternalLink, FileText, Loader2, Plus, Trash2, Users, TrendingUp } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronDown, ClipboardList, Copy, Download, Edit2, ExternalLink, FileText, Loader2, Plus, RotateCcw, Trash2, Users, TrendingUp } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { ReviewReportView, REVIEW_TYPES } from '@/components/ReviewReportView';
 import { parseReviewNotes, inferReviewType } from '@/lib/reviewRecord';
+import { parseSubmissionRecord, parseTaskGrades, taskGradeStats, mcqTaskScore, MAX_TASK_FEEDBACK, passMarkOf, type McqGrade } from '@/lib/assignment-scenarios';
+import { ScenarioGradingPanel, draftsToTaskGrades, taskScoreValue, taskScoreValid, type TaskGradeDraft } from '@/components/dashboard/ScenarioGradingPanel';
+import { SolutionFilesList } from '@/components/SolutionFilesList';
+import { requestSolutionCleanup, type AssignmentSolution } from '@/lib/assignment-solutions';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { useTheme } from '@/components/ThemeProvider';
 import { LIGHT_C, cardStyle } from '@/lib/theme';
@@ -33,11 +37,18 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   const [loadingSubs, setLoadingSubs]       = useState(false);
   const [viewingSub, setViewingSub]         = useState<any>(null);
   const [subFiles, setSubFiles]             = useState<any[]>([]);
+  const [solutions, setSolutions]           = useState<AssignmentSolution[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [score, setScore]                   = useState('');
   const [feedback, setFeedback]             = useState('');
+  const [scenarioMcq, setScenarioMcq]       = useState<{ grades: Record<string, McqGrade>; subtotal: number | null } | null>(null);
+  // Per-task grading: one score + comment per task, kept as typed strings while editing.
+  const [taskDrafts, setTaskDrafts]         = useState<Record<string, TaskGradeDraft>>({});
+  // The final grade follows the task average until the instructor edits it by hand.
+  const [scoreTouched, setScoreTouched]     = useState(false);
   const [grading, setGrading]               = useState(false);
   const [gradeError, setGradeError]         = useState('');
+  const [gradeWarning, setGradeWarning]     = useState('');
   const [gradeSuccess, setGradeSuccess]     = useState(false);
   const [veAttemptProgress, setVeAttemptProgress] = useState<Record<string, any> | null>(null);
   const [veProgressMap, setVeProgressMap]   = useState<Record<string, { pct: number; completedAt: string | null }>>({});
@@ -45,19 +56,41 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   const [cohortFilter, setCohortFilter]     = useState<string>('all');
   const [cohorts, setCohorts]               = useState<{ id: string; name: string }[]>([]);
   const openToken = useRef(0);
+  // Separate guard for openSubmission, so its slower fetches (files, MCQ marking, VE progress)
+  // cannot land after a different submission has been opened and grade it against the wrong one.
+  const subToken = useRef(0);
 
   useEffect(() => {
     supabase.from('assignments').select('*').order('created_at', { ascending: false })
       .then(({ data, error }) => { if (error) console.error('[assignments fetch]', error); setAssignments(data ?? []); setLoading(false); });
   }, []);
 
+  // Task grades as they will be stored, plus the average they suggest for the final grade.
+  const draftGrades = useMemo(() => draftsToTaskGrades(taskDrafts), [taskDrafts]);
+  const taskAverage = useMemo(() => {
+    const scores = Object.values(draftGrades).map(g => g.score).filter((n): n is number => n != null);
+    return scores.length ? Math.round(scores.reduce((x, y) => x + y, 0) / scores.length) : null;
+  }, [draftGrades]);
+  // The selected assignment's configured passing grade (default 85), used for every pass/fail readout.
+  const passMark = passMarkOf(selected?.config);
+
+  // Keep the final grade in step with the task scores while the instructor has not overridden it.
+  useEffect(() => {
+    if (scoreTouched || taskAverage == null) return;
+    setScore(String(taskAverage));
+  }, [taskAverage, scoreTouched]);
+
   async function openAssignment(a: any) {
     // Guard against out-of-order responses when assignments are clicked in quick succession:
     // only the latest call's fetched data is applied.
     const token = ++openToken.current;
     setSelected(a); setViewingSub(null); setSubFiles([]); setActiveTab('details'); setLoadingSubs(true);
-    setExpandedGroups(new Set()); setVeProgressMap({}); setStatusFilter('all'); setCohortFilter('all'); setCohorts([]);
+    setExpandedGroups(new Set()); setVeProgressMap({}); setStatusFilter('all'); setCohortFilter('all'); setCohorts([]); setSolutions([]);
     const groupIds: string[] = Array.isArray(a.group_ids) && a.group_ids.length > 0 ? a.group_ids : [];
+    // Solution files (released to students only after grading) -- shown to the grader so they can
+    // check the model answer while marking. Non-blocking: failure just leaves the list empty.
+    supabase.from('assignment_solutions').select('id, name, kind, url').eq('assignment_id', a.id).order('created_at')
+      .then(({ data }) => { if (openToken.current === token) setSolutions((data ?? []) as AssignmentSolution[]); });
     const [{ data: subs }, { data: cohortStudents }, { data: groupMemberRows }, { data: cohortRows }] = await Promise.all([
       supabase.from('assignment_submissions').select('*, student:students!student_id(id, full_name, email), submitted_by_student:students!submitted_by(full_name)').eq('assignment_id', a.id).order('updated_at', { ascending: false }),
       a.cohort_ids?.length ? supabase.from('students').select('id, full_name, email, cohort_id').in('cohort_id', a.cohort_ids) : Promise.resolve({ data: [] }),
@@ -104,9 +137,16 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   }
 
   async function openSubmission(sub: any) {
+    // Guard against out-of-order fetches when submissions are clicked in quick succession: only the
+    // latest call's data is applied, so one submission's grades can never bleed into another's.
+    const token = ++subToken.current;
     setViewingSub(sub); setSubFiles([]); setScore(sub.score != null ? String(sub.score) : '');
-    setFeedback(sub.feedback ?? ''); setGradeError(''); setGradeSuccess(false);
+    setFeedback(sub.feedback ?? ''); setGradeError(''); setGradeWarning(''); setGradeSuccess(false);
     setVeAttemptProgress(null);
+    // Clear per-task grading state up front. Until this call's fetches resolve, a stale draft from a
+    // previously open submission must not linger (it also feeds the auto-computed final grade), so
+    // hold scoreTouched=true meanwhile to keep the average effect from acting on empty/old drafts.
+    setScenarioMcq(null); setTaskDrafts({}); setScoreTouched(true);
     const veFormId = selected?.config?.ve_form_id;
     const isVe = selected?.type === 'virtual_experience' && veFormId && sub.student_id;
 
@@ -114,12 +154,41 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
       supabase.from('assignment_submission_files').select('*').eq('submission_id', sub.id).order('uploaded_at'),
       isVe ? supabase.auth.getSession() : Promise.resolve({ data: { session: null } }),
     ]);
+    if (subToken.current !== token) return;
     if (files) setSubFiles(files);
+
+    // Scenario submissions: MCQ is graded server-side (the answer keys never reach the browser
+    // and the endpoint works for any authorized grader, not just the assignment owner).
+    const record = selected?.type === 'standard' ? parseSubmissionRecord(sub.response_text) : null;
+    if (record) {
+      const { data: { session: gs } } = await supabase.auth.getSession();
+      const gr = await fetch(`/api/assignments/mcq-grade?submissionId=${sub.id}`, {
+        headers: gs ? { Authorization: `Bearer ${gs.access_token}` } : {},
+      });
+      const graded: { grades: Record<string, McqGrade>; subtotal: number | null } = gr.ok ? await gr.json() : { grades: {}, subtotal: null };
+      if (subToken.current !== token) return;
+      setScenarioMcq(graded);
+      // Seed one draft per task. On a first pass MCQ prefills from the server-side marking
+      // (authoritative) so only the human-judged tasks need typing. Once grades have been saved
+      // they are the truth: a task the instructor deliberately left unscored stays unscored.
+      const saved = parseTaskGrades(sub.task_grades);
+      const isRegrade = Object.keys(saved).length > 0;
+      const drafts: Record<string, TaskGradeDraft> = {};
+      for (const a of record.answers) {
+        const g = saved[a.taskId];
+        const prefill = g?.score != null ? g.score : isRegrade ? null : mcqTaskScore(a, graded.grades?.[a.taskId]);
+        drafts[a.taskId] = { score: prefill != null ? String(prefill) : '', feedback: g?.feedback ?? '' };
+      }
+      setTaskDrafts(drafts);
+      // An existing grade is treated as deliberate, so the task average does not overwrite it.
+      setScoreTouched(sub.score != null);
+    }
 
     if (isVe && session?.data?.session?.access_token) {
       const res = await fetch(`/api/ve-attempt?veId=${veFormId}&studentId=${sub.student_id}`, {
         headers: { Authorization: `Bearer ${session.data.session.access_token}` },
       });
+      if (subToken.current !== token) return;
       if (res.ok) {
         const json = await res.json();
         if (json.progress) setVeAttemptProgress(json.progress);
@@ -129,14 +198,42 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
 
   async function saveGrade() {
     if (!viewingSub) return;
-    setGrading(true); setGradeError(''); setGradeSuccess(false);
+    const isScenario = !!parseSubmissionRecord(viewingSub.response_text);
+    // Block on a task score that is not a number in 0-100, else it would silently save as unscored.
+    if (isScenario && Object.values(taskDrafts).some(d => {
+      const n = taskScoreValue(d.score);
+      return (d.score.trim() !== '' && n == null) || !taskScoreValid(n);
+    })) {
+      setGradeError('Each task score must be a number between 0 and 100.');
+      return;
+    }
+    const finalScore = score.trim() === '' ? null : parseFloat(score);
+    if (finalScore != null && (!Number.isFinite(finalScore) || finalScore < 0 || finalScore > 100)) {
+      setGradeError('The final grade must be a number between 0 and 100.');
+      return;
+    }
+    const taskGrades = isScenario ? draftsToTaskGrades(taskDrafts, sanitizeRichText) : null;
+    if (taskGrades && Object.values(taskGrades).some(g => (g.feedback?.length ?? 0) > MAX_TASK_FEEDBACK)) {
+      setGradeError('One task comment is too long. Shorten it and save again.');
+      return;
+    }
+    setGrading(true); setGradeError(''); setGradeWarning(''); setGradeSuccess(false);
     try {
       const sanitizedFeedback = sanitizeRichText(feedback).trim() || null;
-      const { error } = await supabase.from('assignment_submissions')
-        .update({ score: score ? parseFloat(score) : null, feedback: sanitizedFeedback, status: 'graded', graded_by: (await supabase.auth.getUser()).data.user?.id, graded_at: new Date().toISOString() })
+      const payload: any = { score: finalScore, feedback: sanitizedFeedback, status: 'graded', graded_by: (await supabase.auth.getUser()).data.user?.id, graded_at: new Date().toISOString() };
+      if (isScenario) payload.task_grades = Object.keys(taskGrades ?? {}).length ? taskGrades : null;
+      let { error } = await supabase.from('assignment_submissions')
+        .update(payload)
         .eq('id', viewingSub.id);
+      // A tenant that has not applied migration 143 yet has no task_grades column. Save the
+      // grade itself rather than blocking grading, and say what was left out.
+      if (error && isScenario && (error.code === 'PGRST204' || error.code === '42703')) {
+        delete payload.task_grades;
+        ({ error } = await supabase.from('assignment_submissions').update(payload).eq('id', viewingSub.id));
+        if (!error) setGradeWarning('Saved the final grade only. This database is missing migration 143 (task_grades), so the per-task scores and comments were not stored.');
+      }
       if (error) throw error;
-      const updated = { ...viewingSub, score: score ? parseFloat(score) : null, feedback: sanitizedFeedback, status: 'graded' };
+      const updated = { ...viewingSub, score: finalScore, feedback: sanitizedFeedback, status: 'graded', ...(isScenario ? { task_grades: payload.task_grades } : {}) };
       setViewingSub(updated);
       setSubmissions(prev => prev.map(s => s.id === updated.id ? updated : s));
       setGradeSuccess(true);
@@ -168,27 +265,71 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
       .single();
     if (error) { setDuplicatingId(null); window.alert(error.message); return; }
 
+    // The copy is a series of non-atomic inserts; collect anything that fails to copy so the
+    // instructor is told rather than being shown a false "duplicated" success.
+    const copyIssues: string[] = [];
+
     // Copy resources
-    const { data: resources } = await supabase
+    const { data: resources, error: rSelErr } = await supabase
       .from('assignment_resources')
       .select('name, url, resource_type')
       .eq('assignment_id', a.id);
-    if (resources?.length) {
-      await supabase.from('assignment_resources').insert(
+    if (rSelErr) copyIssues.push('resources');
+    else if (resources?.length) {
+      const { error: rErr } = await supabase.from('assignment_resources').insert(
         resources.map(r => ({ ...r, assignment_id: data.id }))
       );
+      if (rErr) copyIssues.push('resources');
+    }
+
+    // Copy solution files. The rows point at the same private storage objects (immutable, and a
+    // deleted row never deletes the object), so the copy releases the same model answer.
+    const { data: sols, error: sSelErr } = await supabase
+      .from('assignment_solutions')
+      .select('name, kind, storage_path, url')
+      .eq('assignment_id', a.id);
+    if (sSelErr) copyIssues.push('solution files');
+    else if (sols?.length) {
+      const { error: sErr } = await supabase.from('assignment_solutions').insert(
+        sols.map(s => ({ ...s, assignment_id: data.id }))
+      );
+      if (sErr) copyIssues.push('solution files');
+    }
+
+    // Copy MCQ answer keys (stored in a separate server-only table), else the copy's MCQs lose
+    // their correct answers and can't be republished.
+    const { data: keyRow, error: kSelErr } = await supabase.from('assignment_answer_keys').select('keys').eq('assignment_id', a.id).maybeSingle();
+    if (kSelErr) copyIssues.push('MCQ answer keys');
+    else if (keyRow) {
+      const { error: kErr } = await supabase.from('assignment_answer_keys').upsert({ assignment_id: data.id, keys: keyRow.keys }, { onConflict: 'assignment_id' });
+      if (kErr) copyIssues.push('MCQ answer keys');
     }
 
     setDuplicatingId(null);
     setAssignments(prev => [data, ...prev]);
+    if (copyIssues.length) {
+      window.alert(`The copy was created as a draft, but these did not carry over: ${copyIssues.join(', ')}. Open the copy and re-add them before publishing.`);
+    }
   }
 
   async function deleteAssignment(id: string) {
     if (!window.confirm('Delete this assignment? All submissions will also be removed.')) return;
     setDeletingId(id);
+    // Note the solution files first: deleting the assignment cascades their rows away, and after
+    // that nothing knows which objects it used. They are only removed from the bucket if no other
+    // assignment references them (a duplicate shares the same file), which the server re-checks.
+    const { data: sols } = await supabase.from('assignment_solutions')
+      .select('storage_path').eq('assignment_id', id).eq('kind', 'file');
+    const solutionPaths = (sols ?? []).map((s: any) => s.storage_path).filter(Boolean);
+
     const { error } = await supabase.from('assignments').delete().eq('id', id);
     setDeletingId(null);
     if (error) { window.alert(error.message); return; }
+
+    if (solutionPaths.length > 0) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) requestSolutionCleanup(solutionPaths, session.access_token);
+    }
     setAssignments(prev => prev.filter(a => a.id !== id));
     if (selected?.id === id) setSelected(null);
   }
@@ -199,8 +340,12 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
 
   // -- Grading view ---
   if (viewingSub) {
-    const isPassed = viewingSub.score != null && viewingSub.score >= 85;
-    const isFailed = viewingSub.score != null && viewingSub.score < 85;
+    // Scenario-based standard submissions are graded task by task (score + comment per task);
+    // everything else keeps the single overall score + feedback.
+    const scenarioRec = parseSubmissionRecord(viewingSub.response_text);
+    const stats = scenarioRec ? taskGradeStats(scenarioRec.answers, draftGrades) : null;
+    const scorePct = score.trim() === '' ? null : parseFloat(score);
+    const scoreIsPass = scorePct != null && Number.isFinite(scorePct) && scorePct >= passMark;
     return (
       <div>
         <button onClick={() => { setViewingSub(null); setVeAttemptProgress(null); }} className="flex items-center gap-2 mb-6 text-sm font-medium hover:opacity-70 transition-opacity" style={{ color: C.muted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
@@ -229,7 +374,29 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
             </span>
           </div>
 
-          {viewingSub.response_text ? (() => {
+          {/* Scenario submissions: grading progress here, the task-by-task marking below. */}
+          {stats && (
+            <div>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: C.faint }}>Grading progress</p>
+                <p className="text-xs font-semibold" style={{ color: C.text }}>{stats.scored} of {stats.total} tasks scored</p>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden mb-3" style={{ background: C.pill }}>
+                <div style={{ width: `${stats.total ? Math.round((stats.scored / stats.total) * 100) : 0}%`, height: '100%', background: C.green, transition: 'width 0.2s ease' }}/>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {stats.average != null && (
+                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: 'rgba(22,163,74,0.12)', color: '#16a34a' }}>Task average {stats.average}%</span>
+                )}
+                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: C.pill, color: C.muted }}>{stats.commented} comment{stats.commented === 1 ? '' : 's'}</span>
+                {scenarioMcq?.subtotal != null && (
+                  <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: C.pill, color: C.muted }}>Multiple choice auto-marked {scenarioMcq.subtotal}%</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!scenarioRec && (viewingSub.response_text ? (() => {
             const subAssignType = selected?.type ?? 'standard';
             if (REVIEW_TYPES.includes(subAssignType)) {
               const rec = parseReviewNotes(viewingSub.response_text);
@@ -272,7 +439,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
             );
           })() : (
             <p className="text-sm mb-3" style={{ color: C.faint }}>No written response.</p>
-          )}
+          ))}
 
           {veAttemptProgress && (() => {
             const cards: React.ReactNode[] = [];
@@ -306,38 +473,101 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
           )}
         </div>
 
+        {/* Task-by-task marking (scenario assignments) */}
+        {scenarioRec && (
+          <div className="mb-4">
+            <ScenarioGradingPanel
+              record={scenarioRec}
+              mcq={scenarioMcq?.grades ?? {}}
+              drafts={taskDrafts}
+              onChange={(taskId, patch) => setTaskDrafts(prev => ({ ...prev, [taskId]: { ...(prev[taskId] ?? { score: '', feedback: '' }), ...patch } }))}
+              C={C}
+              isDark={isDark}
+            />
+          </div>
+        )}
+
         {/* Grade panel */}
         <div className="rounded-2xl p-5" style={{ ...cardStyle(C) }}>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold" style={{ color: C.text }}>Grade Submission</h3>
-            <span className="text-xs" style={{ color: C.faint }}>Passmark: 85%</span>
+            <h3 className="text-sm font-bold" style={{ color: C.text }}>{scenarioRec ? 'Final grade' : 'Grade Submission'}</h3>
+            <span className="text-xs" style={{ color: C.faint }}>Passmark: {passMark}%</span>
           </div>
 
           <div className="mb-4">
             <label className="block text-xs font-semibold mb-1.5" style={{ color: C.faint }}>Score <span style={{ color: C.faint, fontWeight: 400 }}>(out of 100)</span></label>
-            <input type="number" min={0} max={100} value={score} onChange={e => setScore(e.target.value)} placeholder="e.g. 90"
-              style={{ width: '100%', maxWidth: 160, padding: '10px 14px', borderRadius: 12, border: `1px solid ${C.cardBorder}`, background: C.input, color: C.text, fontSize: 15, fontWeight: 600, outline: 'none', boxSizing: 'border-box' as const }}/>
-            {score && (
-              <span className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold px-2.5 py-1 rounded-full"
-                style={{ background: parseFloat(score) >= 85 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: parseFloat(score) >= 85 ? '#10b981' : '#ef4444' }}>
-                {parseFloat(score) >= 85 ? '✓ Pass' : '✗ Fail'}
-              </span>
+            <div className="flex items-center flex-wrap gap-2">
+              <input type="number" min={0} max={100} value={score} onChange={e => { setScore(e.target.value); setScoreTouched(true); }} placeholder="e.g. 90"
+                style={{ width: 160, padding: '10px 14px', borderRadius: 12, border: `1px solid ${C.cardBorder}`, background: C.input, color: C.text, fontSize: 15, fontWeight: 600, outline: 'none', boxSizing: 'border-box' as const }}/>
+              {score && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+                  style={{ background: scoreIsPass ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: scoreIsPass ? '#10b981' : '#ef4444' }}>
+                  {scoreIsPass ? 'Pass' : 'Fail'}
+                </span>
+              )}
+              {scenarioRec && taskAverage != null && (
+                scoreTouched ? (
+                  <button onClick={() => { setScoreTouched(false); setScore(String(taskAverage)); }}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg hover:opacity-75 transition-opacity"
+                    style={{ background: C.pill, color: C.muted, border: 'none', cursor: 'pointer' }}>
+                    <RotateCcw className="w-3 h-3"/> Use task average ({taskAverage}%)
+                  </button>
+                ) : (
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: 'rgba(22,163,74,0.12)', color: '#16a34a' }}>Following the task average</span>
+                )
+              )}
+            </div>
+            {scenarioRec && (
+              <p className="text-xs mt-2" style={{ color: C.faint }}>
+                {taskAverage != null
+                  ? `Average of the ${stats?.scored ?? 0} scored task${(stats?.scored ?? 0) === 1 ? '' : 's'}: ${taskAverage}%. Type a different number to set the final grade yourself.`
+                  : 'Score the tasks above and the final grade fills in from their average, or set it here yourself.'}
+              </p>
             )}
           </div>
 
-          <div className="mb-5">
-            <label className="block text-xs font-semibold mb-1.5" style={{ color: C.faint }}>Feedback to student</label>
-            <RichTextEditor value={feedback} onChange={setFeedback} placeholder="Write feedback for the student…" bgOverride={C.input} fontFamily="var(--font-mono)" enableAiAssist/>
+          <div className={scenarioRec ? '' : 'mb-5'}>
+            <label className="block text-xs font-semibold mb-1.5" style={{ color: C.faint }}>{scenarioRec ? 'Overall feedback to student' : 'Feedback to student'}</label>
+            <RichTextEditor value={feedback} onChange={setFeedback}
+              placeholder={scenarioRec ? 'Sum up the whole submission. Task comments are saved with each task above.' : 'Write feedback for the student'}
+              bgOverride={C.input} fontFamily="var(--font-mono)" enableAiAssist/>
           </div>
 
-          {gradeError && <p className="text-xs mb-3" style={{ color: '#ef4444' }}>{gradeError}</p>}
-
-          <button onClick={saveGrade} disabled={grading || gradeSuccess}
-            className="px-6 py-2.5 rounded-xl text-sm font-semibold transition-all"
-            style={{ background: gradeSuccess ? '#10b981' : C.cta, color: C.ctaText, border: 'none', cursor: (grading || gradeSuccess) ? 'not-allowed' : 'pointer', opacity: grading ? 0.6 : 1 }}>
-            {grading ? 'Saving…' : gradeSuccess ? '✓ Grade Saved' : viewingSub.status === 'graded' ? 'Update Grade' : 'Save Grade'}
-          </button>
+          {!scenarioRec && (
+            <>
+              {gradeError && <p className="text-xs mb-3" style={{ color: '#ef4444' }}>{gradeError}</p>}
+              <button onClick={saveGrade} disabled={grading || gradeSuccess}
+                className="px-6 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                style={{ background: gradeSuccess ? '#10b981' : C.cta, color: C.ctaText, border: 'none', cursor: (grading || gradeSuccess) ? 'not-allowed' : 'pointer', opacity: grading ? 0.6 : 1 }}>
+                {grading ? 'Saving...' : gradeSuccess ? 'Grade saved' : viewingSub.status === 'graded' ? 'Update Grade' : 'Save Grade'}
+              </button>
+            </>
+          )}
         </div>
+
+        {/* Action bar -- stays in view while marking a long submission, so the task scores, the
+            final grade, and Save are always one glance apart. */}
+        {scenarioRec && stats && (
+          <div style={{ position: 'sticky', bottom: 12, zIndex: 20, marginTop: 16 }}>
+            <div className="flex items-center gap-4 flex-wrap px-4 py-3 rounded-2xl"
+              style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: isDark ? '0 10px 30px rgba(0,0,0,0.45)' : '0 10px 30px rgba(15,23,42,0.12)' }}>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: C.faint }}>Final grade</p>
+                <p className="text-sm font-bold" style={{ color: scorePct == null || !Number.isFinite(scorePct) ? C.faint : scoreIsPass ? '#16a34a' : '#ef4444' }}>
+                  {scorePct == null || !Number.isFinite(scorePct) ? 'Not set' : `${scorePct}% ${scoreIsPass ? 'Pass' : 'Fail'}`}
+                </p>
+              </div>
+              <span className="text-xs font-semibold" style={{ color: C.faint }}>{stats.scored} of {stats.total} tasks scored</span>
+              {gradeError && <span className="text-xs font-semibold" style={{ color: '#ef4444' }}>{gradeError}</span>}
+              {!gradeError && gradeWarning && <span className="text-xs font-semibold" style={{ color: '#d97706' }}>{gradeWarning}</span>}
+              <button onClick={saveGrade} disabled={grading || gradeSuccess}
+                className="ml-auto px-6 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                style={{ background: gradeSuccess ? '#10b981' : C.cta, color: C.ctaText, border: 'none', cursor: (grading || gradeSuccess) ? 'not-allowed' : 'pointer', opacity: grading ? 0.6 : 1 }}>
+                {grading ? 'Saving...' : gradeSuccess ? 'Grade saved' : viewingSub.status === 'graded' ? 'Update grade' : 'Save grade'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -403,8 +633,8 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
       : submissions.filter(s => s.status === 'graded');
     const graded    = gradedSubs.length;
     const passed    = isGroupAssignment
-      ? gradedSubs.filter((r: any) => (r.sub?.score ?? 0) >= 85).length
-      : submissions.filter(s => s.status === 'graded' && s.score >= 85).length;
+      ? gradedSubs.filter((r: any) => (r.sub?.score ?? 0) >= passMark).length
+      : submissions.filter(s => s.status === 'graded' && s.score >= passMark).length;
     const passRate  = graded > 0 ? Math.round((passed / graded) * 100) : 0;
 
     return (
@@ -462,7 +692,14 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                 <div className="rich-content text-sm" dangerouslySetInnerHTML={{ __html: sanitizeRichText(selected[f.key]) }}/>
               </div>
             ))}
-            {!selected.scenario && !selected.brief && !selected.tasks && !selected.requirements && (
+            {solutions.length > 0 && (
+              <div className="rounded-2xl p-5" style={{ ...cardStyle(C) }}>
+                <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: C.faint }}>Solution files</p>
+                <p className="text-xs mb-3" style={{ color: C.faint }}>Each student gets these on their results page once their own submission is graded.</p>
+                <SolutionFilesList solutions={solutions} C={C}/>
+              </div>
+            )}
+            {!selected.scenario && !selected.brief && !selected.tasks && !selected.requirements && solutions.length === 0 && (
               <div className="text-center py-16 rounded-2xl" style={{ ...cardStyle(C) }}>
                 <p className="text-sm" style={{ color: C.faint }}>No details added yet. <Link href={`/create/assignment?edit=${selected.id}`} style={{ color: C.green }}>Edit assignment</Link></p>
               </div>
@@ -512,7 +749,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                     {presentStatuses.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
                   </select>
                 </div>
-                <button onClick={() => isGroupAssignment ? exportGroupCSV(visibleRows, selected.title) : exportCSV(visibleRows, selected.title)}
+                <button onClick={() => isGroupAssignment ? exportGroupCSV(visibleRows, selected.title, passMark) : exportCSV(visibleRows, selected.title, passMark)}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold hover:opacity-80 transition-opacity"
                   style={{ background: C.pill, color: C.muted, border: `1px solid ${C.divider}` }}>
                   <Download className="w-3.5 h-3.5"/> Export CSV
@@ -547,7 +784,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                 {visibleRows.map((row: any, i: number) => {
                   const sub = row.sub;
                   const sc = sub?.score ?? null;
-                  const isPassed = sc != null && sc >= 85;
+                  const isPassed = sc != null && sc >= passMark;
                   const isExpanded = expandedGroups.has(row.id);
                   const statusInfo = statusCfg(row._status, row._pct);
                   return (
@@ -647,7 +884,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                 {visibleRows.map((row: any, i: number) => {
                   const sub     = row.sub;
                   const sc      = sub?.score ?? null;
-                  const isPassed = sc != null && sc >= 85;
+                  const isPassed = sc != null && sc >= passMark;
                   const statusInfo = statusCfg(row._status, row._pct);
                   return (
                     <div key={row.id} className="grid px-5 py-3.5 items-center" style={{ gridTemplateColumns: '1fr 110px 70px 80px 80px', background: i % 2 === 0 ? C.card : C.page, borderTop: `1px solid ${C.divider}` }}>

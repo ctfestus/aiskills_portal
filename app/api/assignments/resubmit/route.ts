@@ -6,11 +6,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminClient } from '@/lib/admin-client';
 import { requireUser, isAuthError } from '@/lib/api-auth';
+import { passMarkOf } from '@/lib/assignment-scenarios';
 
 export const dynamic = 'force-dynamic';
-
-
-const PASS_MARK = 85;
 
 export async function POST(req: NextRequest) {
   const auth = await requireUser(req);
@@ -30,7 +28,7 @@ export async function POST(req: NextRequest) {
   // Fetch the submission
   const { data: submission, error: fetchErr } = await db
     .from('assignment_submissions')
-    .select('id, student_id, group_id, status, score')
+    .select('id, student_id, group_id, status, score, assignment:assignments!assignment_id(config)')
     .eq('id', submissionId)
     .maybeSingle();
 
@@ -59,7 +57,8 @@ export async function POST(req: NextRequest) {
   if (submission.status !== 'graded') {
     return NextResponse.json({ error: 'Submission is not graded' }, { status: 400 });
   }
-  if (submission.score !== null && submission.score >= PASS_MARK) {
+  const passMark = passMarkOf(Array.isArray(submission.assignment) ? submission.assignment[0]?.config : (submission.assignment as any)?.config);
+  if (submission.score !== null && submission.score >= passMark) {
     return NextResponse.json({ error: 'Submission already passed' }, { status: 400 });
   }
 
@@ -67,11 +66,12 @@ export async function POST(req: NextRequest) {
   const { error: updateErr } = await db
     .from('assignment_submissions')
     .update({
-      status:     'draft',
-      score:      null,
-      feedback:   null,
-      graded_by:  null,
-      graded_at:  null,
+      status:      'draft',
+      score:       null,
+      feedback:    null,
+      task_grades: null,   // per-task scores/comments belong to the graded attempt
+      graded_by:   null,
+      graded_at:   null,
     })
     .eq('id', submissionId);
 

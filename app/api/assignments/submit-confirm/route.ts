@@ -56,6 +56,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Individual confirmation: only send if the caller actually has a submitted submission for this
+    // assignment. Without this, any logged-in user could trigger a "submission received" email to
+    // themselves for an arbitrary assignment id.
+    const { data: ownSub } = await admin.from('assignment_submissions')
+      .select('id').eq('assignment_id', assignment_id).eq('student_id', user.id).eq('status', 'submitted').limit(1).maybeSingle();
+    if (!ownSub) return NextResponse.json({ ok: true });
+
     const t = await getTenantSettings();
     const FROM = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
     const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
