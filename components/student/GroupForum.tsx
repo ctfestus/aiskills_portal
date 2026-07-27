@@ -11,7 +11,7 @@
 // already on screen are reflected, not just new ones.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { MessageSquare, Send, Loader2, Trash2, Pencil, AlertCircle, RefreshCw, Check, BarChart2, Plus, X, Bold, Italic, Strikethrough, Code2, Link as LinkIcon } from 'lucide-react';
+import { MessageSquare, Send, Loader2, Trash2, Pencil, AlertCircle, RefreshCw, Check, BarChart2, Plus, X, Bold, Italic, Strikethrough, Code2, Link as LinkIcon, List, ListOrdered, Quote } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { LIGHT_C } from '@/lib/theme';
 
@@ -34,35 +34,71 @@ function timeAgo(iso: string): string {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
-// Lightweight, safe inline formatting (Slack-style): **bold**, *italic*, ~~strike~~, `code`,
+// Inline formatting (Slack-style) for a single line: **bold**, *italic*, ~~strike~~, `code`,
 // [text](url), and bare URLs. Everything is emitted through React (so text is escaped) and links are
 // constrained to http(s) by the pattern - no raw HTML is ever inserted, so there is no injection
-// surface. Line breaks are preserved by the surrounding whitespace-pre-wrap. Not nested (bold inside
-// a link etc. is not parsed), which is plenty for a chat and keeps the parser small and predictable.
+// surface. Not nested (bold inside a link etc. is not parsed), which is plenty for a chat.
 const INLINE_MD_SRC = '(`[^`\\n]+`)|(\\*\\*[^*\\n]+\\*\\*)|(~~[^~\\n]+~~)|(\\*[^*\\n]+\\*)|(\\[[^\\]\\n]+\\]\\(https?:\\/\\/[^)\\s]+\\))|(https?:\\/\\/[^\\s]+)';
-function RichText({ text, C }: { text: string; C: typeof LIGHT_C }) {
+function renderInline(text: string, C: typeof LIGHT_C, kp: string): ReactNode[] {
   const re = new RegExp(INLINE_MD_SRC, 'g');
   const out: ReactNode[] = [];
   const linkStyle = { color: C.green, textDecoration: 'underline', wordBreak: 'break-word' as const };
   const codeStyle = { background: C.card, padding: '1px 5px', borderRadius: 5, fontSize: '0.85em', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' } as const;
   let last = 0, k = 0, m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
-    if (m.index > last) out.push(<span key={k++}>{text.slice(last, m.index)}</span>);
+    if (m.index > last) out.push(<span key={`${kp}-${k++}`}>{text.slice(last, m.index)}</span>);
     const tok = m[0];
-    if (tok[0] === '`') out.push(<code key={k++} style={codeStyle}>{tok.slice(1, -1)}</code>);
-    else if (tok.startsWith('**')) out.push(<strong key={k++}>{tok.slice(2, -2)}</strong>);
-    else if (tok.startsWith('~~')) out.push(<del key={k++} style={{ opacity: 0.75 }}>{tok.slice(2, -2)}</del>);
-    else if (tok[0] === '*') out.push(<em key={k++}>{tok.slice(1, -1)}</em>);
+    if (tok[0] === '`') out.push(<code key={`${kp}-${k++}`} style={codeStyle}>{tok.slice(1, -1)}</code>);
+    else if (tok.startsWith('**')) out.push(<strong key={`${kp}-${k++}`}>{tok.slice(2, -2)}</strong>);
+    else if (tok.startsWith('~~')) out.push(<del key={`${kp}-${k++}`} style={{ opacity: 0.75 }}>{tok.slice(2, -2)}</del>);
+    else if (tok[0] === '*') out.push(<em key={`${kp}-${k++}`}>{tok.slice(1, -1)}</em>);
     else if (tok[0] === '[') {
       const mm = /^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/.exec(tok);
       out.push(mm
-        ? <a key={k++} href={mm[2]} target="_blank" rel="noreferrer" style={linkStyle}>{mm[1]}</a>
-        : <span key={k++}>{tok}</span>);
-    } else out.push(<a key={k++} href={tok} target="_blank" rel="noreferrer" style={linkStyle}>{tok}</a>);
+        ? <a key={`${kp}-${k++}`} href={mm[2]} target="_blank" rel="noreferrer" style={linkStyle}>{mm[1]}</a>
+        : <span key={`${kp}-${k++}`}>{tok}</span>);
+    } else out.push(<a key={`${kp}-${k++}`} href={tok} target="_blank" rel="noreferrer" style={linkStyle}>{tok}</a>);
     last = m.index + tok.length;
   }
-  if (last < text.length) out.push(<span key={k++}>{text.slice(last)}</span>);
-  return <>{out}</>;
+  if (last < text.length) out.push(<span key={`${kp}-${k++}`}>{text.slice(last)}</span>);
+  return out;
+}
+
+// Full message renderer: block level (bulleted/numbered lists, blockquotes, fenced code) built from
+// consecutive matching lines, each line's text run through renderInline. Same safety as renderInline
+// - all content flows through React, links are http(s)-only, no raw HTML is inserted.
+function RichText({ text, C }: { text: string; C: typeof LIGHT_C }) {
+  const lines = text.split('\n');
+  const mono = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  const blocks: ReactNode[] = [];
+  const isBlockStart = (ln: string) => /^\s*([-*]\s+|\d+\.\s+|>\s?|```)/.test(ln);
+  let i = 0, b = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.trimStart().startsWith('```')) {                       // fenced code block
+      const buf: string[] = []; i++;
+      while (i < lines.length && !lines[i].trimStart().startsWith('```')) { buf.push(lines[i]); i++; }
+      i++; // consume the closing fence if present
+      blocks.push(<pre key={b++} style={{ margin: '4px 0', padding: '8px 10px', borderRadius: 8, background: C.card, overflowX: 'auto', fontSize: '0.85em', fontFamily: mono }}>{buf.join('\n')}</pre>);
+    } else if (/^\s*[-*]\s+/.test(line)) {                          // bulleted list
+      const items: string[] = [];
+      while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*[-*]\s+/, '')); i++; }
+      blocks.push(<ul key={b++} style={{ margin: '2px 0', paddingLeft: 20, listStyleType: 'disc' }}>{items.map((it, j) => <li key={j} style={{ margin: '1px 0' }}>{renderInline(it, C, `${b}-${j}`)}</li>)}</ul>);
+    } else if (/^\s*\d+\.\s+/.test(line)) {                         // numbered list
+      const items: string[] = [];
+      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*\d+\.\s+/, '')); i++; }
+      blocks.push(<ol key={b++} style={{ margin: '2px 0', paddingLeft: 22, listStyleType: 'decimal' }}>{items.map((it, j) => <li key={j} style={{ margin: '1px 0' }}>{renderInline(it, C, `${b}-${j}`)}</li>)}</ol>);
+    } else if (/^\s*>\s?/.test(line)) {                             // blockquote
+      const items: string[] = [];
+      while (i < lines.length && /^\s*>\s?/.test(lines[i])) { items.push(lines[i].replace(/^\s*>\s?/, '')); i++; }
+      blocks.push(<blockquote key={b++} style={{ margin: '2px 0', paddingLeft: 10, borderLeft: `3px solid ${C.green}66`, color: C.muted }}>{items.map((it, j) => <div key={j}>{renderInline(it, C, `${b}-${j}`)}</div>)}</blockquote>);
+    } else {                                                        // paragraph (preserves line breaks)
+      const para: string[] = [];
+      while (i < lines.length && !isBlockStart(lines[i])) { para.push(lines[i]); i++; }
+      blocks.push(<p key={b++} style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{para.map((ln, j) => <span key={j}>{renderInline(ln, C, `${b}-${j}`)}{j < para.length - 1 ? '\n' : ''}</span>)}</p>);
+    }
+  }
+  return <>{blocks}</>;
 }
 
 function Avatar({ name, size = 30, C }: { name?: string | null; size?: number; C: typeof LIGHT_C }) {
@@ -381,12 +417,30 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
     setReply(next); touch();
     requestAnimationFrame(() => { if (!el) return; el.focus(); const u0 = s + `[${label}](`.length; el.setSelectionRange(u0, u0 + url.length); });
   }
+  // Prefix each selected line (expanded to whole lines) - for lists and quotes.
+  function prefixLines(makePrefix: (idx: number) => string) {
+    const el = composerRef.current;
+    const s = el?.selectionStart ?? reply.length;
+    const e = el?.selectionEnd ?? reply.length;
+    const from = reply.lastIndexOf('\n', s - 1) + 1;
+    const nl = reply.indexOf('\n', e);
+    const to = nl === -1 ? reply.length : nl;
+    const block = reply.slice(from, to).split('\n').map((ln, i) => makePrefix(i) + ln).join('\n');
+    const next = reply.slice(0, from) + block + reply.slice(to);
+    setReply(next); touch();
+    requestAnimationFrame(() => { if (!el) return; el.focus(); el.setSelectionRange(from, from + block.length); });
+  }
   const FMT_TOOLS: { icon: typeof Bold; title: string; fn: () => void }[] = [
     { icon: Bold, title: 'Bold (Ctrl/Cmd+B)', fn: () => surround('**', '**', 'bold') },
     { icon: Italic, title: 'Italic (Ctrl/Cmd+I)', fn: () => surround('*', '*', 'italic') },
     { icon: Strikethrough, title: 'Strikethrough', fn: () => surround('~~', '~~', 'strikethrough') },
     { icon: Code2, title: 'Code', fn: () => surround('`', '`', 'code') },
     { icon: LinkIcon, title: 'Link', fn: insertLink },
+  ];
+  const BLOCK_TOOLS: { icon: typeof Bold; title: string; fn: () => void }[] = [
+    { icon: List, title: 'Bulleted list', fn: () => prefixLines(() => '- ') },
+    { icon: ListOrdered, title: 'Numbered list', fn: () => prefixLines(i => `${i + 1}. `) },
+    { icon: Quote, title: 'Quote', fn: () => prefixLines(() => '> ') },
   ];
 
   const editStyle = useMemo(() => ({ width: '100%', padding: '10px 12px', borderRadius: 12, background: C.input, color: C.text, fontSize: 14, outline: 'none', border: `1px solid ${C.divider}`, resize: 'none' } as const), [C]);
@@ -466,7 +520,7 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
                       <div className="gf-msg relative rounded-2xl px-3 py-2"
                         style={{ background: mine ? `${C.green}22` : C.pill, color: C.text, opacity: p._optimistic && !p._failed ? 0.6 : 1,
                           borderTopRightRadius: mine && grouped ? 6 : 16, borderTopLeftRadius: !mine && grouped ? 6 : 16 }}>
-                        <p className="text-sm whitespace-pre-wrap break-words"><RichText text={p.body || ''} C={C}/></p>
+                        <div className="text-sm break-words"><RichText text={p.body || ''} C={C}/></div>
                         {mine && !p._optimistic && (
                           <div className="gf-actions absolute top-1 flex gap-1" style={{ right: 'calc(100% + 6px)' }}>
                             <button onClick={() => { setEditingId(p.id); setEditDraft(p.body || ''); }} title="Edit" className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: C.card, border: `1px solid ${C.divider}`, color: C.faint, cursor: 'pointer' }}><Pencil className="w-3 h-3"/></button>
@@ -513,13 +567,17 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-0.5 mb-1 px-0.5">
-                  {FMT_TOOLS.map(({ icon: Icon, title, fn }) => (
-                    <button key={title} type="button" title={title} onMouseDown={e => e.preventDefault()} onClick={fn}
-                      className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}>
-                      <Icon className="w-3.5 h-3.5"/>
-                    </button>
-                  ))}
+                <div className="flex items-center flex-wrap gap-0.5 mb-1 px-0.5">
+                  {[...FMT_TOOLS, null, ...BLOCK_TOOLS].map((t, idx) => {
+                    if (t === null) return <span key={`sep-${idx}`} aria-hidden className="mx-1" style={{ width: 1, height: 16, background: C.divider }}/>;
+                    const Icon = t.icon;
+                    return (
+                      <button key={t.title} type="button" title={t.title} onMouseDown={e => e.preventDefault()} onClick={t.fn}
+                        className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}>
+                        <Icon className="w-3.5 h-3.5"/>
+                      </button>
+                    );
+                  })}
                   <span aria-hidden className="mx-1" style={{ width: 1, height: 16, background: C.divider }}/>
                   <button type="button" onClick={() => { setShowPoll(true); touch(); }} title="Create a poll"
                     className="h-7 px-2 rounded-md inline-flex items-center gap-1 text-[11px] font-medium" style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}>
