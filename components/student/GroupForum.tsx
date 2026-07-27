@@ -1,10 +1,11 @@
 'use client';
 
-// Group-members-only discussion forum for a group assignment: threaded topics + replies. Talks only
-// to /api/assignments/group-forum (DB-derived ancestry auth + RLS behind it). Replies post
+// Group-members-only discussion forum for a group assignment: threaded topics + replies, styled as a
+// chat/forum space (avatars, grouped message rows, hover actions, a scrollable conversation pane).
+// Talks only to /api/assignments/group-forum (DB-derived ancestry auth + RLS behind it). Replies post
 // optimistically; polling is adaptive (fast while a thread is open and the tab is visible, slow when
-// idle, paused when hidden or offline) and uses an (updatedAt,id) cursor so edits and deletions of
-// posts already on screen are reflected, not just new ones.
+// idle, paused when hidden or offline) via an (updatedAt,id) cursor so edits and deletions of posts
+// already on screen are reflected, not just new ones.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MessageSquare, Plus, Send, Loader2, ChevronLeft, Trash2, Pencil, AlertCircle, RefreshCw, X, Check } from 'lucide-react';
@@ -16,7 +17,8 @@ interface Post { id: string; threadId?: string; authorId: string | null; authorN
 
 const POLL_ACTIVE = 3000;
 const POLL_IDLE = 15000;
-const IDLE_AFTER = 60000; // no interaction for 1 min -> idle cadence
+const IDLE_AFTER = 60000;       // no interaction for 1 min -> idle cadence
+const GROUP_WINDOW = 5 * 60000; // consecutive posts from one author within 5 min render as one group
 
 function timeAgo(iso: string): string {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -26,18 +28,22 @@ function timeAgo(iso: string): string {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
-// Render plain-text with clickable URLs. Text goes through React (escaped); only whole URL tokens
-// become anchors, so there is no HTML injection surface.
+// Plain-text with clickable URLs. Text goes through React (escaped); only whole URL tokens become
+// anchors, so there is no HTML-injection surface.
 function Linkified({ text, C }: { text: string; C: typeof LIGHT_C }) {
   const parts = text.split(/(https?:\/\/[^\s]+)/g);
+  return <>{parts.map((p, i) => /^https?:\/\//.test(p)
+    ? <a key={i} href={p} target="_blank" rel="noreferrer" style={{ color: C.green, wordBreak: 'break-word' }}>{p}</a>
+    : <span key={i}>{p}</span>)}</>;
+}
+
+function Avatar({ name, you, size = 34, C }: { name?: string | null; you?: boolean; size?: number; C: typeof LIGHT_C }) {
+  const initial = (name?.trim()?.[0] ?? '?').toUpperCase();
   return (
-    <>
-      {parts.map((p, i) =>
-        /^https?:\/\//.test(p)
-          ? <a key={i} href={p} target="_blank" rel="noreferrer" style={{ color: C.green, wordBreak: 'break-word' }}>{p}</a>
-          : <span key={i}>{p}</span>,
-      )}
-    </>
+    <div className="flex-shrink-0 flex items-center justify-center rounded-full font-bold"
+      style={{ width: size, height: size, fontSize: size * 0.42, background: you ? `${C.green}22` : C.pill, color: you ? C.green : C.muted }}>
+      {initial}
+    </div>
   );
 }
 
@@ -69,6 +75,8 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
   const lastActivity = useRef<number>(Date.now());
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const listHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const stick = useRef(true); // keep pinned to the newest message unless the user scrolls up
   const mounted = useRef(true);
   // Set true on (re)mount, not just once: React StrictMode (dev) mounts -> unmounts -> remounts, and
   // without re-setting here the ref would stay false after that first unmount, so every post-await
@@ -76,6 +84,8 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
   const touch = () => { lastActivity.current = Date.now(); };
+  const scrollToBottom = () => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight; };
+  const onScroll = () => { const el = scrollRef.current; if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; };
 
   const call = useCallback(async (payload: Record<string, unknown>) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -107,7 +117,6 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
 
   useEffect(() => { loadThreads(); }, [loadThreads]);
 
-  // Refresh the list quietly (used by polling + after mutations) without the loading state.
   const refreshList = useCallback(async () => {
     try {
       const json = await call({ action: 'listThreads', assignmentId, groupId });
@@ -119,13 +128,14 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
   const openThreadById = useCallback(async (t: Thread) => {
     touch();
     setOpenThread(t); setView('thread'); setPosts([]); setThreadError(''); setActionError('');
-    setLoadingThread(true); setEditingId(null); setReply('');
+    setLoadingThread(true); setEditingId(null); setReply(''); stick.current = true;
     pollCursor.current = null;
     try {
       const json = await call({ action: 'listPosts', threadId: t.id, mode: 'initial' });
       if (!mounted.current) return;
       setPosts(json.posts); setHasMoreEarlier(!!json.hasMoreEarlier); setOlderCursor(json.olderCursor ?? null);
       pollCursor.current = json.pollCursor ?? null;
+      setTimeout(scrollToBottom, 0);
     } catch (e: any) {
       if (mounted.current) setThreadError(e?.message || 'Could not load this topic.');
     } finally {
@@ -159,6 +169,7 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
         return Array.from(byId.values()).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
       });
       pollCursor.current = json.pollCursor ?? pollCursor.current;
+      if (stick.current) setTimeout(scrollToBottom, 0);
     } catch { /* transient */ }
   }, [openThread, call]);
 
@@ -203,7 +214,7 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
     touch();
     const tempId = `temp-${Date.now()}`;
     const optimistic: Post = { id: tempId, authorId: userId, authorName: 'You', body, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), deleted: false, edited: false, _optimistic: true };
-    setPosts(prev => [...prev, optimistic]); setReply(''); setActionError('');
+    setPosts(prev => [...prev, optimistic]); setReply(''); setActionError(''); stick.current = true; setTimeout(scrollToBottom, 0);
     try {
       const json = await call({ action: 'createPost', threadId: openThread.id, body });
       if (!mounted.current) return;
@@ -218,7 +229,7 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
     }
   }
 
-  async function retryFailed(p: Post) {
+  function retryFailed(p: Post) {
     if (!openThread || !p.body) return;
     setPosts(prev => prev.filter(x => x.id !== p.id));
     setReply(p.body);
@@ -268,12 +279,24 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
     } finally { if (mounted.current) setBusy(false); }
   }
 
-  const inputStyle = useMemo(() => ({ width: '100%', padding: '10px 12px', borderRadius: 10, background: C.input, color: C.text, fontSize: 14, outline: 'none', border: `1px solid ${C.divider}` } as const), [C]);
+  const inputStyle = useMemo(() => ({ width: '100%', padding: '10px 12px', borderRadius: 10, background: C.input, color: C.text, fontSize: 14, outline: 'none', border: `1px solid ${C.divider}`, resize: 'none' } as const), [C]);
 
-  // ============================ render ============================
+  // Scoped hover styles (inline styles can't express :hover) for channel rows + per-message actions.
+  const styleTag = (
+    <style>{`
+      .gf-row { transition: background .12s; }
+      .gf-row:hover { background: ${C.pill}; }
+      .gf-msg .gf-actions { opacity: 0; transition: opacity .12s; }
+      .gf-msg:hover { background: ${C.pill}55; }
+      .gf-msg:hover .gf-actions { opacity: 1; }
+    `}</style>
+  );
+
+  // ============================ thread (conversation) view ============================
   if (view === 'thread' && openThread) {
     return (
       <div className="pt-1">
+        {styleTag}
         <div className="flex items-center justify-between gap-2 mb-3">
           <button onClick={() => { setView('list'); setOpenThread(null); }} className="inline-flex items-center gap-1 text-xs font-semibold" style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 0 }}>
             <ChevronLeft className="w-4 h-4"/> All topics
@@ -284,27 +307,39 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
             </button>
           )}
         </div>
-        <h3 ref={headingRef} tabIndex={-1} className="text-base font-bold mb-1 outline-none" style={{ color: C.text }}>{openThread.title}</h3>
-        <p className="text-[11px] mb-4" style={{ color: C.faint }}>Started by {openThread.authorName || 'a member'}</p>
+        <div className="flex items-start gap-3 pb-3 mb-1" style={{ borderBottom: `1px solid ${C.divider}` }}>
+          <Avatar name={openThread.authorName} you={openThread.authorId === userId} C={C}/>
+          <div className="min-w-0">
+            <h3 ref={headingRef} tabIndex={-1} className="text-base font-bold outline-none leading-tight" style={{ color: C.text }}>{openThread.title}</h3>
+            <p className="text-[11px] mt-0.5" style={{ color: C.faint }}>Started by {openThread.authorId === userId ? 'you' : (openThread.authorName || 'a member')}</p>
+          </div>
+        </div>
 
         {loadingThread ? (
-          <div className="flex items-center gap-2 text-sm py-6" style={{ color: C.muted }}><Loader2 className="w-4 h-4 animate-spin"/> Loading...</div>
+          <div className="flex items-center gap-2 text-sm py-10 justify-center" style={{ color: C.muted }}><Loader2 className="w-4 h-4 animate-spin"/> Loading...</div>
         ) : threadError ? (
-          <div className="flex items-center gap-2 text-sm py-4" style={{ color: '#ef4444' }}>
+          <div className="flex items-center gap-2 text-sm py-6 justify-center" style={{ color: '#ef4444' }}>
             <AlertCircle className="w-4 h-4"/> {threadError}
             <button onClick={() => openThreadById(openThread)} className="inline-flex items-center gap-1 ml-2" style={{ background: 'none', border: 'none', color: C.green, cursor: 'pointer' }}><RefreshCw className="w-3.5 h-3.5"/> Retry</button>
           </div>
         ) : (
           <>
-            {hasMoreEarlier && (
-              <button onClick={loadEarlier} className="text-xs font-medium mb-3" style={{ background: 'none', border: 'none', color: C.green, cursor: 'pointer', padding: 0 }}>Load earlier replies</button>
-            )}
-            <div className="flex flex-col gap-3 mb-4">
-              {posts.map(p => {
+            <div ref={scrollRef} onScroll={onScroll} className="flex flex-col py-2" style={{ maxHeight: '52vh', overflowY: 'auto', overflowX: 'hidden' }}>
+              {hasMoreEarlier && (
+                <button onClick={loadEarlier} className="text-xs font-medium mb-2 self-center" style={{ background: 'none', border: 'none', color: C.green, cursor: 'pointer', padding: '4px 8px' }}>Load earlier replies</button>
+              )}
+              {posts.map((p, i) => {
                 const mine = p.authorId === userId;
-                if (p.deleted) return <div key={p.id} className="text-xs italic px-3 py-2 rounded-lg" style={{ background: C.thumbBg, color: C.faint }}>message deleted</div>;
+                const prev = posts[i - 1];
+                const grouped = !!prev && !prev.deleted && !p.deleted && prev.authorId === p.authorId
+                  && new Date(p.createdAt).getTime() - new Date(prev.createdAt).getTime() < GROUP_WINDOW;
+
+                if (p.deleted) return (
+                  <div key={p.id} className="px-3 py-1"><span className="text-xs italic" style={{ color: C.faint }}>message deleted</span></div>
+                );
+
                 if (editingId === p.id) return (
-                  <div key={p.id} className="flex flex-col gap-2">
+                  <div key={p.id} className="flex flex-col gap-2 px-3 py-2">
                     <textarea value={editDraft} onChange={e => setEditDraft(e.target.value)} rows={3} style={inputStyle}/>
                     <div className="flex gap-2">
                       <button onClick={() => saveEdit(p)} disabled={busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg inline-flex items-center gap-1" style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: 'pointer' }}><Check className="w-3.5 h-3.5"/> Save</button>
@@ -312,41 +347,55 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
                     </div>
                   </div>
                 );
+
                 return (
-                  <div key={p.id} className="rounded-xl px-3 py-2.5" style={{ background: mine ? `${C.green}0f` : C.pill, opacity: p._optimistic && !p._failed ? 0.6 : 1 }}>
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="text-[12px] font-semibold" style={{ color: C.text }}>{mine ? 'You' : (p.authorName || 'Former member')}</span>
-                      <span className="text-[10px]" style={{ color: C.faint }}>{p._failed ? 'not sent' : timeAgo(p.createdAt)}{p.edited ? ' (edited)' : ''}</span>
+                  <div key={p.id} className="gf-msg group relative flex gap-3 px-3 rounded-lg" style={{ paddingTop: grouped ? 1 : 8, paddingBottom: 1, opacity: p._optimistic && !p._failed ? 0.6 : 1 }}>
+                    <div style={{ width: 34, flexShrink: 0 }}>
+                      {grouped
+                        ? <span className="gf-actions block text-[9px] text-right pr-1 pt-0.5" style={{ color: C.faint }}>{new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        : <Avatar name={mine ? 'You' : p.authorName} you={mine} C={C}/>}
                     </div>
-                    <p className="text-sm whitespace-pre-wrap" style={{ color: C.text }}><Linkified text={p.body || ''} C={C}/></p>
-                    {p._failed ? (
-                      <button onClick={() => retryFailed(p)} className="text-[11px] font-semibold mt-1" style={{ background: 'none', border: 'none', color: C.green, cursor: 'pointer', padding: 0 }}>Retry</button>
-                    ) : mine && !p._optimistic && (
-                      <div className="flex gap-3 mt-1">
-                        <button onClick={() => { setEditingId(p.id); setEditDraft(p.body || ''); }} className="text-[11px] inline-flex items-center gap-1" style={{ background: 'none', border: 'none', color: C.faint, cursor: 'pointer', padding: 0 }}><Pencil className="w-3 h-3"/> Edit</button>
-                        <button onClick={() => removePost(p)} className="text-[11px] inline-flex items-center gap-1" style={{ background: 'none', border: 'none', color: C.faint, cursor: 'pointer', padding: 0 }}><Trash2 className="w-3 h-3"/> Delete</button>
+                    <div className="flex-1 min-w-0">
+                      {!grouped && (
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-[13px] font-semibold" style={{ color: mine ? C.green : C.text }}>{mine ? 'You' : (p.authorName || 'Former member')}</span>
+                          <span className="text-[10px]" style={{ color: C.faint }}>{p._failed ? 'not sent' : timeAgo(p.createdAt)}{p.edited ? ' (edited)' : ''}</span>
+                        </div>
+                      )}
+                      <p className="text-sm whitespace-pre-wrap break-words" style={{ color: C.text }}><Linkified text={p.body || ''} C={C}/></p>
+                      {p._failed && <button onClick={() => retryFailed(p)} className="text-[11px] font-semibold" style={{ background: 'none', border: 'none', color: C.green, cursor: 'pointer', padding: 0 }}>Retry</button>}
+                    </div>
+                    {mine && !p._optimistic && (
+                      <div className="gf-actions absolute top-1 right-2 flex gap-1.5">
+                        <button onClick={() => { setEditingId(p.id); setEditDraft(p.body || ''); }} title="Edit" className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: C.card, border: `1px solid ${C.divider}`, color: C.faint, cursor: 'pointer' }}><Pencil className="w-3 h-3"/></button>
+                        <button onClick={() => removePost(p)} title="Delete" className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: C.card, border: `1px solid ${C.divider}`, color: C.faint, cursor: 'pointer' }}><Trash2 className="w-3 h-3"/></button>
                       </div>
                     )}
                   </div>
                 );
               })}
             </div>
-            <div className="flex items-end gap-2">
-              <textarea value={reply} onChange={e => { setReply(e.target.value); touch(); }} placeholder="Write a reply..." rows={2} style={inputStyle}
-                onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendReply(); }}/>
-              <button onClick={sendReply} disabled={!reply.trim()} className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center disabled:opacity-40" style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: reply.trim() ? 'pointer' : 'not-allowed' }}><Send className="w-4 h-4"/></button>
+
+            <div className="pt-3 mt-1" style={{ borderTop: `1px solid ${C.divider}` }}>
+              <div className="flex items-end gap-2 rounded-2xl px-2 py-1.5" style={{ background: C.input, border: `1px solid ${C.divider}` }}>
+                <textarea value={reply} onChange={e => { setReply(e.target.value); touch(); }} placeholder="Write a reply..." rows={1}
+                  className="flex-1" style={{ background: 'transparent', color: C.text, fontSize: 14, outline: 'none', border: 'none', resize: 'none', padding: '8px 6px', maxHeight: 120 }}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReply(); } }}/>
+                <button onClick={sendReply} disabled={!reply.trim()} className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center disabled:opacity-40" style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: reply.trim() ? 'pointer' : 'not-allowed' }}><Send className="w-4 h-4"/></button>
+              </div>
+              <p className="text-[10px] mt-1.5 pl-1" style={{ color: C.faint }}>Enter to send, Shift+Enter for a new line{!online ? ' - you are offline' : ''}</p>
+              {actionError && <p className="text-xs mt-1 pl-1" style={{ color: '#ef4444' }}>{actionError}</p>}
             </div>
-            {!online && <p className="text-[11px] mt-2" style={{ color: C.faint }}>You are offline - replies will send when you reconnect.</p>}
-            {actionError && <p className="text-xs mt-2" style={{ color: '#ef4444' }}>{actionError}</p>}
           </>
         )}
       </div>
     );
   }
 
-  // list view
+  // ============================ topic list (channel index) ============================
   return (
     <div className="pt-1">
+      {styleTag}
       <div className="flex items-center justify-between gap-2 mb-3">
         <h3 ref={listHeadingRef} tabIndex={-1} className="text-sm font-bold outline-none inline-flex items-center gap-1.5" style={{ color: C.text }}><MessageSquare className="w-4 h-4" style={{ color: C.green }}/> Discussion</h3>
         {!composing && (
@@ -355,7 +404,7 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
       </div>
 
       {composing && (
-        <div className="rounded-xl p-3 mb-4 flex flex-col gap-2" style={{ background: C.pill }}>
+        <div className="rounded-2xl p-3 mb-4 flex flex-col gap-2" style={{ background: C.pill }}>
           <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Topic title" maxLength={200} style={inputStyle}/>
           <textarea value={newBody} onChange={e => setNewBody(e.target.value)} placeholder="Start the discussion..." rows={3} maxLength={4000} style={inputStyle}/>
           <div className="flex gap-2">
@@ -367,27 +416,35 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
       )}
 
       {loadingList ? (
-        <div className="flex items-center gap-2 text-sm py-6" style={{ color: C.muted }}><Loader2 className="w-4 h-4 animate-spin"/> Loading discussion...</div>
+        <div className="flex items-center gap-2 text-sm py-10 justify-center" style={{ color: C.muted }}><Loader2 className="w-4 h-4 animate-spin"/> Loading discussion...</div>
       ) : listError ? (
-        <div className="flex items-center gap-2 text-sm py-4" style={{ color: '#ef4444' }}>
+        <div className="flex items-center gap-2 text-sm py-6 justify-center" style={{ color: '#ef4444' }}>
           <AlertCircle className="w-4 h-4"/> {listError}
           <button onClick={() => loadThreads()} className="inline-flex items-center gap-1 ml-2" style={{ background: 'none', border: 'none', color: C.green, cursor: 'pointer' }}><RefreshCw className="w-3.5 h-3.5"/> Retry</button>
         </div>
       ) : threads.length === 0 && !composing ? (
-        <p className="text-sm rounded-lg px-3 py-4 text-center" style={{ background: C.thumbBg, color: C.muted }}>No topics yet. Start one to discuss the assignment with your group.</p>
+        <div className="flex flex-col items-center text-center gap-2 py-10">
+          <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: `${C.green}18` }}><MessageSquare className="w-6 h-6" style={{ color: C.green }}/></div>
+          <p className="text-sm font-semibold" style={{ color: C.text }}>No topics yet</p>
+          <p className="text-xs max-w-xs" style={{ color: C.muted }}>Start the conversation with your group - ask a question, share a link, or split up the work.</p>
+        </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {threads.map(t => (
-            <button key={t.id} onClick={() => openThreadById(t)} className="text-left rounded-xl px-3 py-2.5 transition-opacity hover:opacity-80" style={{ background: C.pill, border: `1px solid ${C.divider}`, cursor: 'pointer' }}>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold truncate" style={{ color: C.text }}>{t.title}</span>
-                <span className="text-[10px] flex-shrink-0" style={{ color: C.faint }}>{timeAgo(t.lastPostAt)}</span>
+        <div className="flex flex-col">
+          {threads.map((t, i) => (
+            <button key={t.id} onClick={() => openThreadById(t)} className="gf-row text-left flex items-center gap-3 px-3 py-2.5 rounded-xl"
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', borderTop: i === 0 ? 'none' : `1px solid ${C.divider}` }}>
+              <Avatar name={t.authorName} you={t.authorId === userId} C={C}/>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold truncate" style={{ color: C.text }}>{t.title}</span>
+                  <span className="text-[10px] flex-shrink-0" style={{ color: C.faint }}>{timeAgo(t.lastPostAt)}</span>
+                </div>
+                <span className="text-[11px]" style={{ color: C.faint }}>{t.authorId === userId ? 'You' : (t.authorName || 'a member')} - {t.replyCount} {t.replyCount === 1 ? 'reply' : 'replies'}</span>
               </div>
-              <span className="text-[11px]" style={{ color: C.faint }}>{t.authorName || 'a member'} - {t.replyCount} {t.replyCount === 1 ? 'reply' : 'replies'}</span>
             </button>
           ))}
           {threadsCursor && (
-            <button onClick={() => loadThreads(threadsCursor)} className="text-xs font-medium mt-1" style={{ background: 'none', border: 'none', color: C.green, cursor: 'pointer', padding: 0 }}>Load more topics</button>
+            <button onClick={() => loadThreads(threadsCursor)} className="text-xs font-medium mt-2 self-center" style={{ background: 'none', border: 'none', color: C.green, cursor: 'pointer', padding: '4px 8px' }}>Load more topics</button>
           )}
         </div>
       )}
