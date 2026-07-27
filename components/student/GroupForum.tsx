@@ -516,13 +516,17 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
                 <div className="flex items-center gap-0.5 mb-1 px-0.5">
                   {FMT_TOOLS.map(({ icon: Icon, title, fn }) => (
                     <button key={title} type="button" title={title} onMouseDown={e => e.preventDefault()} onClick={fn}
-                      className="w-7 h-7 rounded-md flex items-center justify-center hover:opacity-100" style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}>
+                      className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}>
                       <Icon className="w-3.5 h-3.5"/>
                     </button>
                   ))}
+                  <span aria-hidden className="mx-1" style={{ width: 1, height: 16, background: C.divider }}/>
+                  <button type="button" onClick={() => { setShowPoll(true); touch(); }} title="Create a poll"
+                    className="h-7 px-2 rounded-md inline-flex items-center gap-1 text-[11px] font-medium" style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}>
+                    <BarChart2 className="w-3.5 h-3.5"/> Poll
+                  </button>
                 </div>
                 <div className="gf-composer flex items-end gap-1 rounded-2xl px-2 py-1.5" style={{ background: C.input, border: `1px solid ${C.divider}`, transition: 'border-color .12s, box-shadow .12s' }}>
-                  <button onClick={() => { setShowPoll(true); touch(); }} title="Create a poll" className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}><BarChart2 className="w-4 h-4"/></button>
                   <textarea ref={composerRef} value={reply} onChange={e => { setReply(e.target.value); touch(); }} placeholder="Message your group..." rows={1}
                     className="flex-1" style={{ background: 'transparent', color: C.text, fontSize: 14, outline: 'none', border: 'none', resize: 'none', padding: '8px 6px', maxHeight: 120 }}
                     onKeyDown={e => {
