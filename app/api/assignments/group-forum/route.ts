@@ -25,8 +25,8 @@ const MAX_OPTION  = 200;  // poll: per-option length
 
 type Db = ReturnType<typeof adminClient>;
 
-// Shared post projection (body + poll columns + author).
-const POST_SELECT = 'id, thread_id, author_id, body, kind, poll, created_at, updated_at, deleted_at, author:students!author_id(full_name, email)';
+// Shared post projection (body + poll columns + author name/avatar).
+const POST_SELECT = 'id, thread_id, author_id, body, kind, poll, created_at, updated_at, deleted_at, author:students!author_id(full_name, email, avatar_url)';
 
 // Plain-text only. Strip any HTML so nothing downstream can render markup; the UI renders bodies as
 // text and linkifies URLs at display time. Returns '' when the content is empty after cleaning.
@@ -117,6 +117,10 @@ const authorName = (row: any): string | null => {
   const s = Array.isArray(row?.author) ? row.author[0] : row?.author;
   return s?.full_name || s?.email || null;
 };
+const authorAvatar = (row: any): string | null => {
+  const s = Array.isArray(row?.author) ? row.author[0] : row?.author;
+  return s?.avatar_url || null;
+};
 type ShapedPoll = { question: string; options: string[]; counts: number[]; totalVotes: number; myVote: number | null };
 // Never leak a soft-deleted post's body; surface placeholder flags instead. Poll posts carry their
 // options here with zeroed tallies; attachPolls() fills in real counts + the caller's own vote.
@@ -129,6 +133,7 @@ function shapePost(p: any) {
     threadId: p.thread_id,
     authorId: p.author_id,
     authorName: deleted ? null : authorName(p),
+    authorAvatar: deleted ? null : authorAvatar(p),
     body: deleted ? null : p.body,
     kind: isPoll ? 'poll' : 'text',
     poll: (isPoll && !deleted)

@@ -17,7 +17,7 @@ import { LIGHT_C } from '@/lib/theme';
 
 interface PollData { question: string; options: string[]; counts: number[]; totalVotes: number; myVote: number | null; }
 interface Thread { id: string; authorId: string | null; }
-interface Post { id: string; authorId: string | null; authorName: string | null; body: string | null; kind?: 'text' | 'poll'; poll?: PollData | null; createdAt: string; updatedAt: string; deleted: boolean; edited: boolean; _optimistic?: boolean; _failed?: boolean; }
+interface Post { id: string; authorId: string | null; authorName: string | null; authorAvatar?: string | null; body: string | null; kind?: 'text' | 'poll'; poll?: PollData | null; createdAt: string; updatedAt: string; deleted: boolean; edited: boolean; _optimistic?: boolean; _failed?: boolean; }
 
 const POLL_ACTIVE = 3000;
 const POLL_IDLE = 15000;
@@ -32,6 +32,10 @@ function timeAgo(iso: string): string {
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
+}
+function shortTime(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 }
 
 // Inline formatting (Slack-style) for a single line: **bold**, *italic*, ~~strike~~, `code`,
@@ -101,8 +105,11 @@ function RichText({ text, C }: { text: string; C: typeof LIGHT_C }) {
   return <>{blocks}</>;
 }
 
-function Avatar({ name, size = 30, C }: { name?: string | null; size?: number; C: typeof LIGHT_C }) {
+function Avatar({ name, src, size = 30, C }: { name?: string | null; src?: string | null; size?: number; C: typeof LIGHT_C }) {
   const initial = (name?.trim()?.[0] ?? '?').toUpperCase();
+  if (src) return (
+    <img src={src} alt={name || ''} width={size} height={size} className="flex-shrink-0 rounded-full object-cover" style={{ width: size, height: size }}/>
+  );
   return (
     <div className="flex-shrink-0 flex items-center justify-center rounded-full font-bold"
       style={{ width: size, height: size, fontSize: size * 0.42, background: C.pill, color: C.muted }}>
@@ -114,13 +121,13 @@ function Avatar({ name, size = 30, C }: { name?: string | null; size?: number; C
 // A poll rendered inside the conversation: the question plus tappable options with live result bars.
 // Your current choice is highlighted; tapping another option changes your vote. Counts only - who
 // voted for what is never sent to the client.
-function PollCard({ poll, mine, onVote, canManage, onDelete, C }: {
-  poll: PollData; mine: boolean; onVote: (i: number) => void; canManage: boolean; onDelete: () => void; C: typeof LIGHT_C;
+function PollCard({ poll, onVote, canManage, onDelete, C }: {
+  poll: PollData; onVote: (i: number) => void; canManage: boolean; onDelete: () => void; C: typeof LIGHT_C;
 }) {
   const total = poll.totalVotes;
   const voted = poll.myVote != null;
   return (
-    <div className="rounded-2xl px-3 py-3" style={{ background: mine ? `${C.green}22` : C.pill, color: C.text }}>
+    <div className="rounded-xl px-3 py-3" style={{ background: C.pill, border: `1px solid ${C.divider}`, color: C.text }}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] font-bold uppercase tracking-wide inline-flex items-center gap-1" style={{ color: C.muted }}>
           <BarChart2 className="w-3 h-3" style={{ color: C.green }}/> Poll
@@ -448,8 +455,12 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
 
   const styleTag = (
     <style>{`
-      .gf-msg .gf-actions { opacity: 0; transition: opacity .12s; }
-      .gf-msg:hover .gf-actions { opacity: 1; }
+      /* Slack/Teams-style rows: full-width, hover highlights the row and reveals the grouped-line
+         time + the author's own edit/delete actions. */
+      .gf-msg { border-radius: 6px; }
+      .gf-msg:hover { background: ${C.pill}; }
+      .gf-msg .gf-actions, .gf-msg .gf-ts { opacity: 0; transition: opacity .12s; }
+      .gf-msg:hover .gf-actions, .gf-msg:hover .gf-ts { opacity: 1; }
       /* Show focus on the whole composer pill (subtle), not the harsh global green textarea outline
          (globals.css forces a 2px !important ring that looks bad boxed inside the rounded field). */
       .gf-composer:focus-within { border-color: ${C.green} !important; box-shadow: 0 0 0 3px ${C.green}22; }
@@ -501,37 +512,35 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
               );
 
               if (p.deleted) return (
-                <div key={p.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`} style={{ marginTop: 6, paddingLeft: mine ? 0 : 38 }}>
-                  <span className="text-xs italic px-3 py-1.5 rounded-2xl" style={{ background: C.pill, color: C.faint }}>message deleted</span>
+                <div key={p.id} className="flex" style={{ marginTop: grouped ? 2 : 12, paddingLeft: 54 }}>
+                  <span className="text-xs italic" style={{ color: C.faint }}>message deleted</span>
                 </div>
               );
 
               const isPoll = !!p.poll;
               return (
-                <div key={p.id} className={`flex gap-2 ${mine ? 'flex-row-reverse' : ''}`} style={{ marginTop: grouped ? 2 : 10 }}>
-                  {!mine && (grouped ? <div style={{ width: 30, flexShrink: 0 }}/> : <Avatar name={p.authorName} C={C}/>)}
-                  <div className={`flex flex-col min-w-0 ${mine ? 'items-end' : 'items-start'}`} style={{ maxWidth: isPoll ? '92%' : '78%', width: isPoll ? 320 : undefined }}>
-                    {!mine && !grouped && <span className="text-[11px] font-semibold mb-0.5 px-1" style={{ color: C.muted }}>{p.authorName || 'Former member'}</span>}
-                    {isPoll ? (
-                      <div className="w-full" style={{ opacity: p._optimistic && !p._failed ? 0.6 : 1 }}>
-                        <PollCard poll={p.poll!} mine={mine} onVote={i => vote(p, i)} canManage={mine && !p._optimistic} onDelete={() => removePost(p)} C={C}/>
-                      </div>
-                    ) : (
-                      <div className="gf-msg relative rounded-2xl px-3 py-2"
-                        style={{ background: mine ? `${C.green}22` : C.pill, color: C.text, opacity: p._optimistic && !p._failed ? 0.6 : 1,
-                          borderTopRightRadius: mine && grouped ? 6 : 16, borderTopLeftRadius: !mine && grouped ? 6 : 16 }}>
-                        <div className="text-sm break-words"><RichText text={p.body || ''} C={C}/></div>
-                        {mine && !p._optimistic && (
-                          <div className="gf-actions absolute top-1 flex gap-1" style={{ right: 'calc(100% + 6px)' }}>
-                            <button onClick={() => { setEditingId(p.id); setEditDraft(p.body || ''); }} title="Edit" className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: C.card, border: `1px solid ${C.divider}`, color: C.faint, cursor: 'pointer' }}><Pencil className="w-3 h-3"/></button>
-                            <button onClick={() => removePost(p)} title="Delete" className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: C.card, border: `1px solid ${C.divider}`, color: C.faint, cursor: 'pointer' }}><Trash2 className="w-3 h-3"/></button>
-                          </div>
-                        )}
+                <div key={p.id} className="gf-msg relative flex gap-3" style={{ marginTop: grouped ? 2 : 14, padding: '4px 8px 5px 6px', opacity: p._optimistic && !p._failed ? 0.6 : 1 }}>
+                  {grouped
+                    ? <div className="gf-ts flex-shrink-0 flex justify-end pt-0.5" style={{ width: 36 }}><span className="text-[9px]" style={{ color: C.faint }}>{shortTime(p.createdAt)}</span></div>
+                    : <Avatar name={p.authorName} src={p.authorAvatar} size={36} C={C}/>}
+                  <div className="flex flex-col min-w-0 flex-1">
+                    {!grouped && (
+                      <div className="flex items-baseline gap-2 mb-1.5">
+                        <span className="text-[13px] font-bold" style={{ color: C.text }}>{mine ? 'You' : (p.authorName || 'Former member')}</span>
+                        <span className="text-[10px]" style={{ color: C.faint }}>{p._failed ? 'not sent' : timeAgo(p.createdAt)}{p.edited ? ' (edited)' : ''}</span>
                       </div>
                     )}
-                    <span className="text-[10px] mt-0.5 px-1" style={{ color: C.faint }}>{p._failed ? 'not sent' : timeAgo(p.createdAt)}{p.edited ? ' (edited)' : ''}</span>
-                    {p._failed && <button onClick={() => retryFailed(p)} className="text-[11px] font-semibold px-1" style={{ background: 'none', border: 'none', color: C.green, cursor: 'pointer' }}>Retry</button>}
+                    {isPoll
+                      ? <div style={{ maxWidth: 360 }}><PollCard poll={p.poll!} onVote={i => vote(p, i)} canManage={mine && !p._optimistic} onDelete={() => removePost(p)} C={C}/></div>
+                      : <div className="text-sm break-words" style={{ color: C.text, lineHeight: 1.5 }}><RichText text={p.body || ''} C={C}/></div>}
+                    {p._failed && <button onClick={() => retryFailed(p)} className="text-[11px] font-semibold self-start mt-0.5" style={{ background: 'none', border: 'none', color: C.green, cursor: 'pointer' }}>Retry</button>}
                   </div>
+                  {mine && !p._optimistic && (
+                    <div className="gf-actions absolute flex gap-1" style={{ top: 2, right: 6 }}>
+                      {!isPoll && <button onClick={() => { setEditingId(p.id); setEditDraft(p.body || ''); }} title="Edit" className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: C.card, border: `1px solid ${C.divider}`, color: C.faint, cursor: 'pointer' }}><Pencil className="w-3 h-3"/></button>}
+                      <button onClick={() => removePost(p)} title="Delete" className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: C.card, border: `1px solid ${C.divider}`, color: C.faint, cursor: 'pointer' }}><Trash2 className="w-3 h-3"/></button>
+                    </div>
+                  )}
                 </div>
               );
             })}
