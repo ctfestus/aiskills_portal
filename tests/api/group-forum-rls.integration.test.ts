@@ -109,4 +109,25 @@ describe.skipIf(!configured)('group forum RLS (user-scoped)', () => {
     const { data } = await admin.from('assignment_group_posts').select('id').eq('id', ids.openingPost);
     expect((data ?? []).length).toBe(1); // still there
   });
+
+  it('a member cannot create a second opening post (is_opening must be false)', async () => {
+    const { error } = await clientA.from('assignment_group_posts')
+      .insert({ thread_id: ids.thread, author_id: ids.userA, body: 'fake opener', is_opening: true });
+    expect(error).not.toBeNull();
+  });
+
+  it('a member cannot insert a pre-deleted post', async () => {
+    const { error } = await clientA.from('assignment_group_posts')
+      .insert({ thread_id: ids.thread, author_id: ids.userA, body: 'x', deleted_at: new Date().toISOString() });
+    expect(error).not.toBeNull();
+  });
+
+  it('a client-supplied created_at is overridden server-side (cannot pin a thread to the top)', async () => {
+    const ins = await clientA.from('assignment_group_posts')
+      .insert({ thread_id: ids.thread, author_id: ids.userA, body: 'ts test', created_at: '2099-01-01T00:00:00Z' })
+      .select('id').single();
+    expect(ins.error).toBeNull();
+    const { data: row } = await admin.from('assignment_group_posts').select('created_at').eq('id', ins.data!.id).single();
+    expect(new Date(row!.created_at).getFullYear()).toBeLessThan(2099);
+  });
 });

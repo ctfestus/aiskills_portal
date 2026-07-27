@@ -3521,6 +3521,8 @@ CREATE INDEX IF NOT EXISTS idx_agp_thread_created ON public.assignment_group_pos
 CREATE INDEX IF NOT EXISTS idx_agp_thread_updated ON public.assignment_group_posts (thread_id, updated_at, id);
 CREATE INDEX IF NOT EXISTS idx_agp_author         ON public.assignment_group_posts (author_id);
 CREATE INDEX IF NOT EXISTS idx_agfal_group        ON public.assignment_group_forum_access_log (assignment_id, group_id, accessed_at DESC);
+-- A thread has exactly one opening post; this backstops the RPC so no path can add a second.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agp_one_opening ON public.assignment_group_posts (thread_id) WHERE is_opening;
 
 -- ============================== Access helper (RLS) ==============================
 -- Caller is a group member AND the assignment is published AND that group is one of its group_ids.
@@ -3616,7 +3618,10 @@ GRANT  EXECUTE ON FUNCTION public.delete_group_thread(uuid, uuid) TO service_rol
 -- (no resurrection, no editing a tombstone). author_id may only be cleared to NULL by the FK cascade.
 CREATE OR REPLACE FUNCTION public.agp_before_write() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  IF TG_OP = 'UPDATE' THEN
+  IF TG_OP = 'INSERT' THEN
+    NEW.created_at := now();   -- server-controlled: a client-supplied created_at is ignored, so a
+                               -- far-future value cannot pin a thread to the top via last_post_at.
+  ELSE
     IF OLD.deleted_at IS NOT NULL THEN
       RAISE EXCEPTION 'post_deleted';
     END IF;
@@ -3706,6 +3711,8 @@ CREATE POLICY "agp: member select" ON public.assignment_group_posts FOR SELECT
 DROP POLICY IF EXISTS "agp: member insert" ON public.assignment_group_posts;
 CREATE POLICY "agp: member insert" ON public.assignment_group_posts FOR INSERT
   WITH CHECK (author_id = (SELECT auth.uid())
+              AND is_opening = false     -- the opening post is created ONLY by create_group_thread()
+              AND deleted_at IS NULL     -- cannot insert an already-tombstoned row
               AND EXISTS (SELECT 1 FROM public.assignment_group_threads t
                           WHERE t.id = thread_id AND t.deleted_at IS NULL
                             AND public.can_access_group_forum(t.assignment_id, t.group_id)));
@@ -3718,4 +3725,3 @@ CREATE POLICY "agp: author update" ON public.assignment_group_posts FOR UPDATE
               AND EXISTS (SELECT 1 FROM public.assignment_group_threads t
                           WHERE t.id = thread_id AND public.can_access_group_forum(t.assignment_id, t.group_id)));
 -- No DELETE policy on either table: hard deletes are denied for everyone; removal is soft (deleted_at).
-

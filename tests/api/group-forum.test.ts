@@ -163,4 +163,45 @@ describe('POST /api/assignments/group-forum', () => {
     }));
     expect((await post({ action: 'deletePost', postId: 'p1' })).status).toBe(403);
   });
+
+  it('listThreads: admin read fails CLOSED (503) when the audit-log write fails', async () => {
+    mockAdminClient.mockReturnValue(client({
+      assignments: assignment(['g1']), group_members: notMember, students: asAdmin,
+      assignment_group_forum_access_log: { data: null, error: { message: 'audit down' } },
+    }));
+    const res = await post({ action: 'listThreads', assignmentId: 'a1', groupId: 'g1' });
+    expect(res.status).toBe(503);
+  });
+
+  it('listPosts: 404 when the thread is soft-deleted', async () => {
+    mockAdminClient.mockReturnValue(client({
+      assignment_group_threads: { data: { id: 't1', assignment_id: 'a1', group_id: 'g1', author_id: 'u1', deleted_at: '2026-07-27T00:00:00Z' }, error: null },
+    }));
+    expect((await post({ action: 'listPosts', threadId: 't1' })).status).toBe(404);
+  });
+
+  it('listPosts poll: pollCursor keeps microsecond timestamp precision', async () => {
+    const micro = '2026-07-27T10:00:00.123456+00:00';
+    mockAdminClient.mockReturnValue(client({
+      assignment_group_threads: { data: { id: 't1', assignment_id: 'a1', group_id: 'g1', author_id: 'u1', deleted_at: null }, error: null },
+      assignments: assignment(['g1']), group_members: memberRow, students: asStudent,
+      assignment_group_posts: { data: [{ id: 'p1', thread_id: 't1', author_id: 'u1', body: 'hi', created_at: micro, updated_at: micro, deleted_at: null, author: { full_name: 'A' } }], error: null },
+    }));
+    const res = await post({ action: 'listPosts', threadId: 't1', mode: 'poll' });
+    expect(res.status).toBe(200);
+    expect((await res.json()).pollCursor).toBe(`${micro}|p1`);
+  });
+
+  it('deleteThread: 200 via the atomic RPC when the author deletes with no other replies', async () => {
+    mockAdminClient.mockReturnValue(client(
+      {
+        assignment_group_threads: { data: { id: 't1', assignment_id: 'a1', group_id: 'g1', author_id: 'u1', deleted_at: null }, error: null },
+        assignments: assignment(['g1']), group_members: memberRow, students: asStudent,
+      },
+      { data: null, error: null }, // delete_group_thread RPC succeeds
+    ));
+    const res = await post({ action: 'deleteThread', threadId: 't1' });
+    expect(res.status).toBe(200);
+    expect((await res.json()).ok).toBe(true);
+  });
 });
