@@ -23,7 +23,7 @@ import { GroupForum } from '@/components/student/GroupForum';
 import { Sk, EmptyState, StatusBadge } from '@/components/student/shared';
 import {
   BookOpen, ClipboardList, Users, ChevronDown, X, CheckCircle, AlertCircle, Star,
-  ExternalLink, Loader2, FileText, Plus, ArrowLeft, Upload, RefreshCw, Check,
+  ExternalLink, Loader2, FileText, Plus, ArrowLeft, Upload, RefreshCw, Check, MessageSquare,
 } from 'lucide-react';
 
 // --- Assignments section ---
@@ -70,7 +70,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
   const [popupRect, setPopupRect]         = useState<DOMRect | null>(null);
   const [isLeader, setIsLeader]               = useState(false);
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
-  const [groupPanelTab, setGroupPanelTab] = useState<'members' | 'discussion'>('members');
+  const [discussionOpen, setDiscussionOpen] = useState(false); // focused, full-width group discussion
   const toggleParticipant = (id: string) =>
     setSelectedParticipants(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
@@ -435,6 +435,24 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
   const uploading = readyFiles.some(f => f.status === 'uploading');
   const hasContent = responseText.trim() || readyFiles.some(f => f.status === 'done') || links.some(l => l.trim()) || savedFiles.length > 0;
 
+  // Focused discussion: takes over the whole detail area so the forum is the only thing on screen -
+  // no left detail pane, members strip, brief, or submission panel competing for attention.
+  if (discussionOpen && isGroupAssignment && myGroupId) {
+    return (
+      <div className={isScenarioStandard ? 'sa-scenario-font' : undefined} style={isScenarioStandard ? { fontFamily: "'Google Sans Text', 'Inter', sans-serif" } : undefined}>
+        {isScenarioStandard && <style>{`.sa-scenario-font .rich-content { font-family: 'Google Sans Text', 'Inter', sans-serif; }`}</style>}
+        <button onClick={() => setDiscussionOpen(false)}
+          className="inline-flex items-center gap-1 text-sm font-semibold mb-4"
+          style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 0 }}>
+          <ArrowLeft className="w-4 h-4"/> Back to assignment
+        </button>
+        <div className="rounded-2xl px-4 py-4" style={{ background: C.card }}>
+          <GroupForum assignmentId={assignment.id} groupId={myGroupId} userId={userId} C={C}/>
+        </div>
+      </div>
+    );
+  }
+
   return (
     // Scenario-based standard assignments use Google Sans throughout (matching the VE look),
     // so the brief card, group panel, and the player all share one typeface. The scoped style
@@ -593,20 +611,18 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
       {isGroupAssignment && groupMembers.length > 0 && (
         <div className="rounded-2xl px-4 py-3 mb-4" style={{ background: C.card }}>
           <div className="flex items-center justify-between gap-3 mb-4">
-            <div className="inline-flex rounded-xl p-1" style={{ background: C.pill }}>
-              {(['members', 'discussion'] as const).map(tab => (
-                <button key={tab} onClick={() => setGroupPanelTab(tab)}
-                  className="px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
-                  style={{ background: groupPanelTab === tab ? C.card : 'transparent', color: groupPanelTab === tab ? C.text : C.muted, border: 'none', cursor: 'pointer', boxShadow: groupPanelTab === tab ? '0 1px 4px rgba(0,0,0,0.08)' : 'none' }}>
-                  {tab === 'members' ? 'Members' : 'Discussion'}
-                </button>
-              ))}
-            </div>
-            {groupPanelTab === 'members' && (
+            <span className="text-sm font-bold" style={{ color: C.text }}>Members</span>
+            <div className="flex items-center gap-2">
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: C.pill, color: C.muted }}>{groupMembers.length} members</span>
-            )}
+              {myGroupId && (
+                <button onClick={() => setDiscussionOpen(true)}
+                  className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg"
+                  style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: 'pointer' }}>
+                  <MessageSquare className="w-3.5 h-3.5"/> Discussion
+                </button>
+              )}
+            </div>
           </div>
-          {groupPanelTab === 'members' && (
           <div className="flex items-center gap-3 flex-wrap pt-1">
             {groupMembers.map((m: any) => {
               const s = m.students ?? {};
@@ -681,10 +697,6 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               );
             })}
           </div>
-          )}
-          {groupPanelTab === 'discussion' && myGroupId && (
-            <GroupForum assignmentId={assignment.id} groupId={myGroupId} userId={userId} C={C}/>
-          )}
         </div>
       )}
 
