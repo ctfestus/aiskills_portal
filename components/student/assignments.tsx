@@ -19,6 +19,7 @@ import { getStudentMode } from '@/lib/student-mode-client';
 import { isScenarioConfig, parseTaskGrades, passMarkOf } from '@/lib/assignment-scenarios';
 import type { AssignmentSolution } from '@/lib/assignment-solutions';
 import { SolutionFilesList } from '@/components/SolutionFilesList';
+import { GroupForum } from '@/components/student/GroupForum';
 import { Sk, EmptyState, StatusBadge } from '@/components/student/shared';
 import {
   BookOpen, ClipboardList, Users, ChevronDown, X, CheckCircle, AlertCircle, Star,
@@ -69,12 +70,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
   const [popupRect, setPopupRect]         = useState<DOMRect | null>(null);
   const [isLeader, setIsLeader]               = useState(false);
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
-  const [workspaceNotes, setWorkspaceNotes] = useState('');
-  const [workspaceLinks, setWorkspaceLinks] = useState<{ url: string; label?: string }[]>([{ url: '', label: '' }]);
-  const [workspaceSaving, setWorkspaceSaving] = useState(false);
-  const [workspaceError, setWorkspaceError] = useState('');
-  const [groupPanelTab, setGroupPanelTab] = useState<'members' | 'connect'>('members');
-  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [groupPanelTab, setGroupPanelTab] = useState<'members' | 'discussion'>('members');
   const toggleParticipant = (id: string) =>
     setSelectedParticipants(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
@@ -110,16 +106,6 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
           setGroupMembers(grpMembers);
           if (memberRow.is_leader) {
             setSelectedParticipants((grpMembers ?? []).map((m: any) => m.student_id as string));
-          }
-          const workspaceRes = await fetch(`/api/assignments/group-workspace?assignmentId=${assignment.id}&groupId=${memberRow.group_id}`, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          });
-          if (workspaceRes.ok) {
-            const workspaceJson = await workspaceRes.json();
-            const workspace = workspaceJson.workspace ?? {};
-            setWorkspaceNotes(workspace.notes ?? '');
-            const loadedLinks = Array.isArray(workspace.links) ? workspace.links : [];
-            setWorkspaceLinks(loadedLinks.length ? loadedLinks : [{ url: '', label: '' }]);
           }
         }
       }
@@ -257,39 +243,6 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
     }
   }
 
-  async function saveWorkspace() {
-    if (!myGroupId) return;
-    setWorkspaceSaving(true);
-    setWorkspaceError('');
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-      const payload = {
-        assignmentId: assignment.id,
-        groupId: myGroupId,
-        notes: sanitizeRichText(workspaceNotes),
-        links: workspaceLinks.filter(l => l.url.trim()).map(l => ({ url: l.url.trim(), label: (l.label ?? '').trim() })),
-        files: [],
-      };
-      const res = await fetch('/api/assignments/group-workspace', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify(payload),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.error || 'Could not save workspace');
-      const workspace = json.workspace ?? {};
-      setWorkspaceNotes(workspace.notes ?? '');
-      const loadedLinks = Array.isArray(workspace.links) ? workspace.links : [];
-      setWorkspaceLinks(loadedLinks.length ? loadedLinks : [{ url: '', label: '' }]);
-    } catch (err: any) {
-      setWorkspaceError(err?.message || 'Could not save workspace. Please try again.');
-    } finally {
-      setWorkspaceSaving(false);
-    }
-  }
-
-  const removeWorkspaceLink = (i: number) => setWorkspaceLinks(prev => prev.filter((_, idx) => idx !== i));
 
   async function handleSubmit(asDraft: boolean) {
     setSubmitError('');
@@ -641,11 +594,11 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
         <div className="rounded-2xl px-4 py-3 mb-4" style={{ background: C.card }}>
           <div className="flex items-center justify-between gap-3 mb-4">
             <div className="inline-flex rounded-xl p-1" style={{ background: C.pill }}>
-              {(['members', 'connect'] as const).map(tab => (
+              {(['members', 'discussion'] as const).map(tab => (
                 <button key={tab} onClick={() => setGroupPanelTab(tab)}
                   className="px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
                   style={{ background: groupPanelTab === tab ? C.card : 'transparent', color: groupPanelTab === tab ? C.text : C.muted, border: 'none', cursor: 'pointer', boxShadow: groupPanelTab === tab ? '0 1px 4px rgba(0,0,0,0.08)' : 'none' }}>
-                  {tab === 'members' ? 'Members' : 'Connect'}
+                  {tab === 'members' ? 'Members' : 'Discussion'}
                 </button>
               ))}
             </div>
@@ -729,164 +682,12 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
             })}
           </div>
           )}
-          {groupPanelTab === 'connect' && (
-          <div className="pt-1">
-            {isLeader && <div className="flex justify-end mb-4">
-              <button
-                onClick={saveWorkspace}
-                disabled={workspaceSaving}
-                className="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 disabled:opacity-60"
-                style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: workspaceSaving ? 'not-allowed' : 'pointer' }}>
-                {workspaceSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Check className="w-3.5 h-3.5"/>}
-                Save Links
-              </button>
-            </div>}
-
-            <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: C.faint }}>Meeting & File Links</p>
-            <p className="text-sm mb-3 leading-relaxed" style={{ color: C.muted }}>{isLeader ? 'Add where the real collaboration will happen: WhatsApp, Google Meet, Zoom, Google Docs, Notion, GitHub, or similar.' : 'Use these links to join your group discussion or open the shared working document.'}</p>
-            <div className="space-y-2">
-              {isLeader ? workspaceLinks.map((link, i) => (
-                <div key={i} className="grid grid-cols-[1fr_1fr_28px] gap-2 items-center">
-                  <input value={link.label ?? ''} onChange={e => setWorkspaceLinks(prev => prev.map((l, idx) => idx === i ? { ...l, label: e.target.value } : l))} placeholder={i === 0 ? 'WhatsApp / meeting / file' : 'Label'} style={{ minWidth: 0, padding: '10px 12px', borderRadius: 10, background: C.input, color: C.text, fontSize: 14, outline: 'none' }}/>
-                  <input value={link.url} onChange={e => setWorkspaceLinks(prev => prev.map((l, idx) => idx === i ? { ...l, url: e.target.value } : l))} placeholder="https://..." style={{ minWidth: 0, padding: '10px 12px', borderRadius: 10, background: C.input, color: C.text, fontSize: 14, outline: 'none' }}/>
-                  <button onClick={() => removeWorkspaceLink(i)} disabled={workspaceLinks.length === 1} className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30" style={{ background: C.pill, color: C.faint, border: 'none', cursor: workspaceLinks.length === 1 ? 'not-allowed' : 'pointer' }}>
-                    <X className="w-3.5 h-3.5"/>
-                  </button>
-                </div>
-              )) : workspaceLinks.filter(link => link.url.trim()).length > 0 ? (
-                workspaceLinks.filter(link => link.url.trim()).map((link, i) => (
-                  <a key={`${link.url}-${i}`} href={link.url.trim()} target="_blank" rel="noreferrer" className="flex items-center gap-3 no-underline rounded-xl px-3 py-2 transition-all" style={{ background: C.pill, border: `1px solid ${C.divider}`, color: C.text }}>
-                    <ExternalLink className="w-4 h-4 flex-shrink-0" style={{ color: C.green }}/>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-base font-semibold truncate" style={{ color: C.text }}>{link.label || 'Open meeting or file link'}</p>
-                      <p className="text-sm truncate" style={{ color: C.faint }}>{link.url}</p>
-                    </div>
-                  </a>
-                ))
-              ) : (
-                <p className="text-xs rounded-lg px-3 py-2" style={{ background: C.thumbBg, color: C.muted }}>No meeting or file link has been shared yet.</p>
-              )}
-            </div>
-            {isLeader && <button onClick={() => setWorkspaceLinks(prev => [...prev, { url: '', label: '' }])} className="mt-2 text-xs font-medium flex items-center gap-1" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.green, padding: 0 }}>
-              <Plus className="w-3.5 h-3.5"/> Add meeting or file link
-            </button>}
-
-            <div className="mt-4">
-              <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>Optional Draft Notes</p>
-              {isLeader ? (
-                <RichTextEditor value={workspaceNotes} onChange={setWorkspaceNotes} placeholder="Optional: summarize decisions, divide responsibilities, or draft the final response. This is not meant to replace your group conversation." />
-              ) : workspaceNotes ? (
-                <div className="rounded-xl p-4" style={{ background: C.input }}>
-                  <div className="rich-content text-sm" style={{ color: C.text }} dangerouslySetInnerHTML={{ __html: sanitizeRichText(workspaceNotes) }}/>
-                </div>
-              ) : (
-                <p className="text-xs rounded-lg px-3 py-2" style={{ background: C.thumbBg, color: C.muted }}>No draft notes have been shared yet.</p>
-              )}
-            </div>
-            {workspaceError && <p className="text-xs mt-3" style={{ color: '#ef4444' }}>{workspaceError}</p>}
-          </div>
+          {groupPanelTab === 'discussion' && myGroupId && (
+            <GroupForum assignmentId={assignment.id} groupId={myGroupId} userId={userId} C={C}/>
           )}
         </div>
       )}
 
-      {/* Group coordination */}
-      {false && isGroupAssignment && myGroupId && (
-        <div className="rounded-2xl mb-4 overflow-hidden" style={{ background: C.card }}>
-          <button
-            type="button"
-            onClick={() => setWorkspaceOpen(v => !v)}
-            className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left"
-            style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: C.faint }}>Group Coordination</p>
-              <p className="text-xs" style={{ color: C.muted }}>
-                {workspaceOpen
-                  ? isLeader ? 'Add meeting links, working document links, and optional draft notes for your group.' : 'Open meeting links and working documents shared by your group leader.'
-                  : `${workspaceLinks.filter(l => l.url.trim()).length} meeting/file link${workspaceLinks.filter(l => l.url.trim()).length === 1 ? '' : 's'} · ${workspaceNotes ? 'draft notes saved' : 'no draft notes'}`}
-              </p>
-            </div>
-            <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${workspaceOpen ? 'rotate-180' : ''}`} style={{ color: C.faint }}/>
-          </button>
-
-          {workspaceOpen && (
-          <div className="px-5 pb-5">
-            {isLeader && <div className="flex justify-end mb-4">
-              <button
-                onClick={saveWorkspace}
-                disabled={workspaceSaving}
-                className="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 disabled:opacity-60"
-                style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: workspaceSaving ? 'not-allowed' : 'pointer' }}>
-                {workspaceSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Check className="w-3.5 h-3.5"/>}
-                Save Links
-              </button>
-            </div>}
-
-          <div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: C.faint }}>Meeting & File Links</p>
-              <p className="text-sm mb-3 leading-relaxed" style={{ color: C.muted }}>{isLeader ? 'Add where the real collaboration will happen: WhatsApp, Google Meet, Zoom, Google Docs, Notion, GitHub, or similar.' : 'Use these links to join your group discussion or open the shared working document.'}</p>
-              <div className="space-y-2">
-                {isLeader ? workspaceLinks.map((link, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_1fr_28px] gap-2 items-center">
-                    <input
-                      value={link.label ?? ''}
-                      onChange={e => setWorkspaceLinks(prev => prev.map((l, idx) => idx === i ? { ...l, label: e.target.value } : l))}
-                      placeholder={i === 0 ? 'WhatsApp / meeting / file' : 'Label'}
-                      style={{ minWidth: 0, padding: '10px 12px', borderRadius: 10, background: C.input, color: C.text, fontSize: 14, outline: 'none' }}
-                    />
-                    <input
-                      value={link.url}
-                      onChange={e => setWorkspaceLinks(prev => prev.map((l, idx) => idx === i ? { ...l, url: e.target.value } : l))}
-                      placeholder="https://..."
-                      style={{ minWidth: 0, padding: '10px 12px', borderRadius: 10, background: C.input, color: C.text, fontSize: 14, outline: 'none' }}
-                    />
-                    <button onClick={() => removeWorkspaceLink(i)} disabled={workspaceLinks.length === 1}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30"
-                      style={{ background: C.pill, color: C.faint, border: 'none', cursor: workspaceLinks.length === 1 ? 'not-allowed' : 'pointer' }}>
-                      <X className="w-3.5 h-3.5"/>
-                    </button>
-                  </div>
-                )) : workspaceLinks.filter(link => link.url.trim()).length > 0 ? (
-                  workspaceLinks.filter(link => link.url.trim()).map((link, i) => (
-                    <a key={`${link.url}-${i}`} href={link.url.trim()} target="_blank" rel="noreferrer"
-                      className="flex items-center gap-3 no-underline rounded-xl px-3 py-2 transition-all"
-                      style={{ background: C.pill, border: `1px solid ${C.divider}`, color: C.text }}>
-                      <ExternalLink className="w-4 h-4 flex-shrink-0" style={{ color: C.green }}/>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-base font-semibold truncate" style={{ color: C.text }}>{link.label || 'Open meeting or file link'}</p>
-                        <p className="text-sm truncate" style={{ color: C.faint }}>{link.url}</p>
-                      </div>
-                    </a>
-                  ))
-                ) : (
-                  <p className="text-xs rounded-lg px-3 py-2" style={{ background: C.thumbBg, color: C.muted }}>No meeting or file link has been shared yet.</p>
-                )}
-              </div>
-              {isLeader && <button onClick={() => setWorkspaceLinks(prev => [...prev, { url: '', label: '' }])}
-                className="mt-2 text-xs font-medium flex items-center gap-1"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.green, padding: 0 }}>
-                <Plus className="w-3.5 h-3.5"/> Add meeting or file link
-              </button>}
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>Optional Draft Notes</p>
-            {isLeader ? (
-              <RichTextEditor value={workspaceNotes} onChange={setWorkspaceNotes} placeholder="Optional: summarize decisions, divide responsibilities, or draft the final response. This is not meant to replace your group conversation." />
-            ) : workspaceNotes ? (
-              <div className="rounded-xl p-4" style={{ background: C.input }}>
-                <div className="rich-content text-sm" style={{ color: C.text }} dangerouslySetInnerHTML={{ __html: sanitizeRichText(workspaceNotes) }}/>
-              </div>
-            ) : (
-              <p className="text-xs rounded-lg px-3 py-2" style={{ background: C.thumbBg, color: C.muted }}>No draft notes have been shared yet.</p>
-            )}
-          </div>
-          {workspaceError && <p className="text-xs mt-3" style={{ color: '#ef4444' }}>{workspaceError}</p>}
-          </div>
-          )}
-        </div>
-      )}
 
       {/* Participant selection -- all group assignment types, leader only */}
       {!loadingSub && isGroupAssignment && isLeader && groupMembers.length > 0 && !isGraded && (
@@ -1153,7 +954,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               </>
             ) : (
               <p className="text-xs rounded-lg px-3 py-2" style={{ background: C.thumbBg, color: C.muted }}>
-                Only your group leader can submit the final work. Use the shared workspace above to prepare with your group, and you can view the submission here once it has been made.
+                Only your group leader can submit the final work. Use the group discussion above to plan with your group, and you can view the submission here once it has been made.
               </p>
             )}
           </div>
