@@ -73,7 +73,8 @@ describe('POST /api/assignments/group-forum', () => {
     mockAdminClient.mockReturnValue(client({
       assignments: assignment(['g1']), group_members: memberRow, students: asStudent,
       assignment_group_threads: { data: [{ id: 't1', title: 'Task 1', author_id: 'u2', created_at: '2026-07-27T10:00:00Z', last_post_at: '2026-07-27T11:00:00Z', author: { full_name: 'Ada' } }], error: null },
-      assignment_group_posts: { data: [{ thread_id: 't1' }, { thread_id: 't1' }, { thread_id: 't1' }], error: null },
+      // the count query filters is_opening=false server-side; the stub returns these 2 as the replies
+      assignment_group_posts: { data: [{ thread_id: 't1' }, { thread_id: 't1' }], error: null },
     }));
     const res = await post({ action: 'listThreads', assignmentId: 'a1', groupId: 'g1' });
     expect(res.status).toBe(200);
@@ -143,14 +144,14 @@ describe('POST /api/assignments/group-forum', () => {
     expect(res.status).toBe(409);
   });
 
-  it('deleteThread: 409 when the DB trigger reports the topic already has replies', async () => {
-    mockAdminClient.mockReturnValue(client({
-      assignment_group_threads: [
-        { data: { id: 't1', assignment_id: 'a1', group_id: 'g1', author_id: 'u1', deleted_at: null }, error: null }, // loadThread
-        { data: null, error: { message: 'thread_has_replies' } }, // update blocked by trigger
-      ],
-      assignments: assignment(['g1']), group_members: memberRow, students: asStudent,
-    }));
+  it('deleteThread: 409 when the delete RPC reports the topic already has replies', async () => {
+    mockAdminClient.mockReturnValue(client(
+      {
+        assignment_group_threads: { data: { id: 't1', assignment_id: 'a1', group_id: 'g1', author_id: 'u1', deleted_at: null }, error: null }, // loadThread
+        assignments: assignment(['g1']), group_members: memberRow, students: asStudent,
+      },
+      { data: null, error: { message: 'thread_has_replies' } }, // delete_group_thread RPC result
+    ));
     const res = await post({ action: 'deleteThread', threadId: 't1' });
     expect(res.status).toBe(409);
   });

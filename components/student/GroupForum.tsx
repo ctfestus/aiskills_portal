@@ -205,7 +205,9 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
       const json = await call({ action: 'createPost', threadId: openThread.id, body });
       if (!mounted.current) return;
       setPosts(prev => prev.map(p => p.id === tempId ? json.post : p));
-      pollCursor.current = json.post?.updatedAt ? `${new Date(json.post.updatedAt).getTime()}|${json.post.id}` : pollCursor.current;
+      // Do NOT advance pollCursor here. If another member edited or deleted a post since the last
+      // poll, that change carries an earlier timestamp; the next poll (cursor unchanged) fetches both
+      // this new reply and that intervening change, and merges them by id.
     } catch (e: any) {
       if (!mounted.current) return;
       setPosts(prev => prev.map(p => p.id === tempId ? { ...p, _failed: true } : p)); // keep it, flagged, so the text is not lost

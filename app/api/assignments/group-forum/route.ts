@@ -31,18 +31,21 @@ function cleanTitle(raw: unknown): string {
   return String(raw ?? '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
 }
 
-// Opaque keyset cursor "<epochMillis>|<uuid>".
+// Opaque keyset cursor "<iso-timestamp>|<uuid>". The timestamp is the RAW Postgres value kept
+// verbatim (it can carry microseconds). Round-tripping through Date.getTime() drops sub-millisecond
+// digits, which would skip rows during history pagination and re-return rows while polling.
 function encodeCursor(ts: string, id: string): string {
-  return `${new Date(ts).getTime()}|${id}`;
+  return `${ts}|${id}`;
 }
-function decodeCursor(c: unknown): { ms: number; id: string } | null {
-  if (typeof c !== 'string' || !c.includes('|')) return null;
-  const [msRaw, id] = c.split('|');
-  const ms = Number(msRaw);
-  if (!Number.isFinite(ms) || !id) return null;
-  return { ms, id };
+function decodeCursor(c: unknown): { ts: string; id: string } | null {
+  if (typeof c !== 'string') return null;
+  const bar = c.indexOf('|');
+  if (bar < 1) return null;
+  const ts = c.slice(0, bar);
+  const id = c.slice(bar + 1);
+  if (!ts || !id) return null;
+  return { ts, id };
 }
-const iso = (ms: number) => new Date(ms).toISOString();
 
 type Access =
   | { ok: true; mode: 'member'; isLeader: boolean }
@@ -65,9 +68,12 @@ async function resolveAccess(db: Db, assignmentId: string, groupId: string, user
   return { ok: false, status: 403, error: 'Forbidden' };
 }
 
-async function logAdminRead(db: Db, adminId: string, assignmentId: string, groupId: string) {
-  await db.from('assignment_group_forum_access_log')
-    .insert({ admin_id: adminId, assignment_id: assignmentId, group_id: groupId }).then(() => {}, () => {});
+// Returns false if the audit write failed. Admin access is an audited abuse backstop, so callers
+// MUST fail closed (deny the content) when this returns false.
+async function logAdminRead(db: Db, adminId: string, assignmentId: string, groupId: string): Promise<boolean> {
+  const { error } = await db.from('assignment_group_forum_access_log')
+    .insert({ admin_id: adminId, assignment_id: assignmentId, group_id: groupId });
+  return !error;
 }
 
 // Load a thread and its ancestry from the DB (never trust client-supplied assignment/group).
@@ -139,7 +145,9 @@ export async function POST(req: NextRequest) {
         if (!assignmentId || !groupId) return NextResponse.json({ error: 'assignmentId and groupId required' }, { status: 400 });
         const access = await resolveAccess(db, assignmentId, groupId, userId);
         if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
-        if (access.mode === 'admin') await logAdminRead(db, userId, assignmentId, groupId);
+        if (access.mode === 'admin' && !(await logAdminRead(db, userId, assignmentId, groupId))) {
+          return NextResponse.json({ error: 'Access temporarily unavailable.' }, { status: 503 });
+        }
 
         let q = db.from('assignment_group_threads')
           .select('id, title, author_id, created_at, last_post_at, author:students!author_id(full_name, email)')
@@ -147,7 +155,7 @@ export async function POST(req: NextRequest) {
           .order('last_post_at', { ascending: false }).order('id', { ascending: false })
           .limit(THREAD_PAGE + 1);
         const cur = decodeCursor(body.cursor);
-        if (cur) q = q.or(`last_post_at.lt.${iso(cur.ms)},and(last_post_at.eq.${iso(cur.ms)},id.lt.${cur.id})`);
+        if (cur) q = q.or(`last_post_at.lt.${cur.ts},and(last_post_at.eq.${cur.ts},id.lt.${cur.id})`);
         const { data: rows, error } = await q;
         if (error) return NextResponse.json({ error: 'Could not load discussions' }, { status: 500 });
 
@@ -159,15 +167,17 @@ export async function POST(req: NextRequest) {
         const ids = page.map((t: any) => t.id);
         const counts: Record<string, number> = {};
         if (ids.length) {
+          // Count non-deleted, non-opening posts. The opening post is flagged is_opening, so the
+          // count stays correct even if the opening post itself is later deleted.
           const { data: posts } = await db.from('assignment_group_posts')
-            .select('thread_id').in('thread_id', ids).is('deleted_at', null);
+            .select('thread_id').in('thread_id', ids).is('deleted_at', null).eq('is_opening', false);
           for (const p of posts ?? []) counts[(p as any).thread_id] = (counts[(p as any).thread_id] ?? 0) + 1;
         }
         return NextResponse.json({
           threads: page.map((t: any) => ({
             id: t.id, title: t.title, authorId: t.author_id, authorName: authorName(t),
             createdAt: t.created_at, lastPostAt: t.last_post_at,
-            replyCount: Math.max(0, (counts[t.id] ?? 0) - 1),
+            replyCount: counts[t.id] ?? 0,
           })),
           nextCursor,
         });
@@ -177,10 +187,12 @@ export async function POST(req: NextRequest) {
         const threadId = String(body.threadId ?? '');
         if (!threadId) return NextResponse.json({ error: 'threadId required' }, { status: 400 });
         const thread = await loadThread(db, threadId);
-        if (!thread) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        if (!thread || thread.deleted_at) return NextResponse.json({ error: 'Not found' }, { status: 404 });
         const access = await resolveAccess(db, thread.assignment_id, thread.group_id, userId);
         if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
-        if (access.mode === 'admin') await logAdminRead(db, userId, thread.assignment_id, thread.group_id);
+        if (access.mode === 'admin' && !(await logAdminRead(db, userId, thread.assignment_id, thread.group_id))) {
+          return NextResponse.json({ error: 'Access temporarily unavailable.' }, { status: 503 });
+        }
 
         const mode = body.mode === 'earlier' || body.mode === 'poll' ? body.mode : 'initial';
         const sel = 'id, thread_id, author_id, body, created_at, updated_at, deleted_at, author:students!author_id(full_name, email)';
@@ -191,7 +203,7 @@ export async function POST(req: NextRequest) {
           // already on screen (a plain created_at feed would miss those).
           let q = db.from('assignment_group_posts').select(sel).eq('thread_id', threadId)
             .order('updated_at', { ascending: true }).order('id', { ascending: true }).limit(POST_PAGE);
-          if (cur) q = q.or(`updated_at.gt.${iso(cur.ms)},and(updated_at.eq.${iso(cur.ms)},id.gt.${cur.id})`);
+          if (cur) q = q.or(`updated_at.gt.${cur.ts},and(updated_at.eq.${cur.ts},id.gt.${cur.id})`);
           const { data: rows, error } = await q;
           if (error) return NextResponse.json({ error: 'Could not load replies' }, { status: 500 });
           const shaped = (rows ?? []).map(shapePost);
@@ -202,21 +214,22 @@ export async function POST(req: NextRequest) {
         // history: newest-first page, returned oldest-first for display
         let q = db.from('assignment_group_posts').select(sel).eq('thread_id', threadId)
           .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(POST_PAGE + 1);
-        if (mode === 'earlier' && cur) q = q.or(`created_at.lt.${iso(cur.ms)},and(created_at.eq.${iso(cur.ms)},id.lt.${cur.id})`);
+        if (mode === 'earlier' && cur) q = q.or(`created_at.lt.${cur.ts},and(created_at.eq.${cur.ts},id.lt.${cur.id})`);
         const { data: rows, error } = await q;
         if (error) return NextResponse.json({ error: 'Could not load replies' }, { status: 500 });
         const desc = (rows ?? []).slice(0, POST_PAGE);
         const hasMoreEarlier = (rows ?? []).length > POST_PAGE;
         const olderCursor = desc.length ? encodeCursor(desc[desc.length - 1].created_at, desc[desc.length - 1].id) : null;
         const ordered = [...desc].reverse();
-        // pollCursor = the max updated_at across the loaded page (so polling starts after everything shown)
-        let pollMs = 0, pollId = '';
-        for (const p of ordered) { const m = new Date(p.updated_at).getTime(); if (m >= pollMs) { pollMs = m; pollId = p.id; } }
+        // pollCursor = the max updated_at across the loaded page (raw ISO, so polling resumes after
+        // everything shown without losing sub-millisecond precision).
+        let pollTs = '', pollId = '';
+        for (const p of ordered) { if (!pollTs || new Date(p.updated_at).getTime() >= new Date(pollTs).getTime()) { pollTs = p.updated_at; pollId = p.id; } }
         return NextResponse.json({
           thread: { id: thread.id, title: thread.title, authorId: thread.author_id },
           posts: ordered.map(shapePost),
           hasMoreEarlier, olderCursor,
-          pollCursor: pollId ? encodeCursor(iso(pollMs), pollId) : null,
+          pollCursor: pollId ? encodeCursor(pollTs, pollId) : null,
         });
       }
 
@@ -327,17 +340,17 @@ export async function POST(req: NextRequest) {
         if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
         if (access.mode !== 'member' || thread.author_id !== userId) return NextResponse.json({ error: 'You can only delete your own topic' }, { status: 403 });
 
-        // The DB trigger refuses if anyone else has replied; surface that as a 409.
-        const stamp = new Date().toISOString();
-        const { error: tErr } = await db.from('assignment_group_threads').update({ deleted_at: stamp }).eq('id', threadId).is('deleted_at', null);
-        if (tErr) {
-          if (/thread_has_replies/i.test(tErr.message)) {
+        // Atomic: the RPC soft-deletes the thread AND its posts in one transaction, and refuses if
+        // anyone other than the author has a surviving reply.
+        const { error } = await db.rpc('delete_group_thread', { p_thread_id: threadId, p_author_id: userId });
+        if (error) {
+          if (/thread_has_replies/i.test(error.message)) {
             return NextResponse.json({ error: 'This topic has replies from others and can no longer be deleted. You can delete your own posts instead.' }, { status: 409 });
           }
+          if (/forbidden/i.test(error.message)) return NextResponse.json({ error: 'You can only delete your own topic' }, { status: 403 });
+          if (/not_found/i.test(error.message)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
           return NextResponse.json({ error: 'Could not delete the topic' }, { status: 500 });
         }
-        // Also retire its (author-only) posts so nothing dangles under a removed topic.
-        await db.from('assignment_group_posts').update({ deleted_at: stamp }).eq('thread_id', threadId).is('deleted_at', null);
         return NextResponse.json({ ok: true });
       }
 

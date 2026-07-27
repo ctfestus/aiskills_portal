@@ -4,17 +4,19 @@
 -- a THREAD (topic, with an opening post) and POSTS (replies). Enforcement lives in the DB, not just
 -- the API, so a student hitting these tables directly with their anon key is still constrained:
 --
---   * RLS restricts every row to members of a PUBLISHED assignment whose group_ids include THAT group
---     (all three checked via can_access_group_forum, which uses my_group_ids() to avoid the
---     group_members RLS recursion this repo previously fixed). Instructors/staff get NO access.
---   * Members edit/soft-delete only their OWN posts; a thread can be soft-deleted only while nobody
---     else has replied (enforced by a trigger, so even a direct client cannot erase others' replies).
---   * Identity columns are immutable after insert; author_id is nullable ON DELETE SET NULL so a
---     discussion survives a student deletion.
---   * updated_at is bumped on every write, so incremental polling by (updated_at, id) sees edits and
---     soft-deletions, not just new rows. last_post_at is recomputed on every post write (so deleting
---     the newest reply moves the thread's ordering back correctly).
---   * create_group_thread() inserts the thread AND its opening post in one transaction (no orphans).
+--   * RLS restricts NON-deleted rows to members of a PUBLISHED assignment whose group_ids include
+--     THAT group (all three via can_access_group_forum, which uses my_group_ids() to avoid the
+--     group_members RLS recursion). Soft-deleted rows are invisible to direct clients; the
+--     service-role polling route still sees them (to emit "deleted" placeholders). No instructor/staff.
+--   * Threads are created and deleted ONLY through SECURITY DEFINER RPCs (atomic; no orphan topic,
+--     no partial delete). Direct clients have no INSERT/UPDATE on threads at all.
+--   * Members insert/edit/soft-delete only their OWN posts; triggers forbid resurrecting or editing a
+--     deleted post and keep identity columns immutable. A thread deletes only while nobody else has a
+--     surviving reply (trigger + RPC), so a topic author can never erase others' contributions.
+--   * author_id is nullable ON DELETE SET NULL so a discussion survives a student deletion.
+--   * updated_at is bumped on every write so incremental polling by (updated_at, id) sees edits and
+--     deletions. last_post_at is recomputed on every post write (deleting the newest reply moves it
+--     back). The opening post is flagged is_opening so reply counts stay correct if it is deleted.
 --   * Platform admins have NO row access; an out-of-band admin read path logs to the access-log table.
 
 -- ============================== Tables ==============================
@@ -34,13 +36,14 @@ CREATE TABLE IF NOT EXISTS public.assignment_group_posts (
   thread_id  uuid        NOT NULL REFERENCES public.assignment_group_threads(id) ON DELETE CASCADE,
   author_id  uuid        REFERENCES public.students(id) ON DELETE SET NULL,
   body       text        NOT NULL CHECK (char_length(body) BETWEEN 1 AND 4000),
+  is_opening boolean     NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   deleted_at timestamptz
 );
 
 -- Admin abuse backstop: forum rows are members-only in RLS, so an admin read goes through a
--- service-role route that records the access here. No instructor access anywhere.
+-- service-role route that records the access here (and fails closed if the log write fails).
 CREATE TABLE IF NOT EXISTS public.assignment_group_forum_access_log (
   id            uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
   admin_id      uuid        REFERENCES public.students(id) ON DELETE SET NULL,
@@ -74,10 +77,10 @@ REVOKE EXECUTE ON FUNCTION public.can_access_group_forum(uuid, uuid) FROM PUBLIC
 GRANT  EXECUTE ON FUNCTION public.can_access_group_forum(uuid, uuid) TO authenticated;
 
 -- ============================== Atomic thread creation ==============================
--- Called by the server route (service role) with the authenticated user's id as p_author_id. Runs
--- the thread + opening-post inserts in ONE transaction, and re-derives the ancestry check from the
--- DB (published + group in group_ids + membership) rather than trusting the caller. Does not use
--- auth.uid() because the route runs under the service role.
+-- Called by the server route (service role) with the authenticated user's id as p_author_id. Inserts
+-- the thread + opening post in ONE transaction (the ONLY way to create a thread), re-deriving the
+-- ancestry check from the DB (published + group in group_ids + membership). Does not use auth.uid()
+-- because the route runs under the service role.
 CREATE OR REPLACE FUNCTION public.create_group_thread(
   p_assignment_id uuid,
   p_group_id      uuid,
@@ -110,8 +113,8 @@ BEGIN
   VALUES (p_assignment_id, p_group_id, p_author_id, left(v_title, 200))
   RETURNING * INTO v_thread;
 
-  INSERT INTO public.assignment_group_posts (thread_id, author_id, body)
-  VALUES (v_thread.id, p_author_id, left(v_body, 4000))
+  INSERT INTO public.assignment_group_posts (thread_id, author_id, body, is_opening)
+  VALUES (v_thread.id, p_author_id, left(v_body, 4000), true)
   RETURNING * INTO v_post;
 
   RETURN jsonb_build_object('thread', to_jsonb(v_thread), 'post', to_jsonb(v_post));
@@ -120,14 +123,44 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.create_group_thread(uuid, uuid, uuid, text, text) FROM PUBLIC;
 GRANT  EXECUTE ON FUNCTION public.create_group_thread(uuid, uuid, uuid, text, text) TO service_role;
 
+-- ============================== Atomic thread deletion ==============================
+-- Soft-deletes a thread AND all its posts in one transaction (the ONLY way to delete a thread).
+-- Refuses if anyone other than the author has a surviving reply; idempotent if already deleted.
+CREATE OR REPLACE FUNCTION public.delete_group_thread(p_thread_id uuid, p_author_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_thread public.assignment_group_threads;
+BEGIN
+  SELECT * INTO v_thread FROM public.assignment_group_threads WHERE id = p_thread_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'not_found'; END IF;
+  IF v_thread.deleted_at IS NOT NULL THEN RETURN; END IF; -- idempotent
+  IF v_thread.author_id IS DISTINCT FROM p_author_id THEN RAISE EXCEPTION 'forbidden'; END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.assignment_group_posts p
+    WHERE p.thread_id = p_thread_id AND p.deleted_at IS NULL
+      AND p.author_id IS DISTINCT FROM v_thread.author_id
+  ) THEN
+    RAISE EXCEPTION 'thread_has_replies';
+  END IF;
+  UPDATE public.assignment_group_posts   SET deleted_at = now() WHERE thread_id = p_thread_id AND deleted_at IS NULL;
+  UPDATE public.assignment_group_threads SET deleted_at = now() WHERE id = p_thread_id;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.delete_group_thread(uuid, uuid) FROM PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.delete_group_thread(uuid, uuid) TO service_role;
+
 -- ============================== Triggers ==============================
--- Posts: stamp updated_at on every write; keep identity columns immutable (author_id may only be
--- cleared to NULL by the ON DELETE SET NULL cascade, never repointed).
+-- Posts: stamp updated_at; keep identity immutable; forbid ANY change to an already-deleted post
+-- (no resurrection, no editing a tombstone). author_id may only be cleared to NULL by the FK cascade.
 CREATE OR REPLACE FUNCTION public.agp_before_write() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'UPDATE' THEN
+    IF OLD.deleted_at IS NOT NULL THEN
+      RAISE EXCEPTION 'post_deleted';
+    END IF;
     IF NEW.thread_id  IS DISTINCT FROM OLD.thread_id
        OR NEW.created_at IS DISTINCT FROM OLD.created_at
+       OR NEW.is_opening IS DISTINCT FROM OLD.is_opening
        OR (NEW.author_id IS DISTINCT FROM OLD.author_id AND NEW.author_id IS NOT NULL) THEN
       RAISE EXCEPTION 'immutable_columns';
     END IF;
@@ -140,10 +173,9 @@ DROP TRIGGER IF EXISTS trg_agp_before_write ON public.assignment_group_posts;
 CREATE TRIGGER trg_agp_before_write BEFORE INSERT OR UPDATE ON public.assignment_group_posts
   FOR EACH ROW EXECUTE FUNCTION public.agp_before_write();
 
--- Posts: after any write, recompute the parent thread's last_post_at from surviving posts, so a new
--- reply advances ordering and deleting the newest reply moves it back (falls back to the thread's
--- own created_at when nothing survives).
-CREATE OR REPLACE FUNCTION public.agp_after_write() RETURNS trigger LANGUAGE plpgsql AS $$
+-- Posts: after any write, recompute the parent thread's last_post_at from surviving posts. SECURITY
+-- DEFINER so it can maintain the thread even though members have NO direct UPDATE on threads.
+CREATE OR REPLACE FUNCTION public.agp_after_write() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   UPDATE public.assignment_group_threads t
   SET last_post_at = COALESCE(
@@ -158,8 +190,8 @@ DROP TRIGGER IF EXISTS trg_agp_after_write ON public.assignment_group_posts;
 CREATE TRIGGER trg_agp_after_write AFTER INSERT OR UPDATE ON public.assignment_group_posts
   FOR EACH ROW EXECUTE FUNCTION public.agp_after_write();
 
--- Threads: identity + title immutable; a thread may be soft-deleted only while no OTHER member has a
--- surviving reply, so a topic author can never erase others' contributions by deleting the topic.
+-- Threads: identity + title immutable; deleted_at is write-once (no resurrection); a thread may be
+-- soft-deleted only while no OTHER member has a surviving reply.
 CREATE OR REPLACE FUNCTION public.agt_before_update() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF NEW.assignment_id IS DISTINCT FROM OLD.assignment_id
@@ -168,6 +200,9 @@ BEGIN
      OR NEW.title      IS DISTINCT FROM OLD.title
      OR (NEW.author_id IS DISTINCT FROM OLD.author_id AND NEW.author_id IS NOT NULL) THEN
     RAISE EXCEPTION 'immutable_columns';
+  END IF;
+  IF OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS DISTINCT FROM OLD.deleted_at THEN
+    RAISE EXCEPTION 'thread_deleted'; -- write-once: never un-delete or re-stamp
   END IF;
   IF NEW.deleted_at IS NOT NULL AND OLD.deleted_at IS NULL THEN
     IF EXISTS (
@@ -190,23 +225,22 @@ ALTER TABLE public.assignment_group_threads          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_group_posts            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_group_forum_access_log ENABLE ROW LEVEL SECURITY; -- no policy => service-role only
 
--- Threads: members read; members create their own; authors update (soft-delete) their own.
+-- Threads: members read NON-deleted rows only. Creation/deletion are RPC-only (SECURITY DEFINER), so
+-- there is deliberately NO thread INSERT or UPDATE policy -> a direct client can neither make an
+-- orphan topic nor resurrect / re-order one.
 DROP POLICY IF EXISTS "agt: member select" ON public.assignment_group_threads;
-CREATE POLICY "agt: member select" ON public.assignment_group_threads FOR SELECT
-  USING (public.can_access_group_forum(assignment_id, group_id));
 DROP POLICY IF EXISTS "agt: member insert" ON public.assignment_group_threads;
-CREATE POLICY "agt: member insert" ON public.assignment_group_threads FOR INSERT
-  WITH CHECK (author_id = (SELECT auth.uid()) AND public.can_access_group_forum(assignment_id, group_id));
 DROP POLICY IF EXISTS "agt: author update" ON public.assignment_group_threads;
-CREATE POLICY "agt: author update" ON public.assignment_group_threads FOR UPDATE
-  USING      (author_id = (SELECT auth.uid()) AND public.can_access_group_forum(assignment_id, group_id))
-  WITH CHECK (author_id = (SELECT auth.uid()) AND public.can_access_group_forum(assignment_id, group_id));
+CREATE POLICY "agt: member select" ON public.assignment_group_threads FOR SELECT
+  USING (deleted_at IS NULL AND public.can_access_group_forum(assignment_id, group_id));
 
--- Posts: members read; members post as themselves (into a live thread); authors edit/soft-delete own.
+-- Posts: members read NON-deleted rows; post as themselves into a live thread; edit/soft-delete own
+-- (the trigger enforces valid transitions, incl. no touching a deleted post).
 DROP POLICY IF EXISTS "agp: member select" ON public.assignment_group_posts;
 CREATE POLICY "agp: member select" ON public.assignment_group_posts FOR SELECT
-  USING (EXISTS (SELECT 1 FROM public.assignment_group_threads t
-                 WHERE t.id = thread_id AND public.can_access_group_forum(t.assignment_id, t.group_id)));
+  USING (deleted_at IS NULL
+         AND EXISTS (SELECT 1 FROM public.assignment_group_threads t
+                     WHERE t.id = thread_id AND public.can_access_group_forum(t.assignment_id, t.group_id)));
 DROP POLICY IF EXISTS "agp: member insert" ON public.assignment_group_posts;
 CREATE POLICY "agp: member insert" ON public.assignment_group_posts FOR INSERT
   WITH CHECK (author_id = (SELECT auth.uid())
