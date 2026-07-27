@@ -10,8 +10,8 @@
 // paused when hidden/offline) via an (updatedAt,id) cursor so edits and deletions of messages
 // already on screen are reflected, not just new ones.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MessageSquare, Send, Loader2, Trash2, Pencil, AlertCircle, RefreshCw, Check, BarChart2, Plus, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { MessageSquare, Send, Loader2, Trash2, Pencil, AlertCircle, RefreshCw, Check, BarChart2, Plus, X, Bold, Italic, Strikethrough, Code2, Link as LinkIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { LIGHT_C } from '@/lib/theme';
 
@@ -34,13 +34,35 @@ function timeAgo(iso: string): string {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
-// Plain-text with clickable URLs. Text goes through React (escaped); only whole URL tokens become
-// anchors, so there is no HTML-injection surface.
-function Linkified({ text, C }: { text: string; C: typeof LIGHT_C }) {
-  const parts = text.split(/(https?:\/\/[^\s]+)/g);
-  return <>{parts.map((p, i) => /^https?:\/\//.test(p)
-    ? <a key={i} href={p} target="_blank" rel="noreferrer" style={{ color: C.green, wordBreak: 'break-word', textDecoration: 'underline' }}>{p}</a>
-    : <span key={i}>{p}</span>)}</>;
+// Lightweight, safe inline formatting (Slack-style): **bold**, *italic*, ~~strike~~, `code`,
+// [text](url), and bare URLs. Everything is emitted through React (so text is escaped) and links are
+// constrained to http(s) by the pattern - no raw HTML is ever inserted, so there is no injection
+// surface. Line breaks are preserved by the surrounding whitespace-pre-wrap. Not nested (bold inside
+// a link etc. is not parsed), which is plenty for a chat and keeps the parser small and predictable.
+const INLINE_MD_SRC = '(`[^`\\n]+`)|(\\*\\*[^*\\n]+\\*\\*)|(~~[^~\\n]+~~)|(\\*[^*\\n]+\\*)|(\\[[^\\]\\n]+\\]\\(https?:\\/\\/[^)\\s]+\\))|(https?:\\/\\/[^\\s]+)';
+function RichText({ text, C }: { text: string; C: typeof LIGHT_C }) {
+  const re = new RegExp(INLINE_MD_SRC, 'g');
+  const out: ReactNode[] = [];
+  const linkStyle = { color: C.green, textDecoration: 'underline', wordBreak: 'break-word' as const };
+  const codeStyle = { background: C.card, padding: '1px 5px', borderRadius: 5, fontSize: '0.85em', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' } as const;
+  let last = 0, k = 0, m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    if (m.index > last) out.push(<span key={k++}>{text.slice(last, m.index)}</span>);
+    const tok = m[0];
+    if (tok[0] === '`') out.push(<code key={k++} style={codeStyle}>{tok.slice(1, -1)}</code>);
+    else if (tok.startsWith('**')) out.push(<strong key={k++}>{tok.slice(2, -2)}</strong>);
+    else if (tok.startsWith('~~')) out.push(<del key={k++} style={{ opacity: 0.75 }}>{tok.slice(2, -2)}</del>);
+    else if (tok[0] === '*') out.push(<em key={k++}>{tok.slice(1, -1)}</em>);
+    else if (tok[0] === '[') {
+      const mm = /^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/.exec(tok);
+      out.push(mm
+        ? <a key={k++} href={mm[2]} target="_blank" rel="noreferrer" style={linkStyle}>{mm[1]}</a>
+        : <span key={k++}>{tok}</span>);
+    } else out.push(<a key={k++} href={tok} target="_blank" rel="noreferrer" style={linkStyle}>{tok}</a>);
+    last = m.index + tok.length;
+  }
+  if (last < text.length) out.push(<span key={k++}>{text.slice(last)}</span>);
+  return <>{out}</>;
 }
 
 function Avatar({ name, size = 30, C }: { name?: string | null; size?: number; C: typeof LIGHT_C }) {
@@ -124,6 +146,7 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
 
   const lastActivity = useRef<number>(Date.now());
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const stick = useRef(true); // keep pinned to the newest message unless the user scrolls up
   const mounted = useRef(true);
   // Set true on (re)mount, not just once: React StrictMode (dev) mounts -> unmounts -> remounts, and
@@ -336,6 +359,36 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
     }
   }
 
+  // ---- composer formatting (Slack-style markdown) ----
+  // Wrap the current selection in the composer with markdown markers; if nothing is selected, drop in
+  // a placeholder and select it so the next keystroke replaces it.
+  function surround(before: string, after = before, placeholder = 'text') {
+    const el = composerRef.current;
+    const s = el?.selectionStart ?? reply.length;
+    const e = el?.selectionEnd ?? reply.length;
+    const inner = reply.slice(s, e) || placeholder;
+    const next = reply.slice(0, s) + before + inner + after + reply.slice(e);
+    setReply(next); touch();
+    requestAnimationFrame(() => { if (!el) return; el.focus(); const p0 = s + before.length; el.setSelectionRange(p0, p0 + inner.length); });
+  }
+  function insertLink() {
+    const el = composerRef.current;
+    const s = el?.selectionStart ?? reply.length;
+    const e = el?.selectionEnd ?? reply.length;
+    const label = reply.slice(s, e) || 'link text';
+    const url = 'https://';
+    const next = reply.slice(0, s) + `[${label}](${url})` + reply.slice(e);
+    setReply(next); touch();
+    requestAnimationFrame(() => { if (!el) return; el.focus(); const u0 = s + `[${label}](`.length; el.setSelectionRange(u0, u0 + url.length); });
+  }
+  const FMT_TOOLS: { icon: typeof Bold; title: string; fn: () => void }[] = [
+    { icon: Bold, title: 'Bold (Ctrl/Cmd+B)', fn: () => surround('**', '**', 'bold') },
+    { icon: Italic, title: 'Italic (Ctrl/Cmd+I)', fn: () => surround('*', '*', 'italic') },
+    { icon: Strikethrough, title: 'Strikethrough', fn: () => surround('~~', '~~', 'strikethrough') },
+    { icon: Code2, title: 'Code', fn: () => surround('`', '`', 'code') },
+    { icon: LinkIcon, title: 'Link', fn: insertLink },
+  ];
+
   const editStyle = useMemo(() => ({ width: '100%', padding: '10px 12px', borderRadius: 12, background: C.input, color: C.text, fontSize: 14, outline: 'none', border: `1px solid ${C.divider}`, resize: 'none' } as const), [C]);
   const fieldStyle = useMemo(() => ({ width: '100%', padding: '8px 10px', borderRadius: 10, background: C.card, color: C.text, fontSize: 14, outline: 'none', border: `1px solid ${C.divider}` } as const), [C]);
 
@@ -413,7 +466,7 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
                       <div className="gf-msg relative rounded-2xl px-3 py-2"
                         style={{ background: mine ? `${C.green}22` : C.pill, color: C.text, opacity: p._optimistic && !p._failed ? 0.6 : 1,
                           borderTopRightRadius: mine && grouped ? 6 : 16, borderTopLeftRadius: !mine && grouped ? 6 : 16 }}>
-                        <p className="text-sm whitespace-pre-wrap break-words"><Linkified text={p.body || ''} C={C}/></p>
+                        <p className="text-sm whitespace-pre-wrap break-words"><RichText text={p.body || ''} C={C}/></p>
                         {mine && !p._optimistic && (
                           <div className="gf-actions absolute top-1 flex gap-1" style={{ right: 'calc(100% + 6px)' }}>
                             <button onClick={() => { setEditingId(p.id); setEditDraft(p.body || ''); }} title="Edit" className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: C.card, border: `1px solid ${C.divider}`, color: C.faint, cursor: 'pointer' }}><Pencil className="w-3 h-3"/></button>
@@ -460,14 +513,27 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
               </div>
             ) : (
               <>
+                <div className="flex items-center gap-0.5 mb-1 px-0.5">
+                  {FMT_TOOLS.map(({ icon: Icon, title, fn }) => (
+                    <button key={title} type="button" title={title} onMouseDown={e => e.preventDefault()} onClick={fn}
+                      className="w-7 h-7 rounded-md flex items-center justify-center hover:opacity-100" style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}>
+                      <Icon className="w-3.5 h-3.5"/>
+                    </button>
+                  ))}
+                </div>
                 <div className="gf-composer flex items-end gap-1 rounded-2xl px-2 py-1.5" style={{ background: C.input, border: `1px solid ${C.divider}`, transition: 'border-color .12s, box-shadow .12s' }}>
                   <button onClick={() => { setShowPoll(true); touch(); }} title="Create a poll" className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}><BarChart2 className="w-4 h-4"/></button>
-                  <textarea value={reply} onChange={e => { setReply(e.target.value); touch(); }} placeholder="Message your group..." rows={1}
+                  <textarea ref={composerRef} value={reply} onChange={e => { setReply(e.target.value); touch(); }} placeholder="Message your group..." rows={1}
                     className="flex-1" style={{ background: 'transparent', color: C.text, fontSize: 14, outline: 'none', border: 'none', resize: 'none', padding: '8px 6px', maxHeight: 120 }}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}/>
+                    onKeyDown={e => {
+                      const mod = e.metaKey || e.ctrlKey;
+                      if (mod && (e.key === 'b' || e.key === 'B')) { e.preventDefault(); surround('**', '**', 'bold'); return; }
+                      if (mod && (e.key === 'i' || e.key === 'I')) { e.preventDefault(); surround('*', '*', 'italic'); return; }
+                      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+                    }}/>
                   <button onClick={send} disabled={!reply.trim()} className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center disabled:opacity-40" style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: reply.trim() ? 'pointer' : 'not-allowed' }}><Send className="w-4 h-4"/></button>
                 </div>
-                <p className="text-[10px] mt-1.5 pl-1" style={{ color: C.faint }}>Enter to send, Shift+Enter for a new line{!online ? ' - you are offline' : ''}</p>
+                <p className="text-[10px] mt-1.5 pl-1" style={{ color: C.faint }}>Enter to send, Shift+Enter for a new line. **bold**, *italic*, `code`, links{!online ? ' - you are offline' : ''}</p>
               </>
             )}
             {actionError && <p className="text-xs mt-1 pl-1" style={{ color: '#ef4444' }}>{actionError}</p>}
