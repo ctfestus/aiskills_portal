@@ -70,7 +70,10 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const listHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const mounted = useRef(true);
-  useEffect(() => () => { mounted.current = false; }, []);
+  // Set true on (re)mount, not just once: React StrictMode (dev) mounts -> unmounts -> remounts, and
+  // without re-setting here the ref would stay false after that first unmount, so every post-await
+  // setState (loading off, etc.) gets skipped and the UI hangs on "Loading...".
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
   const touch = () => { lastActivity.current = Date.now(); };
 
