@@ -8,14 +8,14 @@
 // authored. This component replaces the legacy `dangerouslySetInnerHTML` lesson
 // body path on every player surface when `lesson.doc` is present.
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { lessonExtensions } from '@/components/lesson/extensions';
 import { LessonContentStyles } from '@/components/lesson/LessonContentStyles';
 import { GlossaryTooltip } from '@/components/lesson/GlossaryTooltip';
 import { LessonRuntimeProvider } from '@/components/lesson/LessonRuntimeContext';
 import { useTenant } from '@/components/TenantProvider';
-import { collectRunnableSetup, type LessonDoc } from '@/lib/lesson-doc';
+import { collectRunnableSetup, sameContent, type LessonDoc } from '@/lib/lesson-doc';
 
 interface LessonRendererProps {
   doc: LessonDoc;
@@ -27,6 +27,9 @@ export function LessonRenderer({ doc, isDark = false, className = '' }: LessonRe
   const { primaryColor } = useTenant();
   // Combined setup from the lesson's shared runnable blocks seeds one shared runtime.
   const { setupSql, setupPython } = useMemo(() => collectRunnableSetup(doc), [doc]);
+  // The doc last loaded into the editor, so a re-render passing an identical-but-new object does
+  // not trigger a needless reload (see the effect below).
+  const loaded = useRef<LessonDoc | null>(null);
   const editor = useEditor({
     editable: false,
     content: doc as Record<string, unknown>,
@@ -35,9 +38,19 @@ export function LessonRenderer({ doc, isDark = false, className = '' }: LessonRe
   });
 
   // Re-load content when the lesson changes (e.g. navigating between slides while
-  // the renderer instance is reused).
+  // the renderer instance is reused). Skipped when the doc is only a new object holding the same
+  // content, and deferred past this commit either way: setContent re-renders the React node views
+  // synchronously (flushSync), which React forbids while it is already rendering.
   useEffect(() => {
-    if (editor && doc) editor.commands.setContent(doc as Record<string, unknown>);
+    if (!editor || !doc) return;
+    if (loaded.current === null) { loaded.current = doc; return; } // content already set at init
+    if (sameContent(loaded.current, doc)) return;
+    loaded.current = doc;
+    const id = setTimeout(() => {
+      if (editor.isDestroyed) return;
+      editor.commands.setContent(doc as Record<string, unknown>);
+    }, 0);
+    return () => clearTimeout(id);
   }, [editor, doc]);
 
   if (!editor) return null;

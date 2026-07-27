@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 // inlineGlossaryDefinitions bakes it into the text as "term (definition)" first.
 // These are pure-JSON assertions (no DOM), matching the node test environment.
 
-import { collectRunnableSetup, inlineGlossaryDefinitions, type LessonDoc } from '@/lib/lesson-doc';
+import { collectRunnableSetup, inlineGlossaryDefinitions, sameContent, type LessonDoc } from '@/lib/lesson-doc';
 
 const runnable = (attrs: Record<string, unknown>): LessonDoc => ({ type: 'runnableCode', attrs });
 
@@ -117,5 +117,32 @@ describe('collectRunnableSetup', () => {
 
   it('returns empty strings for a doc with no runnable blocks', () => {
     expect(collectRunnableSetup(para({ type: 'text', text: 'hi' }))).toEqual({ setupSql: '', setupPython: '' });
+  });
+});
+
+// The editor/renderer skip a setContent when this says the content is unchanged. Getting it wrong
+// either resets the caret on every unrelated re-render (false negative) or silently drops a real
+// external replacement (false positive).
+describe('sameContent', () => {
+  const doc = (text: string): LessonDoc => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] });
+
+  it('is true for a different object holding the same document', () => {
+    expect(sameContent(doc('hello'), doc('hello'))).toBe(true);
+    expect(sameContent(doc('hello'), doc('hello'))).toBe(true); // distinct references each call
+  });
+  it('is false when the document actually changed', () => {
+    expect(sameContent(doc('hello'), doc('hello world'))).toBe(false);
+    expect(sameContent(doc('hello'), { type: 'doc', content: [] })).toBe(false);
+  });
+  it('compares HTML fallbacks by value and never mixes the two shapes', () => {
+    expect(sameContent('<p>a</p>', '<p>a</p>')).toBe(true);
+    expect(sameContent('<p>a</p>', '<p>b</p>')).toBe(false);
+    expect(sameContent('<p>a</p>', doc('a'))).toBe(false);
+  });
+  it('treats null / undefined as not-equal to content, but equal to itself', () => {
+    expect(sameContent(null, null)).toBe(true);
+    expect(sameContent(undefined, undefined)).toBe(true);
+    expect(sameContent(null, doc('a'))).toBe(false);
+    expect(sameContent(null, '')).toBe(false);   // first sync from empty must still run
   });
 });
