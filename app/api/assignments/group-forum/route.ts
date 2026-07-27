@@ -19,8 +19,14 @@ const REPLY_RATE  = 20;   // replies / minute / user
 const RATE_WINDOW = 60;
 const MAX_TITLE   = 200;
 const MAX_BODY    = 4000;
+const MIN_OPTIONS = 2;    // poll: distinct options required
+const MAX_OPTIONS = 6;
+const MAX_OPTION  = 200;  // poll: per-option length
 
 type Db = ReturnType<typeof adminClient>;
+
+// Shared post projection (body + poll columns + author).
+const POST_SELECT = 'id, thread_id, author_id, body, kind, poll, created_at, updated_at, deleted_at, author:students!author_id(full_name, email)';
 
 // Plain-text only. Strip any HTML so nothing downstream can render markup; the UI renders bodies as
 // text and linkifies URLs at display time. Returns '' when the content is empty after cleaning.
@@ -85,7 +91,7 @@ async function loadThread(db: Db, threadId: string) {
 }
 async function loadPost(db: Db, postId: string) {
   const { data } = await db.from('assignment_group_posts')
-    .select('id, thread_id, author_id, body, created_at, updated_at, deleted_at, thread:assignment_group_threads!thread_id(assignment_id, group_id)')
+    .select('id, thread_id, author_id, body, kind, poll, created_at, updated_at, deleted_at, thread:assignment_group_threads!thread_id(assignment_id, group_id)')
     .eq('id', postId).maybeSingle();
   if (!data) return null;
   const thread = Array.isArray((data as any).thread) ? (data as any).thread[0] : (data as any).thread;
@@ -111,20 +117,56 @@ const authorName = (row: any): string | null => {
   const s = Array.isArray(row?.author) ? row.author[0] : row?.author;
   return s?.full_name || s?.email || null;
 };
-// Never leak a soft-deleted post's body; surface placeholder flags instead.
+type ShapedPoll = { question: string; options: string[]; counts: number[]; totalVotes: number; myVote: number | null };
+// Never leak a soft-deleted post's body; surface placeholder flags instead. Poll posts carry their
+// options here with zeroed tallies; attachPolls() fills in real counts + the caller's own vote.
 function shapePost(p: any) {
   const deleted = !!p.deleted_at;
+  const isPoll = p.kind === 'poll';
+  const options: string[] = isPoll && p.poll && Array.isArray(p.poll.options) ? p.poll.options : [];
   return {
     id: p.id,
     threadId: p.thread_id,
     authorId: p.author_id,
     authorName: deleted ? null : authorName(p),
     body: deleted ? null : p.body,
+    kind: isPoll ? 'poll' : 'text',
+    poll: (isPoll && !deleted)
+      ? { question: p.body as string, options, counts: options.map(() => 0), totalVotes: 0, myVote: null } as ShapedPoll
+      : null,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
     deleted,
-    edited: !deleted && new Date(p.updated_at).getTime() - new Date(p.created_at).getTime() > 1000,
+    // Votes bump a poll's updated_at, so never flag polls as "edited" from that.
+    edited: !deleted && !isPoll && new Date(p.updated_at).getTime() - new Date(p.created_at).getTime() > 1000,
   };
+}
+
+// Fill poll tallies (per-option counts, total, and the caller's own choice) for the poll posts in a
+// page. Individual votes are aggregated server-side and never returned, so who-voted-what stays private.
+async function attachPolls(db: Db, shaped: ReturnType<typeof shapePost>[], userId: string) {
+  const ids = shaped.filter(p => p.poll).map(p => p.id);
+  if (!ids.length) return shaped;
+  const { data: votes } = await db.from('assignment_group_poll_votes')
+    .select('post_id, option_idx, voter_id').in('post_id', ids);
+  const agg = new Map<string, { counts: Record<number, number>; total: number; myVote: number | null }>();
+  for (const v of (votes ?? []) as any[]) {
+    let e = agg.get(v.post_id);
+    if (!e) { e = { counts: {}, total: 0, myVote: null }; agg.set(v.post_id, e); }
+    e.counts[v.option_idx] = (e.counts[v.option_idx] ?? 0) + 1;
+    e.total += 1;
+    if (v.voter_id === userId) e.myVote = v.option_idx;
+  }
+  return shaped.map(p => {
+    if (!p.poll) return p;
+    const e = agg.get(p.id);
+    return { ...p, poll: {
+      ...p.poll,
+      counts: p.poll.options.map((_, i) => e?.counts[i] ?? 0),
+      totalVotes: e?.total ?? 0,
+      myVote: e?.myVote ?? null,
+    } };
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -195,7 +237,7 @@ export async function POST(req: NextRequest) {
         }
 
         const mode = body.mode === 'earlier' || body.mode === 'poll' ? body.mode : 'initial';
-        const sel = 'id, thread_id, author_id, body, created_at, updated_at, deleted_at, author:students!author_id(full_name, email)';
+        const sel = POST_SELECT;
         const cur = decodeCursor(body.cursor);
 
         if (mode === 'poll') {
@@ -206,7 +248,7 @@ export async function POST(req: NextRequest) {
           if (cur) q = q.or(`updated_at.gt.${cur.ts},and(updated_at.eq.${cur.ts},id.gt.${cur.id})`);
           const { data: rows, error } = await q;
           if (error) return NextResponse.json({ error: 'Could not load replies' }, { status: 500 });
-          const shaped = (rows ?? []).map(shapePost);
+          const shaped = await attachPolls(db, (rows ?? []).map(shapePost), userId);
           const last = (rows ?? [])[(rows ?? []).length - 1] as any;
           return NextResponse.json({ posts: shaped, pollCursor: last ? encodeCursor(last.updated_at, last.id) : body.cursor ?? null });
         }
@@ -225,9 +267,10 @@ export async function POST(req: NextRequest) {
         // everything shown without losing sub-millisecond precision).
         let pollTs = '', pollId = '';
         for (const p of ordered) { if (!pollTs || new Date(p.updated_at).getTime() >= new Date(pollTs).getTime()) { pollTs = p.updated_at; pollId = p.id; } }
+        const shapedOrdered = await attachPolls(db, ordered.map(shapePost), userId);
         return NextResponse.json({
           thread: { id: thread.id, title: thread.title, authorId: thread.author_id },
-          posts: ordered.map(shapePost),
+          posts: shapedOrdered,
           hasMoreEarlier, olderCursor,
           pollCursor: pollId ? encodeCursor(pollTs, pollId) : null,
         });
@@ -284,9 +327,82 @@ export async function POST(req: NextRequest) {
 
         const { data, error } = await db.from('assignment_group_posts')
           .insert({ thread_id: threadId, author_id: userId, body: text })
-          .select('id, thread_id, author_id, body, created_at, updated_at, deleted_at, author:students!author_id(full_name, email)').single();
+          .select(POST_SELECT).single();
         if (error) return NextResponse.json({ error: 'Could not post your reply' }, { status: 500 });
         return NextResponse.json({ post: shapePost(data) });
+      }
+
+      // A poll is a special post (kind='poll'). It joins the group's single conversation - added to it
+      // if one exists, or opening it if this is the first message.
+      case 'createPoll': {
+        const assignmentId = String(body.assignmentId ?? '');
+        const groupId = String(body.groupId ?? '');
+        if (!assignmentId || !groupId) return NextResponse.json({ error: 'assignmentId and groupId required' }, { status: 400 });
+        const access = await resolveAccess(db, assignmentId, groupId, userId);
+        if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+        if (access.mode !== 'member') return NextResponse.json({ error: 'Only group members can post' }, { status: 403 });
+
+        const question = cleanBody(body.question);
+        const options: string[] = [];
+        for (const o of Array.isArray(body.options) ? body.options : []) {
+          const c = cleanTitle(o);
+          if (c && !options.includes(c)) options.push(c); // drop blanks + duplicates
+        }
+        if (!question) return NextResponse.json({ error: 'A poll needs a question.' }, { status: 400 });
+        if (question.length > MAX_BODY) return NextResponse.json({ error: 'Question is too long.' }, { status: 400 });
+        if (options.length < MIN_OPTIONS || options.length > MAX_OPTIONS) return NextResponse.json({ error: 'A poll needs 2 to 6 distinct options.' }, { status: 400 });
+        if (options.some(o => o.length > MAX_OPTION)) return NextResponse.json({ error: 'An option is too long.' }, { status: 400 });
+
+        const limited = await rateLimited(userId, 'thread');
+        if (limited) return limited;
+
+        const { data: existing } = await db.from('assignment_group_threads')
+          .select('id').eq('assignment_id', assignmentId).eq('group_id', groupId).is('deleted_at', null)
+          .order('last_post_at', { ascending: false }).order('id', { ascending: false }).limit(1).maybeSingle();
+
+        if (existing) {
+          const { data, error } = await db.from('assignment_group_posts')
+            .insert({ thread_id: existing.id, author_id: userId, body: question, kind: 'poll', poll: { options } })
+            .select(POST_SELECT).single();
+          if (error) return NextResponse.json({ error: 'Could not create the poll' }, { status: 500 });
+          return NextResponse.json({ post: shapePost(data) }); // brand-new poll: zeroed tallies are correct
+        }
+
+        const { data, error } = await db.rpc('create_group_thread', {
+          p_assignment_id: assignmentId, p_group_id: groupId, p_author_id: userId,
+          p_title: 'Group discussion', p_body: question, p_kind: 'poll', p_poll: { options },
+        });
+        if (error) {
+          if (/forbidden/i.test(error.message)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+          if (/empty/i.test(error.message)) return NextResponse.json({ error: 'A poll needs a question.' }, { status: 400 });
+          return NextResponse.json({ error: 'Could not create the poll' }, { status: 500 });
+        }
+        const t = (data as any)?.thread; const p = (data as any)?.post;
+        return NextResponse.json({
+          thread: { id: t.id, title: t.title, authorId: t.author_id, createdAt: t.created_at, lastPostAt: t.last_post_at, replyCount: 0 },
+          post: shapePost(p),
+        });
+      }
+
+      case 'vote': {
+        const postId = String(body.postId ?? '');
+        const optionIdx = Number(body.optionIdx);
+        if (!postId) return NextResponse.json({ error: 'postId required' }, { status: 400 });
+        if (!Number.isInteger(optionIdx) || optionIdx < 0) return NextResponse.json({ error: 'Invalid option.' }, { status: 400 });
+        const post = await loadPost(db, postId);
+        if (!post || post.deleted_at || (post as any).kind !== 'poll') return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        const access = await resolveAccess(db, post.assignment_id, post.group_id, userId);
+        if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+        if (access.mode !== 'member') return NextResponse.json({ error: 'Only group members can vote' }, { status: 403 });
+        const options = Array.isArray((post as any).poll?.options) ? (post as any).poll.options : [];
+        if (optionIdx >= options.length) return NextResponse.json({ error: 'Invalid option.' }, { status: 400 });
+
+        const { error } = await db.from('assignment_group_poll_votes')
+          .upsert({ post_id: postId, voter_id: userId, option_idx: optionIdx }, { onConflict: 'post_id,voter_id' });
+        if (error) return NextResponse.json({ error: 'Could not record your vote' }, { status: 500 });
+        // Bump the poll post so the (updated_at,id) poll feed re-sends it and every member's tally refreshes.
+        await db.from('assignment_group_posts').update({ updated_at: new Date().toISOString() }).eq('id', postId);
+        return NextResponse.json({ ok: true });
       }
 
       case 'editPost': {
@@ -297,6 +413,7 @@ export async function POST(req: NextRequest) {
         const access = await resolveAccess(db, post.assignment_id, post.group_id, userId);
         if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
         if (access.mode !== 'member' || post.author_id !== userId) return NextResponse.json({ error: 'You can only edit your own posts' }, { status: 403 });
+        if ((post as any).kind === 'poll') return NextResponse.json({ error: 'Polls cannot be edited. Delete it and create a new one.' }, { status: 400 });
 
         const text = cleanBody(body.body);
         if (!text) return NextResponse.json({ error: 'Your reply is empty.' }, { status: 400 });
@@ -306,7 +423,7 @@ export async function POST(req: NextRequest) {
         let upd = db.from('assignment_group_posts').update({ body: text }).eq('id', postId).is('deleted_at', null);
         if (typeof body.expectedUpdatedAt === 'string') upd = upd.eq('updated_at', body.expectedUpdatedAt);
         const { data, error } = await upd
-          .select('id, thread_id, author_id, body, created_at, updated_at, deleted_at, author:students!author_id(full_name, email)').maybeSingle();
+          .select(POST_SELECT).maybeSingle();
         if (error) return NextResponse.json({ error: 'Could not save your edit' }, { status: 500 });
         if (!data) return NextResponse.json({ error: 'This post changed since you opened it. Reload and try again.' }, { status: 409 });
         return NextResponse.json({ post: shapePost(data) });

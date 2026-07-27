@@ -204,4 +204,98 @@ describe('POST /api/assignments/group-forum', () => {
     expect(res.status).toBe(200);
     expect((await res.json()).ok).toBe(true);
   });
+
+  // ---------------------------------------------------------------- polls
+  it('createPoll: member adds a poll to the conversation with zeroed tallies', async () => {
+    mockAdminClient.mockReturnValue(client({
+      assignments: assignment(['g1']), group_members: memberRow, students: asStudent,
+      assignment_group_threads: { data: { id: 't1' }, error: null }, // the group's existing conversation
+      assignment_group_posts: { data: { id: 'p1', thread_id: 't1', author_id: 'u1', body: 'Lunch?', kind: 'poll', poll: { options: ['Pizza', 'Sushi'] }, created_at: 'x', updated_at: 'x', deleted_at: null, author: { full_name: 'Me' } }, error: null },
+    }));
+    const res = await post({ action: 'createPoll', assignmentId: 'a1', groupId: 'g1', question: 'Lunch?', options: ['Pizza', 'Sushi'] });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.post.kind).toBe('poll');
+    expect(json.post.poll).toMatchObject({ question: 'Lunch?', options: ['Pizza', 'Sushi'], counts: [0, 0], totalVotes: 0, myVote: null });
+  });
+
+  it('createPoll: opens the conversation via the RPC when none exists yet', async () => {
+    mockAdminClient.mockReturnValue(client(
+      {
+        assignments: assignment(['g1']), group_members: memberRow, students: asStudent,
+        assignment_group_threads: { data: null, error: null }, // no conversation yet
+      },
+      { data: { thread: { id: 't9', title: 'Group discussion', author_id: 'u1', created_at: 'x', last_post_at: 'x' }, post: { id: 'p9', thread_id: 't9', author_id: 'u1', body: 'Lunch?', kind: 'poll', poll: { options: ['A', 'B'] }, created_at: 'x', updated_at: 'x', deleted_at: null } }, error: null },
+    ));
+    const res = await post({ action: 'createPoll', assignmentId: 'a1', groupId: 'g1', question: 'Lunch?', options: ['A', 'B'] });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.thread.id).toBe('t9');
+    expect(json.post.poll.options).toEqual(['A', 'B']);
+  });
+
+  it('createPoll: 400 when fewer than 2 distinct options survive (blanks + dupes dropped)', async () => {
+    mockAdminClient.mockReturnValue(client({ assignments: assignment(['g1']), group_members: memberRow, students: asStudent }));
+    const res = await post({ action: 'createPoll', assignmentId: 'a1', groupId: 'g1', question: 'Q', options: ['Same', 'Same', '  '] });
+    expect(res.status).toBe(400);
+  });
+
+  it('vote: records a member vote (upsert) and returns ok', async () => {
+    mockAdminClient.mockReturnValue(client({
+      assignment_group_posts: { data: { id: 'p1', thread_id: 't1', author_id: 'u2', kind: 'poll', poll: { options: ['A', 'B'] }, deleted_at: null, thread: { assignment_id: 'a1', group_id: 'g1' } }, error: null },
+      assignments: assignment(['g1']), group_members: memberRow, students: asStudent,
+      assignment_group_poll_votes: { data: null, error: null },
+    }));
+    const res = await post({ action: 'vote', postId: 'p1', optionIdx: 1 });
+    expect(res.status).toBe(200);
+    expect((await res.json()).ok).toBe(true);
+  });
+
+  it('vote: 400 for an out-of-range option index', async () => {
+    mockAdminClient.mockReturnValue(client({
+      assignment_group_posts: { data: { id: 'p1', thread_id: 't1', author_id: 'u2', kind: 'poll', poll: { options: ['A', 'B'] }, deleted_at: null, thread: { assignment_id: 'a1', group_id: 'g1' } }, error: null },
+      assignments: assignment(['g1']), group_members: memberRow, students: asStudent,
+    }));
+    expect((await post({ action: 'vote', postId: 'p1', optionIdx: 5 })).status).toBe(400);
+  });
+
+  it('vote: 404 on a non-poll (text) post', async () => {
+    mockAdminClient.mockReturnValue(client({
+      assignment_group_posts: { data: { id: 'p1', thread_id: 't1', author_id: 'u2', kind: 'text', poll: null, deleted_at: null, thread: { assignment_id: 'a1', group_id: 'g1' } }, error: null },
+    }));
+    expect((await post({ action: 'vote', postId: 'p1', optionIdx: 0 })).status).toBe(404);
+  });
+
+  it('vote IDOR: 403 voting on a poll in a group the caller cannot reach', async () => {
+    mockAdminClient.mockReturnValue(client({
+      assignment_group_posts: { data: { id: 'p1', thread_id: 't2', author_id: 'x', kind: 'poll', poll: { options: ['A', 'B'] }, deleted_at: null, thread: { assignment_id: 'a1', group_id: 'g2' } }, error: null },
+      assignments: assignment(['g1', 'g2']), group_members: notMember, students: asStudent,
+    }));
+    expect((await post({ action: 'vote', postId: 'p1', optionIdx: 0 })).status).toBe(403);
+  });
+
+  it('editPost: 400 rejecting an edit to a poll', async () => {
+    mockAdminClient.mockReturnValue(client({
+      assignment_group_posts: { data: { id: 'p1', thread_id: 't1', author_id: 'u1', kind: 'poll', poll: { options: ['A', 'B'] }, deleted_at: null, thread: { assignment_id: 'a1', group_id: 'g1' } }, error: null },
+      assignments: assignment(['g1']), group_members: memberRow, students: asStudent,
+    }));
+    expect((await post({ action: 'editPost', postId: 'p1', body: 'nope' })).status).toBe(400);
+  });
+
+  it('listPosts: attaches poll counts, total, and the callers own vote', async () => {
+    const poll = { id: 'p1', thread_id: 't1', author_id: 'u2', body: 'Pizza?', kind: 'poll', poll: { options: ['Yes', 'No'] }, created_at: '2026-07-27T10:00:00Z', updated_at: '2026-07-27T10:00:00Z', deleted_at: null, author: { full_name: 'Ada' } };
+    mockAdminClient.mockReturnValue(client({
+      assignment_group_threads: { data: { id: 't1', assignment_id: 'a1', group_id: 'g1', author_id: 'u2', deleted_at: null }, error: null },
+      assignments: assignment(['g1']), group_members: memberRow, students: asStudent,
+      assignment_group_posts: { data: [poll], error: null },
+      assignment_group_poll_votes: { data: [
+        { post_id: 'p1', option_idx: 0, voter_id: 'u1' }, // the caller
+        { post_id: 'p1', option_idx: 0, voter_id: 'u2' },
+        { post_id: 'p1', option_idx: 1, voter_id: 'u3' },
+      ], error: null },
+    }));
+    const res = await post({ action: 'listPosts', threadId: 't1', mode: 'initial' });
+    expect(res.status).toBe(200);
+    expect((await res.json()).posts[0].poll).toMatchObject({ counts: [2, 1], totalVotes: 3, myVote: 0 });
+  });
 });
