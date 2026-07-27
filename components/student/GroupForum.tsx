@@ -243,6 +243,10 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
     <style>{`
       .gf-msg .gf-actions { opacity: 0; transition: opacity .12s; }
       .gf-msg:hover .gf-actions { opacity: 1; }
+      /* Show focus on the whole composer pill (subtle), not the harsh global green textarea outline
+         (globals.css forces a 2px !important ring that looks bad boxed inside the rounded field). */
+      .gf-composer:focus-within { border-color: ${C.green} !important; box-shadow: 0 0 0 3px ${C.green}22; }
+      .gf-composer textarea:focus-visible { outline: none !important; }
     `}</style>
   );
 
@@ -320,7 +324,7 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
           </div>
 
           <div className="pt-3 mt-1" style={{ borderTop: `1px solid ${C.divider}` }}>
-            <div className="flex items-end gap-2 rounded-2xl px-2 py-1.5" style={{ background: C.input, border: `1px solid ${C.divider}` }}>
+            <div className="gf-composer flex items-end gap-2 rounded-2xl px-2 py-1.5" style={{ background: C.input, border: `1px solid ${C.divider}`, transition: 'border-color .12s, box-shadow .12s' }}>
               <textarea value={reply} onChange={e => { setReply(e.target.value); touch(); }} placeholder="Message your group..." rows={1}
                 className="flex-1" style={{ background: 'transparent', color: C.text, fontSize: 14, outline: 'none', border: 'none', resize: 'none', padding: '8px 6px', maxHeight: 120 }}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}/>
