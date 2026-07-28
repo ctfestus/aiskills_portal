@@ -443,7 +443,9 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
     const block = reply.slice(from, to).split('\n').map((ln, i) => makePrefix(i) + ln).join('\n');
     const next = reply.slice(0, from) + block + reply.slice(to);
     setReply(next); touch();
-    requestAnimationFrame(() => { if (!el) return; el.focus(); el.setSelectionRange(from, from + block.length); });
+    // Collapse the caret to the END of the inserted markers (not selecting them) so the next
+    // keystroke types the item content instead of overwriting the marker.
+    requestAnimationFrame(() => { if (!el) return; el.focus(); const end = from + block.length; el.setSelectionRange(end, end); });
   }
   // Shift+Enter inside a list/quote item continues it (next bullet, incremented number, or quote
   // marker); on an empty item it drops the marker to end the list. Returns true when it handled the
