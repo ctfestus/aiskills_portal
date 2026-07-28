@@ -119,22 +119,23 @@ function Avatar({ name, src, size = 30, C }: { name?: string | null; src?: strin
   );
 }
 
-// Overlapping stack of member photos (a facepile) for the channel header. Each avatar sits ~70% over
-// the previous with a window-colored ring cutting the gap; beyond a cap it shows a "+N" chip.
+// Overlapping stack of member photos (a facepile) for the channel header. Each avatar overlaps the
+// previous by ~40% with a window-colored ring cutting the gap; beyond a cap it shows a "+N" chip.
 function Facepile({ members, C, size = 28, max = 5 }: { members: Member[]; C: typeof LIGHT_C; size?: number; max?: number }) {
   const shown = members.slice(0, max);
   const extra = members.length - shown.length;
+  const overlap = Math.round(size * 0.4);
   const ring = `0 0 0 2px ${C.card}`;
   return (
     <div className="flex items-center flex-shrink-0">
       {shown.map((m, i) => (
-        <div key={m.id} className="rounded-full flex" style={{ marginLeft: i === 0 ? 0 : -Math.round(size * 0.7), zIndex: shown.length - i, boxShadow: ring }}>
+        <div key={m.id} className="rounded-full flex" style={{ marginLeft: i === 0 ? 0 : -overlap, zIndex: shown.length - i, boxShadow: ring }}>
           <Avatar name={m.name} src={m.avatar} size={size} C={C}/>
         </div>
       ))}
       {extra > 0 && (
         <div className="rounded-full flex items-center justify-center font-bold flex-shrink-0"
-          style={{ marginLeft: -Math.round(size * 0.7), zIndex: 0, width: size, height: size, fontSize: size * 0.34, background: C.pill, color: C.muted, boxShadow: ring }}>
+          style={{ marginLeft: -overlap, zIndex: 0, width: size, height: size, fontSize: size * 0.34, background: C.pill, color: C.muted, boxShadow: ring }}>
           +{extra}
         </div>
       )}
