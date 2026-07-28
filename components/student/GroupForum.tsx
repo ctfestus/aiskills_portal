@@ -159,8 +159,8 @@ function PollCard({ poll, onVote, canManage, onDelete, C }: {
           <BarChart2 className="w-3 h-3"/> Poll
         </span>
         {canManage && (
-          <button onClick={onDelete} title="Delete poll" className="w-5 h-5 rounded flex items-center justify-center"
-            style={{ background: 'none', border: 'none', color: C.faint, cursor: 'pointer' }}><Trash2 className="w-3 h-3"/></button>
+          <button onClick={onDelete} title="Delete poll" className="w-6 h-6 -mr-1 rounded flex items-center justify-center"
+            style={{ background: 'none', border: 'none', color: C.faint, cursor: 'pointer' }}><Trash2 className="w-3.5 h-3.5"/></button>
         )}
       </div>
       <p className="text-[15px] font-bold leading-snug mb-2.5 break-words whitespace-pre-wrap" style={{ color: C.text }}>{poll.question}</p>
@@ -535,6 +535,8 @@ export function GroupForum({ assignmentId, groupId, userId, C, onBack, members =
       .gf-msg:hover { background: ${C.pill}; }
       .gf-msg .gf-actions, .gf-msg .gf-ts { opacity: 0; transition: opacity .12s; }
       .gf-msg:hover .gf-actions, .gf-msg:hover .gf-ts { opacity: 1; }
+      /* Touch devices have no hover - keep the edit/delete actions and grouped time visible. */
+      @media (hover: none) { .gf-msg .gf-actions, .gf-msg .gf-ts { opacity: 1; } }
       /* Duolingo-style poll options: hover hint, tactile press (the bottom edge collapses), and a
          result fill that eases in after voting. Reduced-motion users get the states without movement. */
       .gf-poll-opt { transition: transform .08s ease, box-shadow .08s ease, border-color .15s ease, background .15s ease; }
@@ -634,8 +636,8 @@ export function GroupForum({ assignmentId, groupId, userId, C, onBack, members =
                   </div>
                   {mine && !p._optimistic && !isPoll && (
                     <div className="gf-actions absolute flex gap-1" style={{ top: 2, right: 6 }}>
-                      <button onClick={() => { setEditingId(p.id); setEditDraft(p.body || ''); }} title="Edit" className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: C.card, border: `1px solid ${C.divider}`, color: C.faint, cursor: 'pointer' }}><Pencil className="w-3 h-3"/></button>
-                      <button onClick={() => removePost(p)} title="Delete" className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: C.card, border: `1px solid ${C.divider}`, color: C.faint, cursor: 'pointer' }}><Trash2 className="w-3 h-3"/></button>
+                      <button onClick={() => { setEditingId(p.id); setEditDraft(p.body || ''); }} title="Edit" className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.card, border: `1px solid ${C.divider}`, color: C.faint, cursor: 'pointer' }}><Pencil className="w-3.5 h-3.5"/></button>
+                      <button onClick={() => removePost(p)} title="Delete" className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.card, border: `1px solid ${C.divider}`, color: C.faint, cursor: 'pointer' }}><Trash2 className="w-3.5 h-3.5"/></button>
                     </div>
                   )}
                 </div>
