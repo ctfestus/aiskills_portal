@@ -445,8 +445,9 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
     setReply(next); touch();
     requestAnimationFrame(() => { if (!el) return; el.focus(); el.setSelectionRange(from, from + block.length); });
   }
-  // Enter inside a list/quote item continues it (next bullet, incremented number, or quote marker);
-  // Enter on an empty item exits the list. Returns true when it handled the key (so Enter doesn't send).
+  // Shift+Enter inside a list/quote item continues it (next bullet, incremented number, or quote
+  // marker); on an empty item it drops the marker to end the list. Returns true when it handled the
+  // newline itself (so the default line break is suppressed).
   function handleListEnter(): boolean {
     const el = composerRef.current;
     if (!el || el.selectionStart !== el.selectionEnd) return false;
@@ -634,10 +635,12 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
                       const mod = e.metaKey || e.ctrlKey;
                       if (mod && (e.key === 'b' || e.key === 'B')) { e.preventDefault(); surround('**', '**', 'bold'); return; }
                       if (mod && (e.key === 'i' || e.key === 'I')) { e.preventDefault(); surround('*', '*', 'italic'); return; }
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        if (handleListEnter()) { e.preventDefault(); return; } // continue/exit a list instead of sending
-                        e.preventDefault(); send();
+                      if (e.key !== 'Enter') return;
+                      if (e.shiftKey) { // Shift+Enter = new line; continue a list/quote with its marker
+                        if (handleListEnter()) e.preventDefault();
+                        return;
                       }
+                      e.preventDefault(); send(); // Enter sends
                     }}/>
                   <button onClick={send} disabled={!reply.trim()} className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center disabled:opacity-40" style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: reply.trim() ? 'pointer' : 'not-allowed' }}><Send className="w-4 h-4"/></button>
                 </div>
