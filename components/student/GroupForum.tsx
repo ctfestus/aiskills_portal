@@ -126,10 +126,11 @@ function PollCard({ poll, onVote, canManage, onDelete, C }: {
 }) {
   const total = poll.totalVotes;
   const voted = poll.myVote != null;
+  const lead = voted ? Math.max(...poll.counts, 0) : -1; // top count, to accent the leading option
   return (
-    <div className="rounded-xl px-3 py-3" style={{ background: C.pill, border: `1px solid ${C.divider}`, color: C.text }}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-bold uppercase tracking-wide inline-flex items-center gap-1" style={{ color: C.muted }}>
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1" style={{ color: C.muted }}>
           <BarChart2 className="w-3 h-3" style={{ color: C.green }}/> Poll
         </span>
         {canManage && (
@@ -137,29 +138,32 @@ function PollCard({ poll, onVote, canManage, onDelete, C }: {
             style={{ background: 'none', border: 'none', color: C.faint, cursor: 'pointer' }}><Trash2 className="w-3 h-3"/></button>
         )}
       </div>
-      <p className="text-sm font-semibold mb-2.5 break-words whitespace-pre-wrap">{poll.question}</p>
-      <div className="flex flex-col gap-1.5">
+      <p className="text-[15px] font-bold leading-snug break-words whitespace-pre-wrap" style={{ color: C.text }}>{poll.question}</p>
+      <div className="flex flex-col gap-2">
         {poll.options.map((opt, i) => {
           const c = poll.counts[i] ?? 0;
           const pct = total ? Math.round((c / total) * 100) : 0;
           const picked = poll.myVote === i;
+          const leading = voted && c > 0 && c === lead;
           return (
-            <button key={i} onClick={() => onVote(i)} className="relative w-full text-left rounded-lg overflow-hidden"
-              style={{ border: `1px solid ${picked ? C.green : C.divider}`, background: C.card, padding: 0, cursor: 'pointer' }}>
-              <div aria-hidden style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${pct}%`, background: `${C.green}${picked ? '3a' : '1c'}`, transition: 'width .35s ease' }}/>
-              <div className="relative flex items-center justify-between gap-2 px-2.5 py-2">
-                <span className="text-[13px] inline-flex items-center gap-1.5 min-w-0" style={{ color: C.text }}>
-                  {picked && <Check className="w-3.5 h-3.5 flex-shrink-0" style={{ color: C.green }}/>}
-                  <span className="break-words">{opt}</span>
+            <button key={i} onClick={() => onVote(i)} className={`gf-poll-opt relative w-full text-left overflow-hidden${picked ? ' is-picked' : ''}`}
+              style={{ borderRadius: 14, border: `2px solid ${picked ? C.green : C.divider}`, background: picked ? `${C.green}14` : C.card,
+                boxShadow: `0 2px 0 ${picked ? `${C.green}55` : C.divider}`, padding: 0, cursor: 'pointer' }}>
+              {/* result fill: revealed only after voting, grows from the left */}
+              {voted && <div aria-hidden className="gf-poll-fill" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, transformOrigin: 'left', transform: `scaleX(${pct / 100})`, background: picked ? `${C.green}26` : `${C.muted}1f` }}/>}
+              <div className="relative flex items-center gap-2.5 px-3.5 py-2.5">
+                <span className="flex-shrink-0 flex items-center justify-center rounded-full" style={{ width: 18, height: 18, border: `2px solid ${picked ? C.green : C.divider}`, background: picked ? C.green : 'transparent', transition: 'background .15s, border-color .15s' }}>
+                  {picked && <Check className="w-3 h-3" strokeWidth={3} style={{ color: '#fff' }}/>}
                 </span>
-                <span className="text-[11px] font-semibold flex-shrink-0" style={{ color: C.muted }}>{pct}%{c ? ` (${c})` : ''}</span>
+                <span className="flex-1 text-[13px] font-semibold break-words" style={{ color: C.text }}>{opt}</span>
+                {voted && <span className="flex-shrink-0 text-[12px] font-extrabold" style={{ color: picked || leading ? C.green : C.muted, fontVariantNumeric: 'tabular-nums' }}>{pct}%</span>}
               </div>
             </button>
           );
         })}
       </div>
-      <p className="text-[10px] mt-2" style={{ color: C.faint }}>
-        {total} {total === 1 ? 'vote' : 'votes'}{voted ? ' - tap another to change your vote' : ' - tap an option to vote'}
+      <p className="text-[10px] font-medium" style={{ color: C.faint }}>
+        {total} {total === 1 ? 'vote' : 'votes'}{voted ? ' - tap another to change' : ' - tap to vote'}
       </p>
     </div>
   );
@@ -505,6 +509,17 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
       .gf-msg:hover { background: ${C.pill}; }
       .gf-msg .gf-actions, .gf-msg .gf-ts { opacity: 0; transition: opacity .12s; }
       .gf-msg:hover .gf-actions, .gf-msg:hover .gf-ts { opacity: 1; }
+      /* Duolingo-style poll options: hover hint, tactile press (the bottom edge collapses), and a
+         result fill that eases in after voting. Reduced-motion users get the states without movement. */
+      .gf-poll-opt { transition: transform .08s ease, box-shadow .08s ease, border-color .15s ease, background .15s ease; }
+      .gf-poll-opt:not(.is-picked):hover { border-color: ${C.green} !important; }
+      .gf-poll-opt:active { transform: translateY(2px); box-shadow: none !important; }
+      .gf-poll-opt:focus-visible { outline: 2px solid ${C.green}; outline-offset: 2px; }
+      .gf-poll-fill { transition: transform .55s cubic-bezier(.22, 1, .36, 1); }
+      @media (prefers-reduced-motion: reduce) {
+        .gf-poll-opt, .gf-poll-fill { transition: none !important; }
+        .gf-poll-opt:active { transform: none; }
+      }
       /* Show focus on the whole composer pill (subtle), not the harsh global green textarea outline
          (globals.css forces a 2px !important ring that looks bad boxed inside the rounded field). */
       .gf-composer:focus-within { border-color: ${C.green} !important; box-shadow: 0 0 0 3px ${C.green}22; }
