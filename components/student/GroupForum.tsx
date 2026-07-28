@@ -437,6 +437,31 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
     setReply(next); touch();
     requestAnimationFrame(() => { if (!el) return; el.focus(); el.setSelectionRange(from, from + block.length); });
   }
+  // Enter inside a list/quote item continues it (next bullet, incremented number, or quote marker);
+  // Enter on an empty item exits the list. Returns true when it handled the key (so Enter doesn't send).
+  function handleListEnter(): boolean {
+    const el = composerRef.current;
+    if (!el || el.selectionStart !== el.selectionEnd) return false;
+    const caret = el.selectionStart ?? 0;
+    const lineStart = reply.lastIndexOf('\n', caret - 1) + 1;
+    const line = reply.slice(lineStart, caret);
+    let indent = '', marker = '', content = '', mm: RegExpExecArray | null;
+    if ((mm = /^(\s*)([-*])\s+(.*)$/.exec(line))) { indent = mm[1]; marker = `${mm[2]} `; content = mm[3]; }
+    else if ((mm = /^(\s*)(\d+)\.\s+(.*)$/.exec(line))) { indent = mm[1]; marker = `${parseInt(mm[2], 10) + 1}. `; content = mm[3]; }
+    else if ((mm = /^(\s*)>\s?(.*)$/.exec(line))) { indent = mm[1]; marker = '> '; content = mm[2]; }
+    else return false;
+    if (content.trim() === '') { // empty item -> drop the marker and end the list
+      const next = reply.slice(0, lineStart) + reply.slice(caret);
+      setReply(next); touch();
+      requestAnimationFrame(() => { el.focus(); el.setSelectionRange(lineStart, lineStart); });
+      return true;
+    }
+    const insert = `\n${indent}${marker}`;
+    const next = reply.slice(0, caret) + insert + reply.slice(caret);
+    setReply(next); touch();
+    requestAnimationFrame(() => { el.focus(); const p = caret + insert.length; el.setSelectionRange(p, p); });
+    return true;
+  }
   const FMT_TOOLS: { icon: typeof Bold; title: string; fn: () => void }[] = [
     { icon: Bold, title: 'Bold (Ctrl/Cmd+B)', fn: () => surround('**', '**', 'bold') },
     { icon: Italic, title: 'Italic (Ctrl/Cmd+I)', fn: () => surround('*', '*', 'italic') },
@@ -601,7 +626,10 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
                       const mod = e.metaKey || e.ctrlKey;
                       if (mod && (e.key === 'b' || e.key === 'B')) { e.preventDefault(); surround('**', '**', 'bold'); return; }
                       if (mod && (e.key === 'i' || e.key === 'I')) { e.preventDefault(); surround('*', '*', 'italic'); return; }
-                      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        if (handleListEnter()) { e.preventDefault(); return; } // continue/exit a list instead of sending
+                        e.preventDefault(); send();
+                      }
                     }}/>
                   <button onClick={send} disabled={!reply.trim()} className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center disabled:opacity-40" style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: reply.trim() ? 'pointer' : 'not-allowed' }}><Send className="w-4 h-4"/></button>
                 </div>
