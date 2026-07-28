@@ -11,7 +11,7 @@
 // already on screen are reflected, not just new ones.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Hash, Send, Loader2, Trash2, Pencil, AlertCircle, RefreshCw, Check, BarChart2, Plus, X, Bold, Italic, Strikethrough, Code2, Link as LinkIcon, List, ListOrdered, Quote, ArrowLeft } from 'lucide-react';
+import { Send, Loader2, Trash2, Pencil, AlertCircle, RefreshCw, Check, BarChart2, Plus, X, Bold, Italic, Strikethrough, Code2, Link as LinkIcon, List, ListOrdered, Quote, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { LIGHT_C } from '@/lib/theme';
 
@@ -560,7 +560,7 @@ export function GroupForum({ assignmentId, groupId, userId, C, onBack, members =
       <div className="flex items-center gap-2.5 px-4 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${C.divider}` }}>
         {members.length > 0
           ? <Facepile members={members} C={C}/>
-          : <span className="inline-flex items-center justify-center rounded-lg flex-shrink-0" style={{ width: 30, height: 30, background: `${C.green}1a`, color: C.green }}><Hash className="w-[18px] h-[18px]"/></span>}
+          : <span role="img" aria-label="megaphone" className="inline-flex items-center justify-center rounded-lg flex-shrink-0" style={{ width: 30, height: 30, background: `${C.green}1a`, fontSize: 17, lineHeight: 1 }}>📣</span>}
         <div className="min-w-0 leading-tight flex-1">
           <div className="text-[15px] font-bold tracking-tight truncate" style={{ color: C.text }}>Group channel</div>
           <div className="text-[11px] truncate" style={{ color: C.faint }}>{members.length > 0 ? `${members.length} ${members.length === 1 ? 'member' : 'members'} - members only` : 'Members only - plan your group work here'}</div>
@@ -588,7 +588,7 @@ export function GroupForum({ assignmentId, groupId, userId, C, onBack, members =
 
             {posts.length === 0 ? (
               <div className="flex flex-col items-center text-center gap-2 py-10 m-auto">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: `${C.green}18`, color: C.green }}><Hash className="w-6 h-6"/></div>
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: `${C.green}18`, fontSize: 26, lineHeight: 1 }} role="img" aria-label="megaphone">📣</div>
                 <p className="text-sm font-semibold" style={{ color: C.text }}>Start the channel</p>
                 <p className="text-xs max-w-xs" style={{ color: C.muted }}>Say hello, drop a link, or run a quick poll to get the group talking.</p>
               </div>

@@ -23,7 +23,7 @@ import { GroupForum } from '@/components/student/GroupForum';
 import { Sk, EmptyState, StatusBadge } from '@/components/student/shared';
 import {
   BookOpen, ClipboardList, Users, ChevronDown, X, CheckCircle, AlertCircle, Star,
-  ExternalLink, Loader2, FileText, Plus, ArrowLeft, Upload, RefreshCw, Check, Hash, ArrowRight,
+  ExternalLink, Loader2, FileText, Plus, ArrowLeft, Upload, RefreshCw, Check, ArrowRight,
 } from 'lucide-react';
 
 // --- Assignments section ---
@@ -465,7 +465,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
         <button onClick={() => setDiscussionOpen(true)}
           className="w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 mb-4 text-left"
           style={{ background: `${C.green}12`, border: `1px solid ${C.green}40`, cursor: 'pointer' }}>
-          <span className="inline-flex items-center justify-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: C.green, color: '#fff' }}><Hash className="w-5 h-5"/></span>
+          <span role="img" aria-label="Group channel" className="inline-flex items-center justify-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: `${C.green}18`, fontSize: 22, lineHeight: 1 }}>📣</span>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold" style={{ color: C.text }}>Group channel</p>
             <p className="text-xs mt-0.5" style={{ color: C.muted }}>Chat, share links, and run polls with your group.{groupMembers.length ? ` ${groupMembers.length} members.` : ''}</p>
