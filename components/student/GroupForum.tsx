@@ -149,8 +149,9 @@ function PollCard({ poll, onVote, canManage, onDelete, C }: {
             <button key={i} onClick={() => onVote(i)} className={`gf-poll-opt relative w-full text-left overflow-hidden${picked ? ' is-picked' : ''}`}
               style={{ borderRadius: 12, border: `2px solid ${picked ? C.green : 'transparent'}`, background: C.pill,
                 boxShadow: `0 2px 0 ${C.divider}`, padding: 0, cursor: 'pointer' }}>
-              {/* result fill: revealed only after voting, grows from the left (accent tint for all bars) */}
-              {voted && <div aria-hidden className="gf-poll-fill" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, transformOrigin: 'left', transform: `scaleX(${pct / 100})`, background: picked ? `${C.green}3d` : `${C.green}17` }}/>}
+              {/* result fill: revealed only after voting, grows from the left with a rounded right end
+                 (width-based, since scaleX would distort the corner radius) */}
+              {voted && <div aria-hidden className="gf-poll-fill" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: `${pct}%`, borderRadius: '0 10px 10px 0', background: picked ? `${C.green}3d` : `${C.green}17` }}/>}
               <div className="relative flex items-center gap-2.5 px-3 py-2.5">
                 <span className="flex-shrink-0 flex items-center justify-center rounded-full" style={{ width: 18, height: 18, border: `2px solid ${picked ? C.green : C.faint}`, background: picked ? C.green : 'transparent', transition: 'background .15s, border-color .15s' }}>
                   {picked && <Check className="w-3 h-3" strokeWidth={3} style={{ color: '#fff' }}/>}
@@ -515,7 +516,7 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
       .gf-poll-opt:not(.is-picked):hover { border-color: ${C.green} !important; }
       .gf-poll-opt:active { transform: translateY(2px); box-shadow: none !important; }
       .gf-poll-opt:focus-visible { outline: 2px solid ${C.green}; outline-offset: 2px; }
-      .gf-poll-fill { transition: transform .55s cubic-bezier(.22, 1, .36, 1); }
+      .gf-poll-fill { transition: width .55s cubic-bezier(.22, 1, .36, 1); }
       @media (prefers-reduced-motion: reduce) {
         .gf-poll-opt, .gf-poll-fill { transition: none !important; }
         .gf-poll-opt:active { transform: none; }
