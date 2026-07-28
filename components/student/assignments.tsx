@@ -441,7 +441,8 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
     return (
       <div className={isScenarioStandard ? 'sa-scenario-font' : undefined} style={isScenarioStandard ? { fontFamily: "'Google Sans Text', 'Inter', sans-serif" } : undefined}>
         {isScenarioStandard && <style>{`.sa-scenario-font .rich-content { font-family: 'Google Sans Text', 'Inter', sans-serif; }`}</style>}
-        <GroupForum assignmentId={assignment.id} groupId={myGroupId} userId={userId} C={C} onBack={() => setDiscussionOpen(false)}/>
+        <GroupForum assignmentId={assignment.id} groupId={myGroupId} userId={userId} C={C} onBack={() => setDiscussionOpen(false)}
+          members={groupMembers.map((m: any) => ({ id: m.student_id ?? m.id, name: m.students?.full_name ?? null, avatar: m.students?.avatar_url ?? null }))}/>
       </div>
     );
   }

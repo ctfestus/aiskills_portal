@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { LIGHT_C } from '@/lib/theme';
 
 interface PollData { question: string; options: string[]; counts: number[]; totalVotes: number; myVote: number | null; }
+interface Member { id: string; name?: string | null; avatar?: string | null; }
 interface Thread { id: string; authorId: string | null; }
 interface Post { id: string; authorId: string | null; authorName: string | null; authorAvatar?: string | null; body: string | null; kind?: 'text' | 'poll'; poll?: PollData | null; createdAt: string; updatedAt: string; deleted: boolean; edited: boolean; _optimistic?: boolean; _failed?: boolean; }
 
@@ -118,6 +119,29 @@ function Avatar({ name, src, size = 30, C }: { name?: string | null; src?: strin
   );
 }
 
+// Overlapping stack of member photos (a facepile) for the channel header. Each avatar sits ~70% over
+// the previous with a window-colored ring cutting the gap; beyond a cap it shows a "+N" chip.
+function Facepile({ members, C, size = 28, max = 5 }: { members: Member[]; C: typeof LIGHT_C; size?: number; max?: number }) {
+  const shown = members.slice(0, max);
+  const extra = members.length - shown.length;
+  const ring = `0 0 0 2px ${C.card}`;
+  return (
+    <div className="flex items-center flex-shrink-0">
+      {shown.map((m, i) => (
+        <div key={m.id} className="rounded-full flex" style={{ marginLeft: i === 0 ? 0 : -Math.round(size * 0.7), zIndex: shown.length - i, boxShadow: ring }}>
+          <Avatar name={m.name} src={m.avatar} size={size} C={C}/>
+        </div>
+      ))}
+      {extra > 0 && (
+        <div className="rounded-full flex items-center justify-center font-bold flex-shrink-0"
+          style={{ marginLeft: -Math.round(size * 0.7), zIndex: 0, width: size, height: size, fontSize: size * 0.34, background: C.pill, color: C.muted, boxShadow: ring }}>
+          +{extra}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // A poll rendered inside the conversation: the question plus tappable options with live result bars.
 // Your current choice is highlighted; tapping another option changes your vote. Counts only - who
 // voted for what is never sent to the client.
@@ -170,7 +194,7 @@ function PollCard({ poll, onVote, canManage, onDelete, C }: {
   );
 }
 
-export function GroupForum({ assignmentId, groupId, userId, C, onBack }: { assignmentId: string; groupId: string; userId: string; C: typeof LIGHT_C; onBack?: () => void }) {
+export function GroupForum({ assignmentId, groupId, userId, C, onBack, members = [] }: { assignmentId: string; groupId: string; userId: string; C: typeof LIGHT_C; onBack?: () => void; members?: Member[] }) {
   const [thread, setThread] = useState<Thread | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -533,10 +557,12 @@ export function GroupForum({ assignmentId, groupId, userId, C, onBack }: { assig
       {styleTag}
       {/* Slack-style channel header */}
       <div className="flex items-center gap-2.5 px-4 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${C.divider}` }}>
-        <span className="inline-flex items-center justify-center rounded-lg flex-shrink-0" style={{ width: 30, height: 30, background: `${C.green}1a`, color: C.green }}><Hash className="w-[18px] h-[18px]"/></span>
+        {members.length > 0
+          ? <Facepile members={members} C={C}/>
+          : <span className="inline-flex items-center justify-center rounded-lg flex-shrink-0" style={{ width: 30, height: 30, background: `${C.green}1a`, color: C.green }}><Hash className="w-[18px] h-[18px]"/></span>}
         <div className="min-w-0 leading-tight flex-1">
           <div className="text-[15px] font-bold tracking-tight truncate" style={{ color: C.text }}>Group channel</div>
-          <div className="text-[11px] truncate" style={{ color: C.faint }}>Members only - plan your group work here</div>
+          <div className="text-[11px] truncate" style={{ color: C.faint }}>{members.length > 0 ? `${members.length} ${members.length === 1 ? 'member' : 'members'} - members only` : 'Members only - plan your group work here'}</div>
         </div>
         {onBack && (
           <button onClick={onBack} title="Back to assignment" className="flex-shrink-0 inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg whitespace-nowrap" style={{ background: C.pill, color: C.muted, border: 'none', cursor: 'pointer' }}>
