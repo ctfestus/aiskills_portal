@@ -128,7 +128,7 @@ function PollCard({ poll, onVote, canManage, onDelete, C }: {
   const voted = poll.myVote != null;
   const lead = voted ? Math.max(...poll.counts, 0) : -1; // top count, to accent the leading option
   return (
-    <div className="rounded-2xl" style={{ background: C.card, border: `1px solid ${C.divider}`, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', padding: '12px 14px' }}>
+    <div className="rounded-2xl" style={{ background: C.pill, border: `1px solid ${C.divider}`, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', padding: '12px 14px' }}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] font-extrabold uppercase tracking-wider inline-flex items-center gap-1" style={{ color: C.green }}>
           <BarChart2 className="w-3 h-3"/> Poll
@@ -147,7 +147,7 @@ function PollCard({ poll, onVote, canManage, onDelete, C }: {
           const leading = voted && c > 0 && c === lead;
           return (
             <button key={i} onClick={() => onVote(i)} className={`gf-poll-opt relative w-full text-left overflow-hidden${picked ? ' is-picked' : ''}`}
-              style={{ borderRadius: 12, border: `2px solid ${picked ? C.green : 'transparent'}`, background: C.pill,
+              style={{ borderRadius: 12, border: `2px solid ${picked ? C.green : 'transparent'}`, background: C.card,
                 boxShadow: `0 2px 0 ${C.divider}`, padding: 0, cursor: 'pointer' }}>
               {/* result fill: revealed only after voting, grows from the left with a rounded right end
                  (width-based, since scaleX would distort the corner radius) */}
@@ -529,23 +529,27 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
   );
 
   return (
-    <div>
+    <div className="flex flex-col rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.divider}`, boxShadow: '0 10px 34px rgba(0,0,0,0.10)', height: '70vh' }}>
       {styleTag}
-      <div className="flex items-center gap-2 mb-3">
-        <span className="inline-flex items-center justify-center rounded-lg" style={{ width: 26, height: 26, background: `${C.green}1a`, color: C.green }}><Hash className="w-4 h-4"/></span>
-        <h3 className="text-[15px] font-bold tracking-tight" style={{ color: C.text }}>Group channel</h3>
+      {/* Slack-style channel header */}
+      <div className="flex items-center gap-2.5 px-4 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${C.divider}` }}>
+        <span className="inline-flex items-center justify-center rounded-lg flex-shrink-0" style={{ width: 30, height: 30, background: `${C.green}1a`, color: C.green }}><Hash className="w-[18px] h-[18px]"/></span>
+        <div className="min-w-0 leading-tight">
+          <div className="text-[15px] font-bold tracking-tight" style={{ color: C.text }}>Group channel</div>
+          <div className="text-[11px]" style={{ color: C.faint }}>Members only - plan your group work here</div>
+        </div>
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-sm py-10 justify-center" style={{ color: C.muted }}><Loader2 className="w-4 h-4 animate-spin"/> Loading...</div>
+        <div className="flex-1 flex items-center gap-2 text-sm justify-center" style={{ color: C.muted }}><Loader2 className="w-4 h-4 animate-spin"/> Loading...</div>
       ) : error ? (
-        <div className="flex items-center gap-2 text-sm py-6 justify-center" style={{ color: '#ef4444' }}>
+        <div className="flex-1 flex flex-wrap items-center gap-2 text-sm justify-center px-4 text-center" style={{ color: '#ef4444' }}>
           <AlertCircle className="w-4 h-4"/> {error}
           <button onClick={() => location.reload()} className="inline-flex items-center gap-1 ml-2" style={{ background: 'none', border: 'none', color: C.green, cursor: 'pointer' }}><RefreshCw className="w-3.5 h-3.5"/> Retry</button>
         </div>
       ) : (
         <>
-          <div ref={scrollRef} onScroll={onScroll} className="flex flex-col py-1" style={{ maxHeight: '55vh', minHeight: 180, overflowY: 'auto', overflowX: 'hidden' }}>
+          <div ref={scrollRef} onScroll={onScroll} className="flex-1 flex flex-col px-3 py-2" style={{ minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
             {hasMoreEarlier && (
               <button onClick={loadEarlier} className="text-xs font-medium mb-2 self-center" style={{ background: 'none', border: 'none', color: C.green, cursor: 'pointer', padding: '4px 8px' }}>Load earlier messages</button>
             )}
@@ -596,9 +600,9 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
                       : <div className="text-sm break-words" style={{ color: C.text, lineHeight: 1.5 }}><RichText text={p.body || ''} C={C}/></div>}
                     {p._failed && <button onClick={() => retryFailed(p)} className="text-[11px] font-semibold self-start mt-0.5" style={{ background: 'none', border: 'none', color: C.green, cursor: 'pointer' }}>Retry</button>}
                   </div>
-                  {mine && !p._optimistic && (
+                  {mine && !p._optimistic && !isPoll && (
                     <div className="gf-actions absolute flex gap-1" style={{ top: 2, right: 6 }}>
-                      {!isPoll && <button onClick={() => { setEditingId(p.id); setEditDraft(p.body || ''); }} title="Edit" className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: C.card, border: `1px solid ${C.divider}`, color: C.faint, cursor: 'pointer' }}><Pencil className="w-3 h-3"/></button>}
+                      <button onClick={() => { setEditingId(p.id); setEditDraft(p.body || ''); }} title="Edit" className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: C.card, border: `1px solid ${C.divider}`, color: C.faint, cursor: 'pointer' }}><Pencil className="w-3 h-3"/></button>
                       <button onClick={() => removePost(p)} title="Delete" className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: C.card, border: `1px solid ${C.divider}`, color: C.faint, cursor: 'pointer' }}><Trash2 className="w-3 h-3"/></button>
                     </div>
                   )}
@@ -607,7 +611,7 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
             })}
           </div>
 
-          <div className="pt-3 mt-1" style={{ borderTop: `1px solid ${C.divider}` }}>
+          <div className="px-3 pt-3 pb-3 flex-shrink-0" style={{ borderTop: `1px solid ${C.divider}` }}>
             {showPoll ? (
               <div className="rounded-2xl px-3 py-3" style={{ background: C.input, border: `1px solid ${C.divider}` }}>
                 <div className="flex items-center justify-between mb-2">
