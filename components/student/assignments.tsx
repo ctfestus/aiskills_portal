@@ -23,7 +23,7 @@ import { GroupForum } from '@/components/student/GroupForum';
 import { Sk, EmptyState, StatusBadge } from '@/components/student/shared';
 import {
   BookOpen, ClipboardList, Users, ChevronDown, X, CheckCircle, AlertCircle, Star,
-  ExternalLink, Loader2, FileText, Plus, ArrowLeft, Upload, RefreshCw, Check, MessageSquare,
+  ExternalLink, Loader2, FileText, Plus, ArrowLeft, Upload, RefreshCw, Check, Hash,
 } from 'lucide-react';
 
 // --- Assignments section ---
@@ -446,9 +446,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
           style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 0 }}>
           <ArrowLeft className="w-4 h-4"/> Back to assignment
         </button>
-        <div className="rounded-2xl px-4 py-4" style={{ background: C.card }}>
-          <GroupForum assignmentId={assignment.id} groupId={myGroupId} userId={userId} C={C}/>
-        </div>
+        <GroupForum assignmentId={assignment.id} groupId={myGroupId} userId={userId} C={C}/>
       </div>
     );
   }
@@ -618,7 +616,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
                 <button onClick={() => setDiscussionOpen(true)}
                   className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg"
                   style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: 'pointer' }}>
-                  <MessageSquare className="w-3.5 h-3.5"/> Discussion
+                  <Hash className="w-3.5 h-3.5"/> Group channel
                 </button>
               )}
             </div>
@@ -966,7 +964,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               </>
             ) : (
               <p className="text-xs rounded-lg px-3 py-2" style={{ background: C.thumbBg, color: C.muted }}>
-                Only your group leader can submit the final work. Use the group discussion above to plan with your group, and you can view the submission here once it has been made.
+                Only your group leader can submit the final work. Use the group channel above to plan with your group, and you can view the submission here once it has been made.
               </p>
             )}
           </div>

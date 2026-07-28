@@ -11,7 +11,7 @@
 // already on screen are reflected, not just new ones.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { MessageSquare, Send, Loader2, Trash2, Pencil, AlertCircle, RefreshCw, Check, BarChart2, Plus, X, Bold, Italic, Strikethrough, Code2, Link as LinkIcon, List, ListOrdered, Quote } from 'lucide-react';
+import { Hash, Send, Loader2, Trash2, Pencil, AlertCircle, RefreshCw, Check, BarChart2, Plus, X, Bold, Italic, Strikethrough, Code2, Link as LinkIcon, List, ListOrdered, Quote } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { LIGHT_C } from '@/lib/theme';
 
@@ -455,8 +455,8 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
 
   const styleTag = (
     <style>{`
-      /* Slack/Teams-style rows: full-width, hover highlights the row and reveals the grouped-line
-         time + the author's own edit/delete actions. */
+      /* Rows highlight subtly on hover, revealing the grouped-line time and the author's own
+         edit/delete actions. */
       .gf-msg { border-radius: 6px; }
       .gf-msg:hover { background: ${C.pill}; }
       .gf-msg .gf-actions, .gf-msg .gf-ts { opacity: 0; transition: opacity .12s; }
@@ -471,9 +471,10 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
   return (
     <div>
       {styleTag}
-      <h3 className="text-sm font-bold inline-flex items-center gap-1.5 mb-3" style={{ color: C.text }}>
-        <MessageSquare className="w-4 h-4" style={{ color: C.green }}/> Group discussion
-      </h3>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="inline-flex items-center justify-center rounded-lg" style={{ width: 26, height: 26, background: `${C.green}1a`, color: C.green }}><Hash className="w-4 h-4"/></span>
+        <h3 className="text-[15px] font-bold tracking-tight" style={{ color: C.text }}>Group channel</h3>
+      </div>
 
       {loading ? (
         <div className="flex items-center gap-2 text-sm py-10 justify-center" style={{ color: C.muted }}><Loader2 className="w-4 h-4 animate-spin"/> Loading...</div>
@@ -491,9 +492,9 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
 
             {posts.length === 0 ? (
               <div className="flex flex-col items-center text-center gap-2 py-10 m-auto">
-                <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: `${C.green}18` }}><MessageSquare className="w-6 h-6" style={{ color: C.green }}/></div>
-                <p className="text-sm font-semibold" style={{ color: C.text }}>No messages yet</p>
-                <p className="text-xs max-w-xs" style={{ color: C.muted }}>Say hello, ask a question, share a link, or run a quick poll to get started.</p>
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: `${C.green}18`, color: C.green }}><Hash className="w-6 h-6"/></div>
+                <p className="text-sm font-semibold" style={{ color: C.text }}>Start the channel</p>
+                <p className="text-xs max-w-xs" style={{ color: C.muted }}>Say hello, drop a link, or run a quick poll to get the group talking.</p>
               </div>
             ) : posts.map((p, i) => {
               const mine = p.authorId === userId;
