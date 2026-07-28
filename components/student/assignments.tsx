@@ -23,7 +23,7 @@ import { GroupForum } from '@/components/student/GroupForum';
 import { Sk, EmptyState, StatusBadge } from '@/components/student/shared';
 import {
   BookOpen, ClipboardList, Users, ChevronDown, X, CheckCircle, AlertCircle, Star,
-  ExternalLink, Loader2, FileText, Plus, ArrowLeft, Upload, RefreshCw, Check, Hash,
+  ExternalLink, Loader2, FileText, Plus, ArrowLeft, Upload, RefreshCw, Check, Hash, ArrowRight,
 } from 'lucide-react';
 
 // --- Assignments section ---
@@ -460,6 +460,20 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
       {/* Scenario-based standard assignments show the title inside the player's right pane. */}
       {!isScenarioStandard && <h1 className="text-[22px] font-bold tracking-tight mb-5" style={{ color: C.text }}>{assignment.title}</h1>}
 
+      {/* Prominent entry to the group channel so students don't miss it. */}
+      {isGroupAssignment && myGroupId && (
+        <button onClick={() => setDiscussionOpen(true)}
+          className="w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 mb-4 text-left"
+          style={{ background: `${C.green}12`, border: `1px solid ${C.green}40`, cursor: 'pointer' }}>
+          <span className="inline-flex items-center justify-center rounded-xl flex-shrink-0" style={{ width: 40, height: 40, background: C.green, color: '#fff' }}><Hash className="w-5 h-5"/></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold" style={{ color: C.text }}>Group channel</p>
+            <p className="text-xs mt-0.5" style={{ color: C.muted }}>Chat, share links, and run polls with your group.{groupMembers.length ? ` ${groupMembers.length} members.` : ''}</p>
+          </div>
+          <span className="flex-shrink-0 inline-flex items-center gap-1 text-xs font-semibold px-3 py-2 rounded-lg" style={{ background: C.cta, color: C.ctaText }}>Open <ArrowRight className="w-3.5 h-3.5"/></span>
+        </button>
+      )}
+
       {submitSuccess && (
         <div className="flex items-center gap-3 rounded-2xl px-5 py-4 mb-5"
           style={{ background: 'rgba(16,185,129,0.10)', border: '1px solid rgba(16,185,129,0.25)' }}>
@@ -608,13 +622,6 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
             <span className="text-sm font-bold" style={{ color: C.text }}>Members</span>
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: C.pill, color: C.muted }}>{groupMembers.length} members</span>
-              {myGroupId && (
-                <button onClick={() => setDiscussionOpen(true)}
-                  className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg"
-                  style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: 'pointer' }}>
-                  <Hash className="w-3.5 h-3.5"/> Group channel
-                </button>
-              )}
             </div>
           </div>
           <div className="flex items-center gap-3 flex-wrap pt-1">
