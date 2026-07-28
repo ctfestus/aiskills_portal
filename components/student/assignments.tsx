@@ -441,12 +441,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
     return (
       <div className={isScenarioStandard ? 'sa-scenario-font' : undefined} style={isScenarioStandard ? { fontFamily: "'Google Sans Text', 'Inter', sans-serif" } : undefined}>
         {isScenarioStandard && <style>{`.sa-scenario-font .rich-content { font-family: 'Google Sans Text', 'Inter', sans-serif; }`}</style>}
-        <button onClick={() => setDiscussionOpen(false)}
-          className="inline-flex items-center gap-1 text-sm font-semibold mb-4"
-          style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 0 }}>
-          <ArrowLeft className="w-4 h-4"/> Back to assignment
-        </button>
-        <GroupForum assignmentId={assignment.id} groupId={myGroupId} userId={userId} C={C}/>
+        <GroupForum assignmentId={assignment.id} groupId={myGroupId} userId={userId} C={C} onBack={() => setDiscussionOpen(false)}/>
       </div>
     );
   }

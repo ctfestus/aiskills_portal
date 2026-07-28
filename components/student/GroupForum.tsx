@@ -11,7 +11,7 @@
 // already on screen are reflected, not just new ones.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Hash, Send, Loader2, Trash2, Pencil, AlertCircle, RefreshCw, Check, BarChart2, Plus, X, Bold, Italic, Strikethrough, Code2, Link as LinkIcon, List, ListOrdered, Quote } from 'lucide-react';
+import { Hash, Send, Loader2, Trash2, Pencil, AlertCircle, RefreshCw, Check, BarChart2, Plus, X, Bold, Italic, Strikethrough, Code2, Link as LinkIcon, List, ListOrdered, Quote, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { LIGHT_C } from '@/lib/theme';
 
@@ -170,7 +170,7 @@ function PollCard({ poll, onVote, canManage, onDelete, C }: {
   );
 }
 
-export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId: string; groupId: string; userId: string; C: typeof LIGHT_C }) {
+export function GroupForum({ assignmentId, groupId, userId, C, onBack }: { assignmentId: string; groupId: string; userId: string; C: typeof LIGHT_C; onBack?: () => void }) {
   const [thread, setThread] = useState<Thread | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -529,15 +529,20 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
   );
 
   return (
-    <div className="flex flex-col rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.divider}`, boxShadow: '0 10px 34px rgba(0,0,0,0.10)', height: '70vh' }}>
+    <div className="flex flex-col rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.divider}`, boxShadow: '0 10px 34px rgba(0,0,0,0.10)', height: '80vh' }}>
       {styleTag}
       {/* Slack-style channel header */}
       <div className="flex items-center gap-2.5 px-4 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${C.divider}` }}>
         <span className="inline-flex items-center justify-center rounded-lg flex-shrink-0" style={{ width: 30, height: 30, background: `${C.green}1a`, color: C.green }}><Hash className="w-[18px] h-[18px]"/></span>
-        <div className="min-w-0 leading-tight">
-          <div className="text-[15px] font-bold tracking-tight" style={{ color: C.text }}>Group channel</div>
-          <div className="text-[11px]" style={{ color: C.faint }}>Members only - plan your group work here</div>
+        <div className="min-w-0 leading-tight flex-1">
+          <div className="text-[15px] font-bold tracking-tight truncate" style={{ color: C.text }}>Group channel</div>
+          <div className="text-[11px] truncate" style={{ color: C.faint }}>Members only - plan your group work here</div>
         </div>
+        {onBack && (
+          <button onClick={onBack} title="Back to assignment" className="flex-shrink-0 inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg whitespace-nowrap" style={{ background: C.pill, color: C.muted, border: 'none', cursor: 'pointer' }}>
+            <ArrowLeft className="w-3.5 h-3.5"/> <span className="hidden sm:inline">Back to assignment</span>
+          </button>
+        )}
       </div>
 
       {loading ? (
