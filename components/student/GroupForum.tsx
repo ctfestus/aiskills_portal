@@ -196,6 +196,14 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
   // without re-setting here the ref stays false after that first unmount, so every post-await setState
   // is skipped and the UI hangs on "Loading...".
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  // Grow the composer with its content so multi-line messages and continued lists stay visible
+  // (a fixed one-row box hides everything past the first line).
+  useEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [reply, showPoll]);
 
   const touch = () => { lastActivity.current = Date.now(); };
   const scrollToBottom = () => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight; };
@@ -621,7 +629,7 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
                 </div>
                 <div className="gf-composer flex items-end gap-1 rounded-2xl px-2 py-1.5" style={{ background: C.input, border: `1px solid ${C.divider}`, transition: 'border-color .12s, box-shadow .12s' }}>
                   <textarea ref={composerRef} value={reply} onChange={e => { setReply(e.target.value); touch(); }} placeholder="Message your group..." rows={1}
-                    className="flex-1" style={{ background: 'transparent', color: C.text, fontSize: 14, outline: 'none', border: 'none', resize: 'none', padding: '8px 6px', maxHeight: 120 }}
+                    className="flex-1" style={{ background: 'transparent', color: C.text, fontSize: 14, lineHeight: 1.45, outline: 'none', border: 'none', resize: 'none', padding: '8px 6px', maxHeight: 160, overflowY: 'auto' }}
                     onKeyDown={e => {
                       const mod = e.metaKey || e.ctrlKey;
                       if (mod && (e.key === 'b' || e.key === 'B')) { e.preventDefault(); surround('**', '**', 'bold'); return; }
