@@ -651,11 +651,11 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
                       }
                     </div>
                   </div>
-                  {/* Leader star badge */}
+                  {/* Leader star badge - sits halfway on the avatar's bottom-right edge */}
                   {m.is_leader && (
-                    <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center z-10"
-                      style={{ background: '#f59e0b', boxShadow: '0 1px 4px rgba(245,158,11,0.5)' }}>
-                      <Star className="w-2 h-2 fill-white" style={{ color: 'white' }}/>
+                    <div className="absolute flex items-center justify-center z-10"
+                      style={{ bottom: 0, right: 0, width: 17, height: 17, borderRadius: '9999px', background: '#f59e0b', boxShadow: `0 0 0 2px ${C.card}` }}>
+                      <Star className="w-2.5 h-2.5 fill-white" style={{ color: 'white' }}/>
                     </div>
                   )}
                   {/* Fixed-position profile popup - renders at viewport level, never clips */}
