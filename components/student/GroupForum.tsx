@@ -191,6 +191,7 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const stick = useRef(true); // keep pinned to the newest message unless the user scrolls up
+  const knownIds = useRef<Set<string>>(new Set()); // ids on screen; poll auto-scroll only for NEW ones
   const mounted = useRef(true);
   // Set true on (re)mount, not just once: React StrictMode (dev) mounts -> unmounts -> remounts, and
   // without re-setting here the ref stays false after that first unmount, so every post-await setState
@@ -204,6 +205,9 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [reply, showPoll]);
+  // Track which post ids are on screen, so polling can tell a NEW message from an in-place update
+  // (an edit, deletion, or vote tally on an existing post) and only auto-scroll for the former.
+  useEffect(() => { knownIds.current = new Set(posts.map(p => p.id)); }, [posts]);
 
   const touch = () => { lastActivity.current = Date.now(); };
   const scrollToBottom = () => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight; };
@@ -278,12 +282,16 @@ export function GroupForum({ assignmentId, groupId, userId, C }: { assignmentId:
           if (thread) {
             const json = await call({ action: 'listPosts', threadId: thread.id, mode: 'poll', cursor: pollCursor.current ?? undefined });
             if (mounted.current && json.posts?.length) {
+              const incoming = json.posts as Post[];
+              // A new message (unseen id) is worth scrolling to; an in-place update to a post already
+              // on screen (edit, deletion, or a vote changing a poll's tally) is not.
+              const hasNewMessage = incoming.some(p => !knownIds.current.has(p.id));
               setPosts(prev => {
                 const byId = new Map(prev.map(p => [p.id, p]));
-                for (const p of json.posts as Post[]) byId.set(p.id, p);
+                for (const p of incoming) byId.set(p.id, p);
                 return Array.from(byId.values()).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
               });
-              if (stick.current) setTimeout(scrollToBottom, 0);
+              if (hasNewMessage && stick.current) setTimeout(scrollToBottom, 0);
             }
             if (json?.pollCursor) pollCursor.current = json.pollCursor;
           } else {
