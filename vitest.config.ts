@@ -15,6 +15,7 @@ export default defineConfig({
       SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
       RESEND_API_KEY: 're_test_key',
       APP_URL: 'http://localhost:3000',
+      CLOUDINARY_CLOUD_NAME: 'test-cloud',
     },
   },
 });
