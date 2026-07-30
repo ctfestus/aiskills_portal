@@ -30,7 +30,7 @@ import type { QuestionTypeOrDownloads } from '@/components/create/QuestionTypePi
 import { getFontById, loadGoogleFont } from '@/lib/fonts';
 import { FontPickerModal } from '@/components/FontPickerModal';
 import { supabase } from '@/lib/supabase';
-import { uploadToCloudinary, uploadToCloudinaryWithMeta, deleteFromCloudinary } from '@/lib/uploadToCloudinary';
+import { uploadToCloudinary, uploadToCloudinaryWithMeta, deleteFromCloudinary, MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from '@/lib/uploadToCloudinary';
 import { uploadToStorage } from '@/lib/uploadToStorage';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { deleteUploadedFile } from '@/lib/storage-cleanup';
@@ -2627,6 +2627,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                             const file = e.target.files?.[0];
                                             if (!file) return;
                                             e.target.value = '';
+                                            // Two different ceilings: PDFs are proxied through /api/upload (Vercel caps
+                                            // the request body), everything else goes direct to Supabase Storage.
+                                            if (isPdfFile(file.name, file.type) && file.size > MAX_UPLOAD_BYTES) { showToast(`PDF is too large (${(file.size / 1048576).toFixed(1)} MB). Maximum is ${MAX_UPLOAD_LABEL} for PDFs.`); return; }
                                             if (file.size > 20 * 1024 * 1024) { showToast(`File is too large (${(file.size / 1048576).toFixed(1)} MB). Maximum is 20 MB.`); return; }
                                             try {
                                               if (isPdfFile(file.name, file.type)) {
@@ -3395,14 +3398,14 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                       const file = e.target.files?.[0];
                                       if (!file) return;
                                       e.target.value = '';
-                                      if (file.size > 20 * 1024 * 1024) { showToast(`PDF is too large (${(file.size / 1048576).toFixed(1)} MB). Maximum is 20 MB.`); return; }
+                                      if (file.size > MAX_UPLOAD_BYTES) { showToast(`PDF is too large (${(file.size / 1048576).toFixed(1)} MB). Maximum is ${MAX_UPLOAD_LABEL}.`); return; }
                                       try {
                                         const { url, pages } = await uploadToCloudinaryWithMeta(file, 'lesson-pdfs');
                                         handleUpdateQuestion(q.id, { lesson: { ...q.lesson, pdfUrl: url, pdfName: file.name, pdfPages: pages } });
                                       } catch (err: any) { showToast(err?.message || 'PDF upload failed. Please try again.'); }
                                     }} />
                                     <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-70" style={{ background: FE.groupBg, color: FE.muted }}>
-                                      <FileText className="w-3.5 h-3.5" /> Upload PDF (max 20 MB)
+                                      <FileText className="w-3.5 h-3.5" /> Upload PDF (max {MAX_UPLOAD_LABEL})
                                     </div>
                                   </label>
                                 )}

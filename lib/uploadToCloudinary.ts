@@ -1,3 +1,17 @@
+import { compressImageForUpload, profileFor } from '@/lib/compress-image';
+
+// Vercel rejects a serverless request body over ~4.5MB at the edge with
+// FUNCTION_PAYLOAD_TOO_LARGE, before /api/upload runs -- so the route's own 20MB limit is
+// never reached. Sit just under the platform cap so nothing that uploads today starts
+// failing: images are shrunk well below it automatically, and a non-image that is genuinely
+// too big (a large PDF) gets a readable message instead of an opaque 413.
+export const MAX_UPLOAD_BYTES = 4.3 * 1024 * 1024;
+
+/** Display form of MAX_UPLOAD_BYTES, so UI copy can never drift from the enforced limit. */
+export const MAX_UPLOAD_LABEL = '4.3 MB';
+
+const mb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
 /**
  * Upload a file to Cloudinary via the /api/upload server route.
  * Returns the secure CDN URL.
@@ -17,8 +31,19 @@ export async function uploadToCloudinaryWithMeta(
   folder: string,
   publicId?: string,
 ): Promise<{ url: string; pages: number; publicId: string }> {
+  // Raster images are downscaled/re-encoded here, with the profile chosen by folder, so a
+  // camera or phone photo is not rejected by the platform before the route can see it.
+  // Non-images pass through untouched.
+  const prepared = await compressImageForUpload(file, profileFor(folder));
+
+  if (prepared.size > MAX_UPLOAD_BYTES) {
+    throw new Error(
+      `This file is ${mb(prepared.size)}. Uploads are limited to ${mb(MAX_UPLOAD_BYTES)} -- please compress it and try again.`,
+    );
+  }
+
   const fd = new FormData();
-  fd.append('file', file);
+  fd.append('file', prepared);
   fd.append('folder', folder);
   if (publicId) fd.append('publicId', publicId);
 
