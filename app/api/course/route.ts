@@ -8,7 +8,9 @@ import { publishActivity } from '@/lib/activity';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { updateLearningPathProgress } from '@/lib/learning-path-progress';
 import { courseResultEmail } from '@/lib/email-templates';
-import { pointsSystemFromCourseRow, type PointsSystem } from '@/lib/course-schema';
+import { pointsSystemFromCourseRow, linkedInSharePointsFor, type PointsSystem } from '@/lib/course-schema';
+import { computeAttemptPoints, isScorableQuestion } from '@/lib/attempt-points';
+import { claimLinkedInShare, loadClaimedShareItemIds } from '@/lib/linkedin-share';
 import { gradeQuestion, parseAnswer, normalizePythonOutput } from '@/lib/grade-question';
 import { ensureCertificate, awardContentBadge, sendCertificateEmailOnce } from '@/lib/issue-certificate';
 import { checkRequiredSqlPatterns, compareResults, type SQLResult } from '@/lib/sql-engine';
@@ -231,6 +233,96 @@ async function loadAccessibleCourse(
   return { course };
 }
 
+/**
+ * The student's open attempt on this course, creating one if they have none.
+ *
+ * Needed by any action that must WRITE to an attempt: the LinkedIn claim (whose URL would otherwise
+ * be lost when sharing is the student's first action) and complete-attempt (a course can be finishable
+ * without a single answer, e.g. one whose only slide is an optional share they skipped). Returns null
+ * when the course is already passed, which must never be resurrected.
+ */
+type AttemptRow = { id: string; answers: Record<string, string> | null; hints_used: string[] | null };
+
+/**
+ * Distinct outcomes, because callers must treat them differently. Collapsing these into `null` made a
+ * database failure indistinguishable from "already finished", so complete-attempt reported HTTP 200
+ * success for a course it had persisted nothing for.
+ */
+type EnsureAttemptResult =
+  | { status: 'existing'; attempt: AttemptRow }
+  | { status: 'created'; attempt: AttemptRow }
+  | { status: 'already_completed' }
+  | { status: 'error' };
+
+async function ensureActiveAttempt(
+  supabase: ReturnType<typeof adminClient>,
+  courseId: string,
+  studentId: string,
+): Promise<EnsureAttemptResult> {
+  const { data: existing, error: existingError } = await supabase.from('course_attempts')
+    .select('id, answers, hints_used')
+    .eq('course_id', courseId).eq('student_id', studentId)
+    .is('completed_at', null)
+    .order('current_question_index', { ascending: false })
+    .order('updated_at', { ascending: false })
+    .limit(1).maybeSingle();
+  if (existingError) {
+    console.error('[course] attempt lookup failed', existingError);
+    return { status: 'error' };
+  }
+  if (existing) return { status: 'existing', attempt: existing as AttemptRow };
+
+  const { data: passed, error: passedError } = await supabase.from('course_attempts')
+    .select('id')
+    .eq('course_id', courseId).eq('student_id', studentId)
+    .eq('passed', true).not('completed_at', 'is', null)
+    .limit(1).maybeSingle();
+  if (passedError) {
+    console.error('[course] passed-attempt lookup failed', passedError);
+    return { status: 'error' };
+  }
+  if (passed) return { status: 'already_completed' };
+
+  // Checked like the two lookups above. There is no unique constraint on attempt_number -- only
+  // idx_ca_one_active_per_student on (student_id, course_id) WHERE completed_at IS NULL -- so a
+  // swallowed failure here would not raise; the insert would quietly land on attempt_number 1 and
+  // /api/course-progress, which picks the current attempt by `attempt_number desc`, could then rank
+  // a retake below the attempt it replaced and show the student the wrong one.
+  const { data: last, error: lastError } = await supabase.from('course_attempts').select('attempt_number')
+    .eq('course_id', courseId).eq('student_id', studentId)
+    .order('attempt_number', { ascending: false }).limit(1).maybeSingle();
+  if (lastError) {
+    console.error('[course] attempt_number lookup failed', lastError);
+    return { status: 'error' };
+  }
+
+  const { data: created, error } = await supabase.from('course_attempts')
+    .insert({
+      student_id: studentId,
+      course_id: courseId,
+      attempt_number: (last?.attempt_number ?? 0) + 1,
+      answers: {},
+    })
+    .select('id, answers, hints_used')
+    .single();
+
+  if (error || !created) {
+    // A concurrent request may have created it between the lookup and the insert.
+    if ((error as { code?: string } | null)?.code === '23505') {
+      const { data: race } = await supabase.from('course_attempts')
+        .select('id, answers, hints_used')
+        .eq('course_id', courseId).eq('student_id', studentId)
+        .is('completed_at', null)
+        .order('updated_at', { ascending: false })
+        .limit(1).maybeSingle();
+      if (race) return { status: 'existing', attempt: race as AttemptRow };
+    }
+    console.error('[course] could not create attempt', error);
+    return { status: 'error' };
+  }
+  return { status: 'created', attempt: created as AttemptRow };
+}
+
 async function markSolutionViewed(
   supabase: ReturnType<typeof adminClient>,
   courseId: string,
@@ -394,6 +486,13 @@ export async function POST(req: NextRequest) {
 
     try {
       const supabase = adminClient();
+      // Access check. These actions use the service-role client, which bypasses RLS, so without
+      // this a signed-in user holding any course UUID could create progress on -- or complete --
+      // a course they were never assigned, including an unpublished one. loadAccessibleCourse
+      // mirrors the course SELECT policy (owner, staff, assigned cohort, or published learning path).
+      const access = await loadAccessibleCourse(supabase, course_id, sessionUser, 'id, user_id, status, cohort_ids');
+      if (access.error) return access.error;
+
       const [{ data: cert }, { data: progress }, { count: attemptCount }, { data: passingAttempt }] = await Promise.all([
         supabase.from('certificates').select('id')
           .eq('course_id', course_id).eq('student_id', sessionUser.id).eq('revoked', false)
@@ -586,30 +685,160 @@ export async function POST(req: NextRequest) {
   }
 
   // -- Save in-progress attempt (create if needed) ---
+  // -- Claim a LinkedIn post for a share slide ---
+  // Synchronous (unlike save-progress) because only the server knows whether the post is already
+  // claimed, and the student needs that answer inline. This route is the ONLY writer of a share
+  // slide's answer: save-progress lets stored answers win, so the client echoing the URL back is
+  // ignored, and linkedin_shares has no client write policy at all.
+  if (action === 'claim-linkedin-share') {
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { course_id, question_id, post_url } = body;
+    if (!course_id || !question_id) {
+      return NextResponse.json({ error: 'course_id and question_id are required' }, { status: 400 });
+    }
+    if (typeof post_url !== 'string' || !post_url.trim()) {
+      return NextResponse.json({ error: 'invalid_url' }, { status: 400 });
+    }
+
+    try {
+      const supabase = adminClient();
+      const access = await loadAccessibleCourse(supabase, course_id, sessionUser);
+      if (access.error) return access.error;
+
+      const questions: any[] = Array.isArray((access.course as any).questions) ? (access.course as any).questions : [];
+      const slide = questions.find(q => q?.id === question_id && q?.isLinkedInShare);
+      if (!slide) return NextResponse.json({ error: 'Share slide not found' }, { status: 404 });
+
+      // Bonus comes from the stored course config, never from the request body.
+      const points = linkedInSharePointsFor(slide);
+
+      // Their own LinkedIn profile, collected at onboarding, is what the post's author is checked
+      // against. Read server-side so the client cannot supply whichever profile fits the post.
+      const { data: profileRow } = await supabase
+        .from('students').select('social_links').eq('id', sessionUser.id).maybeSingle();
+      const studentProfileUrl = (profileRow as any)?.social_links?.linkedin ?? null;
+
+      const claim = await claimLinkedInShare(supabase, {
+        studentId:   sessionUser.id,
+        contentType: 'course',
+        contentId:   course_id,
+        itemId:      question_id,
+        postUrl:     post_url,
+        points,
+        studentProfileUrl,
+      });
+
+      if (!claim.ok) {
+        if (claim.code === 'already_claimed') return NextResponse.json({ error: 'already_claimed' }, { status: 409 });
+        if (claim.code === 'author_mismatch') return NextResponse.json({ error: 'author_mismatch' }, { status: 403 });
+        if (claim.code === 'no_profile')      return NextResponse.json({ error: 'no_profile' }, { status: 422 });
+        if (claim.code === 'no_author_in_url') return NextResponse.json({ error: 'no_author_in_url' }, { status: 400 });
+        if (claim.code === 'invalid_url')      return NextResponse.json({ error: 'invalid_url' }, { status: 400 });
+        return NextResponse.json({ error: 'Failed to save your link.' }, { status: 500 });
+      }
+
+      // Mirror the canonical URL into the attempt so the slide reads as completed on reload,
+      // CREATING the attempt if the student has none: sharing can be their very first action, and
+      // save-progress deliberately strips share answers (only this action may write them), so
+      // without this the claim would exist in linkedin_shares while the slide looked unfinished.
+      // Returns null for an already-passed course, which must not be resurrected.
+      // The claim row is already written and this mirror is a SECOND statement, so the two can
+      // disagree if it fails. That ordering is deliberate, not incidental -- do not reverse it:
+      //
+      //   claim first (here)  the UI under-reports (slide looks unfinished) while the server
+      //                       over-reports (the gate reads linkedin_shares, so it passes and the
+      //                       bonus is awarded). The student did post, so awarding it is right.
+      //   answer first        the UI would say done while completion is refused with
+      //                       share_required -- and an answer with no claim behind it is exactly the
+      //                       forged state save-progress is written to reject.
+      //
+      // The window is one statement wide and self-heals: the same slot upserts, so a retry repairs
+      // it. Eliminating it entirely needs both writes in one transaction (an RPC, as
+      // complete_ve_assignment does); the URL, author and uniqueness checks would stay here in TS.
+      const ensured = await ensureActiveAttempt(supabase, course_id, sessionUser.id);
+      if (ensured.status === 'error') {
+        // No attempt to mirror into. Report it so the student retries rather than silently ending up
+        // with a claim whose slide still reads as unfinished.
+        return NextResponse.json({ error: 'Failed to save your link.' }, { status: 500 });
+      }
+
+      // An already-passed course has no open attempt to mirror into, and must not be resurrected.
+      if (ensured.status !== 'already_completed') {
+        const existingAnswers = ensured.attempt.answers && typeof ensured.attempt.answers === 'object'
+          ? ensured.attempt.answers
+          : {};
+        const { error: updateError } = await supabase.from('course_attempts')
+          .update({ answers: { ...existingAnswers, [question_id]: claim.url }, updated_at: new Date().toISOString() })
+          .eq('id', ensured.attempt.id);
+        if (updateError) {
+          console.error('[course/claim-linkedin-share] attempt update', updateError);
+          return NextResponse.json({ error: 'Failed to save your link.' }, { status: 500 });
+        }
+      }
+
+      return NextResponse.json({ ok: true, url: claim.url, points });
+    } catch (err: any) {
+      console.error('[course/claim-linkedin-share]', err);
+      return NextResponse.json({ error: 'Failed to save your link.' }, { status: 500 });
+    }
+  }
+
   if (action === 'save-progress') {
     const sessionUser = await getSessionUser(req);
     if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const { course_id, current_question_index, answers, streak, hints_used, points } = body;
+    // `points` is deliberately NOT destructured from the body: it is computed below, never accepted.
+    const { course_id, current_question_index, answers, streak, hints_used } = body;
     if (!course_id) return NextResponse.json({ error: 'course_id required' }, { status: 400 });
 
     try {
       const supabase = adminClient();
 
-      let courseResult = await supabase.from('courses').select('id, question_types').eq('id', course_id).single();
-      if (courseResult.error && (courseResult.error as any).code !== 'PGRST116') {
-        courseResult = await supabase.from('courses').select('id, questions').eq('id', course_id).single();
-      }
-      const course = courseResult.data;
-      if (courseResult.error || !course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+      const POINTS_COLS = 'points_enabled, points_base, points_system';
+      const ACCESS_COLS = 'id, user_id, status, cohort_ids';
+      // `questions` (not just the lightweight question_types projection) because points are now
+      // computed here from the stored answers, and grading needs each question's answer key. Those
+      // keys must never reach the browser, which is why this stays a service-role read and why the
+      // projection was not widened to carry them.
+      // Access check. These actions use the service-role client, which bypasses RLS, so without
+      // this a signed-in user holding any course UUID could create progress on -- or complete --
+      // a course they were never assigned, including an unpublished one. loadAccessibleCourse
+      // mirrors the course SELECT policy (owner, staff, assigned cohort, or published learning path).
+      const access = await loadAccessibleCourse(supabase, course_id, sessionUser, `${ACCESS_COLS}, questions, ${POINTS_COLS}`);
+      if (access.error) return access.error;
+      const course = access.course as any;
 
       const incomingIndex = Number.isFinite(Number(current_question_index))
         ? Number(current_question_index)
         : 0;
       const incomingAnswers = answers && typeof answers === 'object' && !Array.isArray(answers) ? answers : {};
       const incomingHints = Array.isArray(hints_used) ? hints_used : [];
-      const incomingPoints = Number.isFinite(Number(points)) ? Number(points) : 0;
       const incomingStreak = Number.isFinite(Number(streak)) ? Number(streak) : 0;
-      const qTypes = questionTypeMap((course as any).question_types ?? (course as any).questions);
+      const slides: any[] = Array.isArray((course as any).questions) ? (course as any).questions : [];
+      const qTypes = questionTypeMap(slides);
+      // A share slide's answer is written ONLY by claim-linkedin-share, which validates the URL,
+      // its author and its uniqueness. Without this, a client could post any string here and the
+      // slide would read as claimed on reload -- Continue enabled, progress inflated -- right up
+      // until complete-attempt refused.
+      const shareSlideIdSet = new Set(
+        slides.filter((s: any) => s?.isLinkedInShare === true).map((s: any) => String(s.id)),
+      );
+      for (const key of Object.keys(incomingAnswers)) {
+        if (shareSlideIdSet.has(key)) delete (incomingAnswers as Record<string, unknown>)[key];
+      }
+
+      // `points` from the request body is IGNORED. It used to be stored (bounded by a ceiling), but a
+      // ceiling is not proof of work: a student could report the course maximum without answering
+      // anything, and course_attempts.points feeds student_xp -- so it showed on the leaderboard.
+      // The total is computed from the answers actually stored, by the same function
+      // complete-attempt uses, so mid-course XP still counts and still comes from the server.
+      const sharePointsSystem = pointsSystemFromCourseRow(course);
+
+      // Share bonuses are part of the total, and are gated on a claim rather than on the URL in
+      // `answers`. Loaded once here so the payload builder can run synchronously.
+      const claimedShares = shareSlideIdSet.size > 0
+        ? await loadClaimedShareItemIds(supabase, { studentId: sessionUser.id, contentId: course_id })
+        : new Set<string>();
 
       // Attempt count carried inside a __review_<id> snapshot; used to decide which review state is newer.
       const reviewCount = (val: unknown): number => {
@@ -659,12 +888,27 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        const mergedHints = [...new Set([...existingHints, ...incomingHints])];
+        const computedPoints = computeAttemptPoints({
+          questions: slides,
+          storedAnswers: mergedAnswers,
+          hintsUsed: mergedHints,
+          pointsSystem: sharePointsSystem,
+          claimedShareItemIds: claimedShares,
+          isCorrect: q => gradeQuestion(q, {
+            storedAnswers: mergedAnswers,
+            persistedAnswers: mergedAnswers,
+            verifySqlProof: (questionId, query, proof) => verifySqlProof(course_id, sessionUser.id, questionId, query, proof),
+            verifyProof: (questionId, output, proof) => verifyPythonProof(course_id, questionId, output, proof),
+          }),
+        });
+
         return {
           current_question_index: Math.max(existingIndex, incomingIndex),
           answers:                mergedAnswers,
           streak:                 Math.max(existing?.streak ?? 0, incomingStreak),
-          hints_used:             [...new Set([...existingHints, ...incomingHints])],
-          points:                 Math.max(existing?.points ?? 0, incomingPoints),
+          hints_used:             mergedHints,
+          points:                 computedPoints,
           updated_at:             new Date().toISOString(),
         };
       };
@@ -742,33 +986,50 @@ export async function POST(req: NextRequest) {
     try {
       const supabase = adminClient();
 
-      const [{ data: courseData }, { data: attempt }, { data: studentRow }] = await Promise.all([
-        supabase.from('courses')
-          .select('questions, passmark, points_enabled, points_base, points_system')
-          .eq('id', course_id).single(),
-        supabase.from('course_attempts')
-          .select('id, answers, hints_used')
-          .eq('course_id', course_id).eq('student_id', sessionUser.id)
-          .is('completed_at', null)
-          .order('current_question_index', { ascending: false })
-          .order('updated_at', { ascending: false })
-          .limit(1).maybeSingle(),
-        supabase.from('students').select('full_name').eq('id', sessionUser.id).single(),
-      ]);
+      // Access check. These actions use the service-role client, which bypasses RLS, so without
+      // this a signed-in user holding any course UUID could create progress on -- or complete --
+      // a course they were never assigned, including an unpublished one. loadAccessibleCourse
+      // mirrors the course SELECT policy (owner, staff, assigned cohort, or published learning path).
+      const access = await loadAccessibleCourse(
+        supabase, course_id, sessionUser,
+        'id, user_id, status, cohort_ids, questions, passmark, points_enabled, points_base, points_system',
+      );
+      if (access.error) return access.error;
+      const courseData = access.course as any;
+
+      const { data: studentRow } = await supabase
+        .from('students').select('full_name').eq('id', sessionUser.id).single();
 
       if (!courseData) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
-      if (!attempt) return NextResponse.json({ ok: true, ignored: 'no_active_attempt' });
 
-      if (attempt && courseData) {
+      // A course can be finishable without the student having answered anything -- the clearest
+      // case is a course whose only slide is an OPTIONAL LinkedIn share they skipped, which writes
+      // no answer and so never triggers save-progress. Returning ignored:'no_active_attempt' there
+      // looked like success to the client while persisting nothing: no attempt, no certificate.
+      const ensured = await ensureActiveAttempt(supabase, course_id, sessionUser.id);
+      if (ensured.status === 'error') {
+        return NextResponse.json({ error: 'Failed to complete attempt.' }, { status: 500 });
+      }
+      if (ensured.status === 'already_completed') {
+        return NextResponse.json({ ok: true, ignored: 'already_completed' });
+      }
+      const activeAttempt = ensured.attempt;
+
+      if (activeAttempt && courseData) {
         // Server-side scoring - client-supplied score/passed/points are ignored.
         // Merge final_answers (sent by client) over stored answers so that the last
         // lessonOnly 'viewed' entry is always present, regardless of race timing.
         const questions: any[]              = Array.isArray(courseData.questions) ? courseData.questions : [];
-        const persistedAnswers: Record<string, string> = attempt.answers ?? {};
+        const persistedAnswers: Record<string, string> = activeAttempt.answers ?? {};
         const qTypes = questionTypeMap(questions);
         const storedAnswers: Record<string, string> = { ...persistedAnswers };
         const incomingFinalAnswers = final_answers && typeof final_answers === 'object' ? final_answers : {};
+        // Share slides are written only by claim-linkedin-share, so the client must not be able to
+        // swap in a different (or junk) URL at completion and corrupt the audit trail. The XP itself
+        // is gated on linkedin_shares below, so this protects the record rather than the reward.
+        const shareSlideIds = new Set(questions.filter(q => q?.isLinkedInShare).map(q => String(q.id)));
         for (const key of Object.keys(incomingFinalAnswers)) {
+          if (shareSlideIds.has(key)) continue;
           const type = qTypes.get(key);
           if (isProofRequiredQuestion(type)) {
             const ctx = { courseId: course_id, studentId: sessionUser.id, questionId: key };
@@ -782,10 +1043,28 @@ export async function POST(req: NextRequest) {
           }
           storedAnswers[key] = incomingFinalAnswers[key];
         }
-        const hintsUsed: string[]           = attempt.hints_used ?? [];
+        // A required share slide is a SERVER gate, not just a disabled button. The player blocks
+        // Continue and the finish dialog, but posting straight to this action would otherwise
+        // complete the attempt, grade it, and issue the certificate with nothing shared. Loaded once
+        // here and reused for the bonus below.
+        const claimedShares = shareSlideIds.size > 0
+          ? await loadClaimedShareItemIds(supabase, { studentId: sessionUser.id, contentId: course_id })
+          : new Set<string>();
+        const missingRequiredShares = questions.filter(q =>
+          q?.isLinkedInShare && q.linkedInShareRequired !== false && !claimedShares.has(String(q.id)));
+        if (missingRequiredShares.length > 0) {
+          return NextResponse.json({
+            error: 'share_required',
+            missing: missingRequiredShares.map(q => String(q.id)),
+          }, { status: 409 });
+        }
+
+        const hintsUsed: string[]           = activeAttempt.hints_used ?? [];
         const passmark                      = courseData.passmark ?? 50;
 
-        const scorable = questions.filter(q => !q.lessonOnly && !q.isSection && !q.isDownloads);
+        // Mirrors isScorableSlide() in components/CourseTaker.tsx -- share slides earn bonus XP but
+        // are never graded, so counting them would drag the percentage down.
+        const scorable = questions.filter(isScorableQuestion);
         let correct = 0;
         const scoreQuestion = (q: any): boolean => gradeQuestion(q, {
           storedAnswers,
@@ -803,69 +1082,15 @@ export async function POST(req: NextRequest) {
         const passed    = scorePct >= passmark;
         const pointsSystem: PointsSystem = pointsSystemFromCourseRow(courseData);
 
-        const answerMetaFor = (q: any) => {
-          const raw = storedAnswers[q.id];
-          const parsed = parseAnswer(raw) ?? {};
-          const meta = parseAnswer(storedAnswers[`__meta_${q.id}`]) ?? {};
-          const elapsedRaw = meta.elapsedSeconds ?? parsed.elapsedSeconds;
-          const elapsed = Number(elapsedRaw);
-          const answeredAtRaw = meta.answeredAt ?? parsed.answeredAt ?? parsed.checkedAt;
-          const answeredAtMs = answeredAtRaw ? Date.parse(String(answeredAtRaw)) : NaN;
-          return {
-            parsed,
-            elapsedSeconds: Number.isFinite(elapsed) && elapsed >= 0 ? elapsed : null,
-            answeredAtMs: Number.isFinite(answeredAtMs) ? answeredAtMs : null,
-          };
-        };
-
-        const calculateEarned = (q: any, pointStreak: number, elapsedSeconds: number | null) => {
-          const withinTimeBonus = pointsSystem.timeBonusEnabled
-            && elapsedSeconds != null
-            && elapsedSeconds <= pointsSystem.timeBonusSeconds;
-          const timeMultiplier = withinTimeBonus ? pointsSystem.timeBonusMultiplier : 1;
-          let earned = Math.round(pointsSystem.basePoints * timeMultiplier);
-          const isStreak = pointsSystem.streakEnabled && pointStreak >= pointsSystem.streakCount;
-          if (isStreak) {
-            earned = pointsSystem.streakBonus > 0
-              ? earned + pointsSystem.streakBonus
-              : Math.round(earned * 1.2);
-          }
-          if (hintsUsed.includes(q.id)) earned = Math.max(0, earned - pointsSystem.hintPenalty);
-          return earned;
-        };
-
-        const pointEvents = scorable
-          .map((q, index) => {
-            const meta = answerMetaFor(q);
-            return {
-              q,
-              index,
-              raw: storedAnswers[q.id],
-              correct: scoreQuestion(q),
-              solutionViewed: !!meta.parsed?.solutionViewed,
-              elapsedSeconds: meta.elapsedSeconds,
-              answeredAtMs: meta.answeredAtMs,
-            };
-          })
-          .filter(e => e.raw != null)
-          .sort((a, b) => (a.answeredAtMs ?? Number.POSITIVE_INFINITY) - (b.answeredAtMs ?? Number.POSITIVE_INFINITY) || a.index - b.index);
-
-        let computed_points = 0;
-        if (pointsSystem.enabled) {
-          let pointStreak = 0;
-          for (const event of pointEvents) {
-            if (event.correct) {
-              pointStreak += 1;
-              computed_points += calculateEarned(event.q, pointStreak, event.elapsedSeconds);
-            } else {
-              pointStreak = 0;
-              if (event.solutionViewed) {
-                computed_points = Math.max(0, computed_points - pointsSystem.solutionPenalty);
-              }
-            }
-          }
-          computed_points = Math.max(0, Math.round(computed_points));
-        }
+        // Same function save-progress uses, so the number never jumps at submission.
+        const computed_points = computeAttemptPoints({
+          questions,
+          storedAnswers,
+          hintsUsed,
+          pointsSystem,
+          claimedShareItemIds: claimedShares,
+          isCorrect: scoreQuestion,
+        });
 
         const { error: updateError } = await supabase.from('course_attempts').update({
           completed_at:           new Date().toISOString(),
@@ -875,7 +1100,7 @@ export async function POST(req: NextRequest) {
           current_question_index: Math.max(Number(current_question_index) || 0, questions.length),
           answers:                storedAnswers,
           updated_at:             new Date().toISOString(),
-        }).eq('id', attempt.id);
+        }).eq('id', activeAttempt.id);
 
         if (updateError) {
           console.error('[course/complete-attempt] attempt update failed', updateError);

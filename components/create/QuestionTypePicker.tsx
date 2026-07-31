@@ -7,10 +7,11 @@ import {
   Code2, Bot, Table2, BarChart2, ScrollText,
   Database, Terminal, Download,
 } from 'lucide-react';
+import { LinkedInIcon } from '@/components/LinkedInIcon';
 import { useTheme } from '@/components/ThemeProvider';
 import type { QuestionType } from '@/lib/course-schema';
 
-export type QuestionTypeOrDownloads = QuestionType | 'downloads';
+export type QuestionTypeOrDownloads = QuestionType | 'downloads' | 'linkedin_share';
 
 export const TYPE_LABELS: Record<QuestionTypeOrDownloads, string> = {
   multiple_choice:    'Multiple Choice',
@@ -26,12 +27,17 @@ export const TYPE_LABELS: Record<QuestionTypeOrDownloads, string> = {
   sql_exercise:       'SQL Exercise',
   python_exercise:    'Python Exercise',
   downloads:          'Downloads',
+  linkedin_share:     'LinkedIn Share',
 };
 
 type TypeEntry = { value: QuestionTypeOrDownloads; label: string; icon: React.ReactNode; wide?: boolean };
 
 // Types only offered when a caller explicitly allows them (e.g. certifications), hidden by default.
 const OPT_IN_TYPES = new Set<QuestionTypeOrDownloads>(['image_choice']);
+
+// Standalone slide kinds rather than question types -- they carry no answer, so an existing question
+// can never be "changed into" one. Gated together by the includeDownloads prop.
+const SLIDE_ONLY_TYPES = new Set<QuestionTypeOrDownloads>(['downloads', 'linkedin_share']);
 
 const CATEGORIES: Array<{ label: string; color: string; types: TypeEntry[] }> = [
   {
@@ -68,7 +74,8 @@ const CATEGORIES: Array<{ label: string; color: string; types: TypeEntry[] }> = 
     label: 'Resources',
     color: '#6b7280',
     types: [
-      { value: 'downloads', label: 'Downloads', icon: <Download className="w-[15px] h-[15px]" />, wide: true },
+      { value: 'downloads',      label: 'Downloads',     icon: <Download className="w-[15px] h-[15px]" /> },
+      { value: 'linkedin_share', label: 'LinkedIn Share', icon: <LinkedInIcon className="w-[15px] h-[15px]" /> },
     ],
   },
 ];
@@ -127,7 +134,7 @@ export function QuestionTypePicker({ onSelect, onClose, includeDownloads = true,
         {/* Categories */}
         <div className="px-3.5 pb-3.5">
           {CATEGORIES.map((cat, catIdx) => {
-            let types = includeDownloads ? cat.types : cat.types.filter(t => t.value !== 'downloads');
+            let types = includeDownloads ? cat.types : cat.types.filter(t => !SLIDE_ONLY_TYPES.has(t.value));
             if (allowedTypes) types = types.filter(t => allowedTypes.includes(t.value));
             // image_choice is opt-in (certifications): hidden unless explicitly allowed.
             else types = types.filter(t => !OPT_IN_TYPES.has(t.value));

@@ -17,18 +17,21 @@ import { getToolIcon } from '@/lib/tool-icons';
 import { computeAccess } from '@/lib/enrollment-access';
 import { LIGHT_C } from '@/lib/theme';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
+import { courseProgressCounts, courseProgressPct } from '@/lib/course-progress';
 import { CarouselSkeleton, EmptyState, ProgressBar, HoverPreviewCard, stripSqlSolutions } from '@/components/student/shared';
 
 // --- Course card ---
 function CourseCard({ course, deadline, C, onDetails, hideCategory }: { course: any; deadline?: Date | null; C: typeof LIGHT_C; onDetails: () => void; hideCategory?: boolean }) {
   const questions = course.form?.questions ?? course.config?.questions ?? course.form?.config?.questions ?? [];
-  const countableQ = questions.filter((q: any) => !q.isSection);
-  const answeredQ = countableQ.filter((q: any) => !!(course.answers ?? {})[q.id]).length;
-  const totalQ = countableQ.length;
+  // Shared rule: an unclaimed optional LinkedIn slide leaves the denominator, so a student who
+  // skipped it is not shown short of 100%.
+  const courseCounts = courseProgressCounts(questions, course.answers ?? {});
+  const answeredQ = courseCounts.done;
+  const totalQ = courseCounts.total;
   const currentIdx = course.current_question_index ?? 0;
   const completed = !!course.completed_at;
   const passed = course.passed === true;
-  const progress = completed ? 100 : (totalQ > 0 ? Math.round((answeredQ / totalQ) * 100) : 0);
+  const progress = completed ? 100 : courseProgressPct(questions, course.answers ?? {});
   const score = course.score ?? 0;
   const coverImage = course.config?.coverImage ?? course.form?.config?.coverImage;
   const description: string = course.form?.config?.description ?? course.form?.description ?? '';
@@ -165,14 +168,17 @@ function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT
   const lessons = questions.filter((q: any) => q.lesson?.title || q.lesson?.body || q.lesson?.doc);
   const lessonCount = lessons.length;
   const countableDetailQ = questions.filter((q: any) => !q.isSection);
-  const answeredDetailQ = countableDetailQ.filter((q: any) => !!(course.answers ?? {})[q.id]).length;
   const assessmentCount = countableDetailQ.length;
+  // Shared rule for the percentage; assessmentCount above stays the plain slide tally, since it
+  // labels how much the course contains rather than how far this student has got.
+  const detailCounts = courseProgressCounts(questions, course.answers ?? {});
+  const answeredDetailQ = detailCounts.done;
   const currentIdx = course.current_question_index ?? 0;
   const completed = !!course.completed_at;
   const passed = course.passed === true;
   const score = course.score ?? 0;
   const certId: string | null = course.cert_id ?? null;
-  const progress = completed ? 100 : (assessmentCount > 0 ? Math.round((answeredDetailQ / assessmentCount) * 100) : 0);
+  const progress = completed ? 100 : courseProgressPct(questions, course.answers ?? {});
   const [imgErr, setImgErr] = useState(false);
 
   const courseUrl = `/${course.slug || course.form?.slug || course.form_id}`;
@@ -241,7 +247,7 @@ function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT
                 <div className="mt-2 space-y-1">
                   <div className="flex justify-between text-xs" style={{ color: C.faint }}>
                     <span>{progress}% complete</span>
-                    <span>{Math.min(currentIdx, assessmentCount)} / {assessmentCount} questions</span>
+                    <span>{detailCounts.done} / {detailCounts.total} slides</span>
                   </div>
                   <ProgressBar value={progress} color={C.green}/>
                 </div>
@@ -652,10 +658,11 @@ function ToolRow({ tool, courses, deadlines, C, onDetails }: { tool: string; cou
           const title      = c.form?.title ?? 'Untitled Course';
           const status     = completed ? 'Completed' : currentIdx > 0 ? 'In progress' : null;
           const questions  = c.form?.questions ?? c.form?.config?.questions ?? [];
-          const countableQ = questions.filter((q: any) => !q.isSection);
-          const answeredQ  = countableQ.filter((q: any) => !!(c.answers ?? {})[q.id]).length;
-          const totalQ     = countableQ.length;
-          const progress   = completed ? 100 : (totalQ > 0 ? Math.round((answeredQ / totalQ) * 100) : 0);
+          // Shared rule, so a skipped optional LinkedIn slide does not show as unfinished.
+          const cardCounts = courseProgressCounts(questions, c.answers ?? {});
+          const answeredQ  = cardCounts.done;
+          const totalQ     = cardCounts.total;
+          const progress   = completed ? 100 : courseProgressPct(questions, c.answers ?? {});
           return (
             <div key={c.form_id} className="flex-shrink-0 w-[220px] snap-start"
               onMouseEnter={(e) => openHover(c, e.currentTarget)} onMouseLeave={scheduleClose}>

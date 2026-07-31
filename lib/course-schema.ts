@@ -72,6 +72,15 @@ export interface CourseQuestion {
   downloadsTitle?: string;
   downloadsDescription?: string;
   downloadItems?: DownloadItem[];
+  // LinkedIn share slide: the student pastes the URL of the post where they shared their work.
+  // Non-graded (excluded from scoring like isSection/isDownloads) but earns bonus XP, awarded
+  // server-side in /api/course complete-attempt only against a live claim in linkedin_shares.
+  isLinkedInShare?: boolean;
+  linkedInShareTitle?: string;
+  linkedInShareDescription?: string;   // sanitized HTML
+  linkedInSharePrompt?: string;        // suggested post text, offered to the student to copy
+  linkedInSharePoints?: number;        // bonus XP; DEFAULT_LINKEDIN_SHARE_POINTS when unset
+  linkedInShareRequired?: boolean;     // defaults to true -- blocks the slide until a valid post URL
   lesson?: {
     title?: string;
     body?: string;          // sanitized HTML; canonical for legacy lessons, lossy fallback when `doc` is present
@@ -280,6 +289,51 @@ export interface CertificationPrepItem {
 }
 
 // --- Defaults ---
+
+/** Bonus XP a LinkedIn share slide awards when the author does not set an amount. */
+export const DEFAULT_LINKEDIN_SHARE_POINTS = 50;
+
+/** Highest bonus a single share slide may award, however the course config was authored. */
+export const MAX_LINKEDIN_SHARE_POINTS = 200;
+
+export function clampLinkedInSharePoints(value: unknown): number {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(n, MAX_LINKEDIN_SHARE_POINTS);
+}
+
+/**
+ * The bonus a share slide actually awards.
+ *
+ * The distinction that matters: an UNSET amount means "use the default", but an explicit **0** means
+ * zero. Treating both as falsy made the landing page advertise 50 XP for a slide the server awarded
+ * nothing for. Every surface that needs this number -- the award, the ceiling, the advertised total --
+ * must go through here.
+ */
+export function linkedInSharePointsFor(question: { linkedInSharePoints?: unknown } | null | undefined): number {
+  const raw = question?.linkedInSharePoints;
+  if (raw == null || raw === '') return DEFAULT_LINKEDIN_SHARE_POINTS;
+  return clampLinkedInSharePoints(raw);
+}
+
+/**
+ * A fresh LinkedIn share slide. Shared by the create page and FormEditor -- courses have two
+ * separate editors, and a slide built inline in each would drift.
+ */
+export function newLinkedInShareSlide(id: string): CourseQuestion {
+  return {
+    id,
+    isLinkedInShare: true,
+    linkedInShareTitle: 'Share your work on LinkedIn',
+    linkedInShareDescription: '',
+    linkedInSharePrompt: '',
+    linkedInSharePoints: DEFAULT_LINKEDIN_SHARE_POINTS,
+    linkedInShareRequired: true,
+    question: '',
+    options: [],
+    correctAnswer: '',
+  };
+}
 
 export const DEFAULT_POINTS_SYSTEM: PointsSystem = {
   enabled: true,

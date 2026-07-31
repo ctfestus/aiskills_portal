@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminClient } from '@/lib/admin-client';
 import { requireRole, isAuthError } from '@/lib/api-auth';
+import { veProgressPct } from '@/lib/ve-completion';
+import { courseProgressCounts, courseProgressPct } from '@/lib/course-progress';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +13,8 @@ function daysSince(dateStr: string | null | undefined): number | null {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
 }
 
+// VE percentages route through veProgressPct so they agree with the completion gate; the raw
+// requirement total below is still used for the "x of y" display on non-VE items.
 function totalRequirementsFromModules(modules: any): number {
   let total = 0;
   for (const mod of modules ?? []) {
@@ -204,7 +208,9 @@ export async function GET(req: NextRequest) {
         ? totalRequirementsFromModules(item.modules)
         : isAssignment
           ? 0
-          : ((item.questions as any[])?.filter((q: any) => !q.isSection).length ?? 0);
+          // Course denominator excludes an optional share this student never claimed, so it is
+          // resolved per student below rather than once for the item.
+          : 0;
 
     const itemStudents = itemCohortIds.flatMap(cid => studentsByCohort.get(cid) ?? []);
 
@@ -232,9 +238,7 @@ export async function GET(req: NextRequest) {
           lastActive = attempt.updated_at ?? null;
           const days = daysSince(lastActive);
           status = days !== null && days >= STALL_DAYS ? 'stalled' : 'in_progress';
-          if (total > 0) {
-            progressPct = Math.round((completedRequirements(attempt.progress) / total) * 100);
-          }
+          progressPct = veProgressPct(veModulesMap.get(item.ve_form_id!) ?? [], attempt.progress ?? {});
         } else {
           status = 'not_started';
         }
@@ -267,12 +271,12 @@ export async function GET(req: NextRequest) {
           lastActive = attempt.updated_at ?? null;
           const days = daysSince(lastActive);
           status = days !== null && days >= STALL_DAYS ? 'stalled' : 'in_progress';
-          if (total > 0) {
-            const answeredCount = isVE ? 0 : ((item.questions as any[])?.filter((q: any) => !q.isSection && !!(attempt.answers ?? {})[q.id]).length ?? 0);
-            progressPct = isVE
-              ? Math.round((completedRequirements(attempt.progress) / total) * 100)
-              : Math.round((answeredCount / total) * 100);
-          }
+          // Not guarded on `total`: the course denominator is resolved per student inside
+          // courseProgressPct (an unclaimed optional share leaves it), so the item-level total is
+          // 0 for courses and gating on it would report every course at 0%.
+          progressPct = isVE
+            ? veProgressPct(item.modules ?? [], attempt.progress ?? {})
+            : courseProgressPct((item.questions as any[]) ?? [], attempt.answers ?? {});
         }
       }
 

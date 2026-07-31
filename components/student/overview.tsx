@@ -9,6 +9,8 @@ import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import { LIGHT_C } from '@/lib/theme';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
+import { veProgressPct, veCompletionCounts, isVeComplete } from '@/lib/ve-completion';
+import { courseProgressCounts, courseProgressPct } from '@/lib/course-progress';
 import { CarouselSkeleton, ProgressBar, HoverPreviewCard, stripSqlSolutions } from '@/components/student/shared';
 import type { SectionId } from '@/components/student/nav';
 import {
@@ -20,14 +22,16 @@ import {
 // Progress (answered/total or requirements done) for an in-progress course or project
 function inProgressProgress(form: any, attempt: any, isProject: boolean) {
   if (isProject) {
-    const total = (form.config?.modules ?? []).reduce((a: number, m: any) => a + (m.lessons ?? []).reduce((b: number, l: any) => b + (l.requirements ?? []).length, 0), 0);
-    const done  = Object.values(attempt?.progress ?? {}).filter((v: any) => v?.completed).length;
-    return { done, total, pct: total > 0 ? Math.round((done / total) * 100) : 0 };
+    // Shared rule: a skipped optional LinkedIn share must not drag this below 100%.
+    const modules = form.config?.modules ?? [];
+    const counts = veCompletionCounts(modules, attempt?.progress ?? {});
+    return { done: counts.doneReqs, total: counts.totalReqs, pct: veProgressPct(modules, attempt?.progress ?? {}) };
   }
-  const countable = (form.config?.questions ?? []).filter((q: any) => !q.isSection);
-  const total = countable.length;
-  const done  = countable.filter((q: any) => !!(attempt?.answers ?? {})[q.id]).length;
-  return { done, total, pct: total > 0 ? Math.round((done / total) * 100) : 0 };
+  // Shared rule: an unclaimed optional LinkedIn slide must not drag this below 100%.
+  const questions = form.config?.questions ?? [];
+  const answers = attempt?.answers ?? {};
+  const counts = courseProgressCounts(questions, answers);
+  return { done: counts.done, total: counts.total, pct: courseProgressPct(questions, answers) };
 }
 
 // Rich hover preview for an in-progress item
@@ -149,6 +153,11 @@ export function OverviewSection({ user, userEmail, C, onNavigate }: {
   const [loading, setLoading]               = useState(true);
   const [courses, setCourses]               = useState<any[]>([]);
   const [courseAttempts, setCourseAttempts] = useState<Record<string, any>>({});
+  // Read from student_xp rather than summed here, so this figure and the leaderboard cannot disagree:
+  // both come from recalc_student_xp. Summing course_attempts.points locally picked one attempt per
+  // course by a slightly different rule than the trigger uses, and could land on an in-progress
+  // attempt -- whose points the browser used to report.
+  const [totalXP, setTotalXP] = useState(0);
   const [gpAttempts, setGpAttempts]         = useState<Record<string, any>>({});
   const [deadlines, setDeadlines]           = useState<Record<string, Date | null>>({});
   const [certs, setCerts]                   = useState<any[]>([]);
@@ -323,6 +332,10 @@ export function OverviewSection({ user, userEmail, C, onNavigate }: {
         if (a.deadline_date) dlMap[a.id] = new Date(a.deadline_date);
       }
 
+      const { data: xpRow } = await supabase
+        .from('student_xp').select('total_xp').eq('student_id', user.id).maybeSingle();
+      setTotalXP((xpRow as any)?.total_xp ?? 0);
+
       setCourses(allLearning);
       setCourseAttempts(caMap);
       setGpAttempts(gpMap);
@@ -367,11 +380,9 @@ export function OverviewSection({ user, userEmail, C, onNavigate }: {
     if (!a) return false;
     if (a.completed_at) return true;
     if (proj) {
-      const totalReqs = (f.config?.modules ?? []).reduce(
-        (acc: number, m: any) => acc + (m.lessons ?? []).reduce((b: number, l: any) => b + (l.requirements ?? []).length, 0), 0
-      );
-      const doneReqs = Object.values(a.progress ?? {}).filter((v: any) => v?.completed).length;
-      return totalReqs > 0 && doneReqs >= totalReqs;
+      // Same verdict the server reaches, so an item finished by skipping an optional share does
+      // not linger in the In Progress row.
+      return isVeComplete(veCompletionCounts(f.config?.modules ?? [], a.progress ?? {}));
     } else {
       const totalQ = (f.config?.questions ?? []).length;
       return totalQ > 0 && (a.current_question_index ?? 0) >= totalQ;
@@ -383,8 +394,6 @@ export function OverviewSection({ user, userEmail, C, onNavigate }: {
     const a    = proj ? gpAttempts[f.id] : courseAttempts[f.id];
     return isEffectivelyDone(f, a, proj);
   }).length;
-
-  const totalXP = Object.values(courseAttempts).reduce((sum: number, a: any) => sum + (a?.points ?? 0), 0);
 
   // In-progress items sorted by last active -- most recent first
   const inProgressItems = [...courses]

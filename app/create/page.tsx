@@ -15,12 +15,13 @@ import {
   Download, Link2, FileText, Database, ArrowLeft, Lock, LockOpen,
   Clock, Users, Globe, Repeat, Code2, RefreshCw, Music, FileCode,
 } from 'lucide-react';
+import { LinkedInIcon } from '@/components/LinkedInIcon';
 import { ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import type {
   FieldType, FormField, QuestionType, DownloadItem, CourseQuestion,
   Speaker, EventDetails, PostSubmission, PointsMilestone, PointsSystem, FormConfig,
 } from '@/lib/course-schema';
-import { pointsSystemFromCourseRow } from '@/lib/course-schema';
+import { pointsSystemFromCourseRow, newLinkedInShareSlide, DEFAULT_LINKEDIN_SHARE_POINTS, MAX_LINKEDIN_SHARE_POINTS } from '@/lib/course-schema';
 import { useC } from '@/components/create/theme';
 import { SocialIcon, FIELD_TYPE_LABELS, TEMPLATES, SOCIAL_PLATFORMS, Toggle, SwitchToggle, inputCls, labelCls } from '@/components/create/shared';
 import { SortableFieldCard } from '@/components/create/SortableFieldCard';
@@ -1252,6 +1253,7 @@ const [isSaving, setIsSaving] = useState(false);
     const type = overrideType ?? newQuestionType;
     if (!formConfig) return;
     if (type === 'downloads') { handleAddDownloads(); return; }
+    if (type === 'linkedin_share') { handleAddLinkedInShare(); return; }
     const id = Math.random().toString(36).substring(7);
     const defaults: Record<QuestionType, Partial<CourseQuestion>> = {
       multiple_choice:     { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A' },
@@ -1297,6 +1299,12 @@ const [isSaving, setIsSaving] = useState(false);
     });
   };
 
+  const handleAddLinkedInShare = () => {
+    if (!formConfig) return;
+    const id = Math.random().toString(36).substring(7);
+    updateConfig({ questions: [...(formConfig.questions || []), newLinkedInShareSlide(id)] });
+  };
+
   const insertSectionAt = (afterIndex: number) => {
     if (!formConfig) return;
     const id = Math.random().toString(36).substring(7);
@@ -1314,6 +1322,12 @@ const [isSaving, setIsSaving] = useState(false);
       const id = Math.random().toString(36).substring(7);
       const qs = [...(formConfig.questions || [])];
       qs.splice(afterIndex + 1, 0, { id, isDownloads: true, downloadsTitle: 'Downloads', downloadsDescription: '', downloadItems: [], question: '', options: [], correctAnswer: '' } as CourseQuestion);
+      updateConfig({ questions: qs });
+      return;
+    }
+    if (type === 'linkedin_share') {
+      const qs = [...(formConfig.questions || [])];
+      qs.splice(afterIndex + 1, 0, newLinkedInShareSlide(Math.random().toString(36).substring(7)));
       updateConfig({ questions: qs });
       return;
     }
@@ -1350,7 +1364,8 @@ const [isSaving, setIsSaving] = useState(false);
     } else if (pickerCtx.mode === 'insert') {
       insertQuestionAt(pickerCtx.afterIndex, type);
     } else if (pickerCtx.mode === 'change') {
-      if (type === 'downloads') return;
+      // Slide kinds carry no answer, so an existing question cannot be converted into one.
+      if (type === 'downloads' || type === 'linkedin_share') return;
       const q = formConfig?.questions?.find(qq => qq.id === pickerCtx.qId);
       if (!q) return;
       const qType = q.type ?? 'multiple_choice';
@@ -3250,6 +3265,112 @@ const [isSaving, setIsSaving] = useState(false);
                               style={inputStyle}
                             />
                           </div>
+                        </div>
+                        {insertDivider}
+                        </React.Fragment>
+                      );
+                    }
+
+                    // -- LinkedIn share block card --
+                    // Keep in sync with the identical card in components/FormEditor.tsx: create and
+                    // edit are two separate editors.
+                    if (q.isLinkedInShare) {
+                      const patch = (changes: Partial<CourseQuestion>) =>
+                        updateConfig({ questions: formConfig.questions?.map(qq => qq.id === q.id ? { ...qq, ...changes } : qq) });
+                      const required = q.linkedInShareRequired !== false;
+
+                      return (
+                        <React.Fragment key={q.id}>
+                        <div className="rounded-xl overflow-hidden" style={{ background: C.card, border: `1px solid #0A66C240`, borderLeft: '3px solid #0A66C2' }}>
+                          {/* Header */}
+                          <div className="flex items-center gap-2 px-3.5 py-2.5" style={{ borderBottom: isExpanded ? `1px solid ${C.divider}` : 'none' }}>
+                            <button type="button" onClick={() => toggleQuestion(q.id)} className="flex-1 text-left">
+                              <span className="text-[10px] font-bold tracking-widest uppercase flex items-center gap-1.5" style={{ color: '#0A66C2' }}>
+                                <LinkedInIcon className="w-3 h-3" /> {q.linkedInShareTitle || 'LinkedIn Share'}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => patch({ lockUntilPrevious: !q.lockUntilPrevious })}
+                              title={q.lockUntilPrevious ? 'Locked until the previous lesson is completed' : 'Lock until the previous lesson is completed'}
+                              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all"
+                              style={q.lockUntilPrevious ? { background: accentColor, color: C.ctaText } : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.faint }}
+                            >
+                              {q.lockUntilPrevious ? <Lock className="w-3 h-3" /> : <LockOpen className="w-3 h-3" />} Lock
+                            </button>
+                            <button type="button" onClick={() => updateConfig({ questions: formConfig.questions?.filter(qq => qq.id !== q.id) })}
+                              className="p-1 rounded transition-colors hover:bg-red-500/10">
+                              <X className="w-3.5 h-3.5 text-red-400" />
+                            </button>
+                            <button type="button" onClick={() => toggleQuestion(q.id)} className="p-1 transition-colors" style={{ color: C.faint }}>
+                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+
+                          {isExpanded && <div className="px-3.5 py-3 space-y-3">
+                            <input
+                              value={q.linkedInShareTitle || ''}
+                              onChange={e => patch({ linkedInShareTitle: e.target.value })}
+                              placeholder="Slide title e.g. Share your certificate on LinkedIn"
+                              className={`${inputCls} font-semibold`}
+                              style={inputStyle}
+                            />
+
+                            <RichTextEditor
+                              value={q.linkedInShareDescription || ''}
+                              onChange={html => patch({ linkedInShareDescription: html })}
+                              placeholder="Tell students what to post and why it helps them..."
+                              enableAiAssist
+                            />
+
+                            {/* Suggested caption the student can copy straight into LinkedIn. */}
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold tracking-widest uppercase" style={{ color: C.faint }}>
+                                Suggested post text
+                              </label>
+                              <textarea
+                                value={q.linkedInSharePrompt || ''}
+                                onChange={e => patch({ linkedInSharePrompt: e.target.value })}
+                                placeholder="Optional. Students can copy this as a starting point for their post."
+                                rows={4}
+                                className={inputCls}
+                                style={inputStyle}
+                              />
+                            </div>
+
+                            <div className="flex flex-wrap items-end gap-3">
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold tracking-widest uppercase" style={{ color: C.faint }}>
+                                  Bonus XP (max {MAX_LINKEDIN_SHARE_POINTS})
+                                </label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={MAX_LINKEDIN_SHARE_POINTS}
+                                  value={q.linkedInSharePoints ?? DEFAULT_LINKEDIN_SHARE_POINTS}
+                                  onChange={e => patch({ linkedInSharePoints: Math.min(MAX_LINKEDIN_SHARE_POINTS, Math.max(0, Number(e.target.value) || 0)) })}
+                                  className={inputCls}
+                                  style={{ ...inputStyle, width: 110 }}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => patch({ linkedInShareRequired: !required })}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all"
+                                style={required
+                                  ? { background: accentColor, color: C.ctaText }
+                                  : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.faint }}
+                              >
+                                {required ? <Lock className="w-3 h-3" /> : <LockOpen className="w-3 h-3" />}
+                                {required ? 'Required to continue' : 'Optional'}
+                              </button>
+                            </div>
+
+                            <p className="text-[11px] leading-relaxed" style={{ color: C.faint }}>
+                              Students paste the link to their own LinkedIn post. The link is checked, and a post
+                              already submitted by someone else is rejected. This slide is not scored.
+                            </p>
+                          </div>}
                         </div>
                         {insertDivider}
                         </React.Fragment>

@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, CheckCircle2, ArrowRight, MapPin, Building2, ExternalLink, Calendar, Download, Copy, Check, Star, BookOpen, FileText, Zap, Clock } from 'lucide-react';
 import { AnimatedField, ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
+import { courseXpOnOffer } from '@/lib/course-progress';
 import { CourseTaker } from '@/components/CourseTaker';
 import dynamic from 'next/dynamic';
 const VirtualExperienceTaker = dynamic(() => import('@/components/VirtualExperienceTaker'), { ssr: false });
@@ -1216,7 +1217,7 @@ export default function PublicFormPage() {
                       <>
                         <span style={{ fontSize: 12, fontWeight: 600, color: cp.muted, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Total XP</span>
                         <span style={{ fontSize: 16, fontWeight: 800, color: accentColor }}>
-                          {questions.filter((q: any) => !q.isSection).length * (config.pointsSystem?.basePoints ?? 100)} XP
+                          {courseXpOnOffer(questions, config.pointsSystem)} XP
                         </span>
                       </>
                     ) : (

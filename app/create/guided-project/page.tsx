@@ -131,7 +131,7 @@ interface Requirement {
   id: string;
   label: string;
   description: string;
-  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review';
+  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review' | 'linkedin_share';
   options?: string[];
   optionFeedback?: string[];
   correctAnswer?: string;
@@ -144,6 +144,8 @@ interface Requirement {
   emailFrame?: boolean;
   emailBody?: string;
   attachments?: ReqAttachment[];
+  sharePrompt?: string;   // linkedin_share: suggested post text the student can copy
+  shareRequired?: boolean; // linkedin_share: absent/true = required; false = optional, never blocks the lesson
 }
 interface Lesson {
   id: string;
@@ -1848,12 +1850,15 @@ function VirtualExperienceCreatePageInner() {
                                                       correctAnswer: type === 'mcq' || type === 'decision' ? '' : undefined,
                                                       expectedAnswer: undefined,
                                                       aiReview: type === 'text' ? req.aiReview : undefined,
+                                                      sharePrompt: type === 'linkedin_share' ? req.sharePrompt : undefined,
+                                                      shareRequired: type === 'linkedin_share' ? (req.shareRequired ?? true) : undefined,
                                                     });
                                                   }}
                                                   style={{ padding: '2px 6px', borderRadius: 6, border: `1px solid ${C.cardBorder}`, background: C.card, color: C.text, fontSize: 11, fontWeight: 700 }}>
                                                   <option value="mcq">Multiple Choice</option>
                                                   <option value="text">Short Answer</option>
                                                   <option value="upload">File Upload</option>
+                                                  <option value="linkedin_share">LinkedIn Post Share</option>
                                                   <option value="task">Deliverable (Checkbox)</option>
                                                   <option value="briefing">Inbox Email</option>
                                                   <option value="scenario_update">Team Chat Update</option>
@@ -1975,7 +1980,32 @@ function VirtualExperienceCreatePageInner() {
                                                   <input value={req.description}
                                                     onChange={e => updateReq(mod.id, les.id, req.id, { description: e.target.value })}
                                                     style={{ ...inp, background: C.card, fontSize: 12 }}
-                                                    placeholder={req.type === 'mcq' ? 'Hint: which column(s) to analyse…' : req.type === 'upload' ? 'Instructions for the student…' : 'Prompt or context…'} />
+                                                    placeholder={req.type === 'mcq' ? 'Hint: which column(s) to analyse…' : req.type === 'upload' ? 'Instructions for the student…' : req.type === 'linkedin_share' ? 'What should they post about?' : 'Prompt or context…'} />
+                                                  {req.type === 'linkedin_share' && (
+                                                    <>
+                                                      <textarea value={req.sharePrompt || ''}
+                                                        onChange={e => updateReq(mod.id, les.id, req.id, { sharePrompt: e.target.value })}
+                                                        rows={4}
+                                                        style={{ ...inp, background: C.card, fontSize: 12, resize: 'vertical' }}
+                                                        placeholder="Optional suggested post text the student can copy…" />
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => updateReq(mod.id, les.id, req.id, { shareRequired: req.shareRequired === false })}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all self-start"
+                                                        style={req.shareRequired === false
+                                                          ? { background: C.card, border: `1px solid ${C.cardBorder}`, color: C.muted }
+                                                          : { background: C.cta, color: 'white' }}>
+                                                        {req.shareRequired === false ? 'Optional' : 'Required to finish the lesson'}
+                                                      </button>
+                                                      <p className="text-[11px]" style={{ color: C.faint }}>
+                                                        The student pastes the link to their own LinkedIn post. It is checked as a real post
+                                                        written by them, and a post someone else already submitted is rejected.
+                                                        {req.shareRequired === false
+                                                          ? ' Optional: the lesson completes whether or not they share.'
+                                                          : ' Required: the lesson will not complete until they share.'}
+                                                      </p>
+                                                    </>
+                                                  )}
                                                 </>
                                               )}
                                               {req.type === 'mcq' && (

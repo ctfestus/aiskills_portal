@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
+import { courseXpOnOffer } from '@/lib/course-progress';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
 
@@ -525,8 +526,10 @@ function CourseCard({ index, href, cover, title, cta, config, creatorName, creat
 
   const questions: any[] = config?.questions || [];
   const assessmentCount = questions.length;
-  const pointsEnabled = config?.pointsSystem?.enabled;
-  const totalPoints = pointsEnabled ? assessmentCount * (config?.pointsSystem?.basePoints || 100) : 0;
+  // Shared rule: multiplying every slide by basePoints charged for lessons and downloads that award
+  // nothing, and priced a LinkedIn share at basePoints instead of its own configured bonus (including
+  // a deliberate 0).
+  const totalPoints = courseXpOnOffer(questions, config?.pointsSystem);
   const chips = [
     ...(assessmentCount > 0 ? [{ icon: <BookOpen size={11}/>, label: `${assessmentCount} ${assessmentCount === 1 ? 'lesson' : 'lessons'}` }] : []),
     ...(totalPoints > 0    ? [{ icon: <Zap size={11}/>,      label: `${totalPoints} pts`  }] : []),

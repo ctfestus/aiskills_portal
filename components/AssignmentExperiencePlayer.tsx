@@ -3,12 +3,16 @@
 import { useState, useCallback, useRef } from 'react';
 import {
   CheckCircle2, Circle, ChevronDown, ChevronUp, ChevronRight, ChevronLeft,
-  Loader2, Lock, Upload as UploadIcon, Link as LinkIcon, CheckCircle, Download,
+  Loader2, Lock, Upload as UploadIcon, Link as LinkIcon, CheckCircle, Download, Eye,
   Paperclip, Send, Reply, X, AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText, sanitizeEmailContent } from '@/lib/sanitize';
 import { applyNameTags } from '@/lib/merge-tags';
+import { preflightLinkedInPostUrl } from '@/lib/linkedin-post-url';
+import { saveMyLinkedInProfileUrl, shareClaimErrorMessage } from '@/lib/linkedin-profile';
+import { veCompletionCounts, lessonCompletionPct, isVeComplete, reqCountsForCompletion } from '@/lib/ve-completion';
+import { LinkedInIcon } from '@/components/LinkedInIcon';
 import { LessonRenderer } from '@/components/lesson/LessonRenderer';
 import type { LessonDoc } from '@/lib/lesson-doc';
 import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
@@ -34,7 +38,9 @@ interface Requirement {
   id: string;
   label: string;
   description: string;
-  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review';
+  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review' | 'linkedin_share';
+  sharePrompt?: string;   // linkedin_share: suggested post text the student can copy
+  shareRequired?: boolean; // linkedin_share: absent/true = required; false = optional, never blocks the lesson
   options?: string[];
   optionFeedback?: string[];
   correctAnswer?: string;
@@ -101,10 +107,10 @@ interface Props {
 
 // -- Helpers ---
 
+// Lesson percentage comes from the shared rule so the player, the progress route and the
+// assignment-completion route cannot disagree about what "done" means.
 function lessonPct(lesson: Lesson, progress: Progress): number {
-  if (!lesson.requirements.length) return 100;
-  const done = lesson.requirements.filter(r => progress[r.id]?.completed).length;
-  return Math.round((done / lesson.requirements.length) * 100);
+  return lessonCompletionPct(lesson, progress);
 }
 
 import { safeEmbedUrl as getEmbedUrl, isHtmlEmbedUrl } from '@/lib/safe-embed-url';
@@ -151,6 +157,16 @@ export default function AssignmentExperiencePlayer({
   const [activeLesson,  setActiveLesson]  = useState(modules[0]?.lessons[0]?.id ?? '');
   const [saving,        setSaving]        = useState(false);
   const [uploadingReq,  setUploadingReq]  = useState<string | null>(null);
+  // linkedin_share deliverables: draft URL per requirement, plus claim state.
+  const [shareDrafts,   setShareDrafts]   = useState<Record<string, string>>({});
+  const [shareSaving,   setShareSaving]   = useState<string | null>(null);
+  const [shareErrors,   setShareErrors]   = useState<Record<string, string>>({});
+  const [shareCopied,   setShareCopied]   = useState<string | null>(null);
+  // Set when the server has no LinkedIn profile to check a post's author against.
+  const [needsProfile,  setNeedsProfile]  = useState<string | null>(null);
+  const [profileDraft,  setProfileDraft]  = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError,  setProfileError]  = useState('');
   // "done" means the assignment was actually SUBMITTED, not merely that all requirements are
   // locally complete. Deriving it from progress used to show a false "submitted" screen (and hide
   // the submit button) for students who finished the work but never clicked Complete.
@@ -190,10 +206,14 @@ export default function AssignmentExperiencePlayer({
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
-  // totals
-  const totalReqs = modules.reduce((a, m) => a + m.lessons.reduce((b, l) => b + l.requirements.length, 0), 0);
-  const doneReqs  = Object.values(progress).filter(v => v.completed).length;
-  const overallPct = totalReqs ? Math.round((doneReqs / totalReqs) * 100) : 0;
+  // Same rule the server uses. Counting Object.values(progress) instead would include stale
+  // entries for deleted requirements, and counting every requirement would let a skipped
+  // optional share hold the bar below 100% and keep Complete disabled forever.
+  const overallCounts = veCompletionCounts(modules, progress);
+  const totalReqs = overallCounts.totalReqs;
+  const doneReqs  = overallCounts.doneReqs;
+  const overallPct = totalReqs ? Math.round((doneReqs / totalReqs) * 100) : 100;
+  const canComplete = isVeComplete(overallCounts);
 
   const currentMod = modules.find(m => m.id === activeModule);
   const currentLes = currentMod?.lessons.find(l => l.id === activeLesson);
@@ -243,6 +263,72 @@ export default function AssignmentExperiencePlayer({
       return next;
     });
   }, [saveProgress]);
+
+  /**
+   * Claim a LinkedIn post for a linkedin_share deliverable.
+   *
+   * Awaited rather than routed through the debounced saveProgress: only the server knows whether the
+   * post is already claimed, and the requirement counts as complete only once it says so. The route
+   * writes the progress entry itself, so we mirror its canonical URL.
+   */
+  async function submitShareLink(reqId: string) {
+    const draft = (shareDrafts[reqId] ?? '').trim();
+    if (!draft || readOnly || previewMode) return;
+    const pre = preflightLinkedInPostUrl(draft);
+    if (!pre.ok) {
+      setShareErrors(prev => ({ ...prev, [reqId]: shareClaimErrorMessage(pre.code) }));
+      return;
+    }
+    setShareErrors(prev => { const n = { ...prev }; delete n[reqId]; return n; });
+    setShareSaving(reqId);
+    try {
+      const res = await fetch('/api/guided-project-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
+        body: JSON.stringify({
+          action: 'claim-linkedin-share',
+          veId: formId,
+          requirementId: reqId,
+          post_url: draft,
+          assignmentId: assignmentId || undefined,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // No profile on file to check the author against -- ask for it inline instead of erroring.
+        if (json?.error === 'no_profile') {
+          setNeedsProfile(reqId); setProfileError(''); return;
+        }
+        setShareErrors(prev => ({ ...prev, [reqId]: shareClaimErrorMessage(json?.error) }));
+        // Deliberately NOT offering to change the saved profile here. Letting a student edit it in
+        // response to a mismatch turns the check into a formality: paste a stranger's post, enter that
+        // stranger's profile as your own, retry. Setting a profile for the first time is fine (above);
+        // changing one to match a post that just failed is not.
+        return;
+      }
+      const savedUrl = typeof json.url === 'string' ? json.url : draft;
+      setShareDrafts(prev => ({ ...prev, [reqId]: savedUrl }));
+      setProgress(prev => ({ ...prev, [reqId]: { ...(prev[reqId] ?? { completed: false }), linkUrl: savedUrl, completed: true } }));
+    } catch {
+      setShareErrors(prev => ({ ...prev, [reqId]: 'Could not save your link. Please try again.' }));
+    } finally {
+      setShareSaving(null);
+    }
+  }
+
+  /** Save the student's LinkedIn profile, then retry the claim it was blocking. */
+  async function saveProfileAndRetry(reqId: string) {
+    setProfileSaving(true);
+    setProfileError('');
+    try {
+      const result = await saveMyLinkedInProfileUrl(profileDraft);
+      if (!result.ok) { setProfileError(result.error); return; }
+      setNeedsProfile(null);
+      await submitShareLink(reqId);
+    } finally {
+      setProfileSaving(false);
+    }
+  }
 
   // File upload for upload requirements
   async function handleFileUpload(reqId: string, file: File, noComplete?: boolean) {
@@ -576,8 +662,10 @@ export default function AssignmentExperiencePlayer({
                         // Messages arrive sequentially: a requirement only appears once
                         // everything before it is done AND the manager has finished
                         // replying (review/preview show the whole conversation).
+                        // An optional, unclaimed share must not hold back the requirements after it.
                         if (!readOnly && !previewMode && qi > 0 && !currentLes.requirements.slice(0, qi).every(r =>
-                          progress[r.id]?.completed && !typingAcks.has(r.id) && !typingDecisions.has(r.id) && !efTyping[r.id]
+                          (!reqCountsForCompletion(r, progress) || progress[r.id]?.completed)
+                          && !typingAcks.has(r.id) && !typingDecisions.has(r.id) && !efTyping[r.id]
                         )) return null;
 
                         // Scenario update - team chat surface
@@ -1298,7 +1386,15 @@ export default function AssignmentExperiencePlayer({
                                 <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
                                   style={{ background: `${accent}12`, color: accent }}>MCQ</span>
                                 <div>
-                                  <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
+                                  <p className="text-sm font-semibold flex items-center gap-2" style={{ color: text }}>
+                                    {req.label}
+                                    {req.shareRequired === false && (
+                                      <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded flex-shrink-0"
+                                        style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', color: muted }}>
+                                        Optional
+                                      </span>
+                                    )}
+                                  </p>
                                   {req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}
                                 </div>
                                 {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5 ml-auto" style={{ color: accent }}/>}
@@ -1359,6 +1455,154 @@ export default function AssignmentExperiencePlayer({
                                 className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none"
                                 style={{ border: `1px solid ${isDone ? `${accent}40` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: isDone ? `${accent}05` : subtle, color: text }}
                               />
+                            </div>
+                          );
+                        }
+
+                        // LinkedIn post share
+                        if (req.type === 'linkedin_share') {
+                          const claimed = prog?.linkUrl ?? '';
+                          const draft   = shareDrafts[req.id] ?? claimed;
+                          const saving  = shareSaving === req.id;
+                          const error   = shareErrors[req.id];
+                          return (
+                            <div key={req.id} className="space-y-3">
+                              <div className="flex items-start gap-2.5">
+                                <span className="flex-shrink-0 flex items-center justify-center rounded-lg mt-0.5"
+                                  style={{ width: 30, height: 30, background: '#0A66C2' }}>
+                                  <LinkedInIcon className="w-4 h-4" style={{ color: '#fff' }} />
+                                </span>
+                                <div className="flex-1">
+                                  <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
+                                  {req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}
+                                </div>
+                                {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accent }}/>}
+                              </div>
+
+                              {/* No XP on the VE side, so the payoff is framed as the work being seen. */}
+                              {!claimed && (
+                                <div className="flex items-center gap-2 rounded-xl px-3 py-2.5"
+                                  style={{ background: `${accent}10` }}>
+                                  <Eye className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accent }}/>
+                                  <p className="text-[12px] leading-snug" style={{ color: muted }}>
+                                    Real work, shared publicly. This is the part hiring managers actually see.
+                                  </p>
+                                </div>
+                              )}
+
+                              {req.sharePrompt && (
+                                <div className="rounded-xl p-3.5" style={{ background: subtle, border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'}` }}>
+                                  <div className="flex items-center justify-between gap-3 mb-1.5">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: faint }}>Suggested post</p>
+                                    <button type="button"
+                                      onClick={() => {
+                                        navigator.clipboard?.writeText(req.sharePrompt || '').then(() => {
+                                          setShareCopied(req.id);
+                                          setTimeout(() => setShareCopied(null), 1800);
+                                        }).catch(() => {});
+                                      }}
+                                      className="px-2.5 py-1.5 rounded-md text-[11.5px] font-semibold transition-all active:scale-[0.97]"
+                                      style={{ border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)'}`, color: text }}>
+                                      {shareCopied === req.id ? 'Copied' : 'Copy'}
+                                    </button>
+                                  </div>
+                                  <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: muted }}>{req.sharePrompt}</p>
+                                </div>
+                              )}
+
+                              <a href="https://www.linkedin.com/feed/?shareActive=true" target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-[0.98] hover:opacity-90"
+                                style={{ background: '#0A66C2', color: '#fff' }}>
+                                <LinkedInIcon className="w-4 h-4" /> Write my post
+                              </a>
+
+                              <div className="space-y-1.5">
+                                <p className="text-xs font-medium" style={{ color: muted }}>Paste the link to your post</p>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                  {/* Input owns the border and radius so the global focus ring (an outline on
+                                      the input) follows its rounded corners instead of drawing a sharp
+                                      rectangle inside a bordered wrapper. */}
+                                  <div className="flex-1 min-w-0 relative">
+                                    <LinkIcon className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: faint }}/>
+                                    <input type="url" inputMode="url" value={draft} readOnly={readOnly}
+                                      placeholder="https://www.linkedin.com/posts/..."
+                                      className="w-full min-w-0 pl-9 pr-3 py-2.5 rounded-xl text-sm outline-none"
+                                      style={{
+                                        border: `1px solid ${error ? '#f43f5e' : claimed ? `${accent}40` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                                        background: subtle,
+                                        color: text,
+                                      }}
+                                      onChange={e => {
+                                        setShareDrafts(prev => ({ ...prev, [req.id]: e.target.value }));
+                                        if (shareErrors[req.id]) setShareErrors(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                                      }}
+                                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitShareLink(req.id); } }}/>
+                                  </div>
+                                  {!readOnly && (
+                                    <button type="button"
+                                      onClick={() => submitShareLink(req.id)}
+                                      disabled={saving || !draft.trim() || draft.trim() === claimed}
+                                      className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-[0.98] disabled:opacity-45"
+                                      style={{ background: accent, color: '#fff' }}>
+                                      {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : claimed ? 'Update' : 'Submit'}
+                                    </button>
+                                  )}
+                                </div>
+                                {/* Asked for once, when there is no profile to check the post's author
+                                    against. Saving it retries the claim straight away. */}
+                                {needsProfile === req.id && (
+                                  <div className="rounded-xl p-3 space-y-2" style={{ background: subtle }}>
+                                    <p className="text-xs font-semibold" style={{ color: text }}>
+                                      First, add your LinkedIn profile
+                                    </p>
+                                    <p className="text-[11px] leading-relaxed" style={{ color: muted }}>
+                                      We check that the post you paste was written by you, so we need to know which profile is yours. This is saved to your profile once.
+                                    </p>
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                      <input
+                                        type="url" inputMode="url" value={profileDraft}
+                                        onChange={e => { setProfileDraft(e.target.value); if (profileError) setProfileError(''); }}
+                                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveProfileAndRetry(req.id); } }}
+                                        placeholder="linkedin.com/in/your-name"
+                                        className="flex-1 min-w-0 px-3 py-2.5 rounded-xl text-sm outline-none"
+                                        style={{ border: `1px solid ${profileError ? '#f43f5e' : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: isDark ? 'rgba(255,255,255,0.05)' : '#fff', color: text }}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => saveProfileAndRetry(req.id)}
+                                        disabled={profileSaving || !profileDraft.trim()}
+                                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-[0.98] disabled:opacity-45"
+                                        style={{ background: accent, color: '#fff' }}
+                                      >
+                                        {profileSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : 'Save and submit'}
+                                      </button>
+                                    </div>
+                                    {profileError && (
+                                      <p className="text-[11.5px] font-medium flex items-start gap-1.5" style={{ color: '#f43f5e' }}>
+                                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0"/> {profileError}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
+                                {error && (
+                                  <p className="text-[11.5px] font-medium flex items-start gap-1.5" style={{ color: '#f43f5e' }}>
+                                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0"/> {error}
+                                  </p>
+                                )}
+                                {!error && claimed && (
+                                  <a href={claimed} target="_blank" rel="noreferrer"
+                                    className="text-[11.5px] font-semibold flex items-center gap-1.5 hover:underline" style={{ color: '#10b981' }}>
+                                    <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0"/> Verified. View your post
+                                  </a>
+                                )}
+                                {!error && !claimed && (
+                                  <p className="text-[11px] leading-relaxed" style={{ color: faint }}>
+                                    Open your post on LinkedIn, copy its full address, and paste it here. Shortened
+                                    lnkd.in links cannot be checked.
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           );
                         }
@@ -1580,10 +1824,10 @@ export default function AssignmentExperiencePlayer({
                   </button>
                 ) : (
                   <button
-                    disabled={overallPct < 100 || saving}
+                    disabled={!canComplete || saving}
                     onClick={submitAssignment}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
-                    style={{ background: '#10b981', color: 'white', border: 'none', cursor: overallPct < 100 || saving ? 'not-allowed' : 'pointer' }}>
+                    style={{ background: '#10b981', color: 'white', border: 'none', cursor: !canComplete || saving ? 'not-allowed' : 'pointer' }}>
                     {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <CheckCircle className="w-4 h-4"/>} Complete
                   </button>
                   )

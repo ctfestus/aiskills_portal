@@ -13,11 +13,17 @@ import {
   Clock, EyeOff, AlertTriangle, ShieldAlert, GripVertical,
   ChevronLeft, BookOpen, X, ExternalLink, ArrowRight, MoreHorizontal, Zap,
   ArrowLeftToLine, ArrowRightFromLine, Download, ArrowDownToLine, Lock,
-  Check, Play, FileText, FlaskConical, ListChecks,
+  Check, Play, FileText, FlaskConical, ListChecks, Copy,
 } from 'lucide-react';
+import { LinkedInIcon } from '@/components/LinkedInIcon';
+import { XpBadgeStack } from '@/components/XpBadge';
 import { AnimatedField } from '@/components/AnimatedField';
 import { useTheme } from '@/components/ThemeProvider';
 import type { QuestionType, DownloadItem, CourseQuestion } from '@/lib/course-schema';
+import { DEFAULT_LINKEDIN_SHARE_POINTS } from '@/lib/course-schema';
+import { courseProgressCounts, answeredScorableCount } from '@/lib/course-progress';
+import { preflightLinkedInPostUrl } from '@/lib/linkedin-post-url';
+import { saveMyLinkedInProfileUrl, shareClaimErrorMessage } from '@/lib/linkedin-profile';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { LessonRenderer } from '@/components/lesson/LessonRenderer';
 import { LessonAudioPlayer } from '@/components/lesson/LessonAudioPlayer';
@@ -153,6 +159,33 @@ function burstConfetti(canvas: HTMLCanvasElement, accent: string) {
     else ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
   animate();
+}
+
+/**
+ * True for slides that carry a gradeable answer. Section dividers, lesson-only slides, downloads
+ * blocks and LinkedIn share slides all render as slides but must never count toward the score or
+ * the percentage. The server applies the same filter in /api/course complete-attempt.
+ */
+function isScorableSlide(q: any): boolean {
+  return !q?.lessonOnly && !q?.isSection && !q?.isDownloads && !q?.isLinkedInShare;
+}
+
+/** Slides whose "completion" is just having been seen, so Next stamps them 'viewed'. */
+function isViewedOnlySlide(q: any): boolean {
+  return !!(q?.lessonOnly || q?.isDownloads);
+}
+
+/**
+ * complete-attempt refused because a required LinkedIn share has no claim. Carries the slide ids so
+ * the student can be sent straight to them rather than shown a dead-end error.
+ */
+class ShareRequiredError extends Error {
+  missingIds: string[];
+  constructor(missingIds: string[]) {
+    super('share_required');
+    this.name = 'ShareRequiredError';
+    this.missingIds = missingIds;
+  }
 }
 
 // -- Sortable item for arrange questions --
@@ -308,12 +341,23 @@ export function CourseTaker({
   // Existing certificate (student already completed this course)
   const [existingCertId, setExistingCertId] = useState<string | null>(null);
   const [finishPending, setFinishPending] = useState<any[] | null>(null); // unanswered questions blocking finish
+  // LinkedIn share slides: draft URL per slide id, plus the in-flight/error state of its claim.
+  const [shareDrafts, setShareDrafts] = useState<Record<string, string>>({});
+  const [shareSaving, setShareSaving] = useState<string | null>(null);
+  const [shareErrors, setShareErrors] = useState<Record<string, string>>({});
+  const [sharePromptCopied, setSharePromptCopied] = useState<string | null>(null);
+  // Set when the server has no LinkedIn profile to check a post's author against: the slide asks for
+  // it inline rather than dead-ending the student.
+  const [needsProfile, setNeedsProfile] = useState<string | null>(null);
+  const [profileDraft, setProfileDraft] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
   const [streakToast, setStreakToast] = useState<string | null>(null);
   const [lockedToast, setLockedToast] = useState<string | null>(null);
   const questions = useMemo(() => config.questions || [], [config.questions]);
   const learningOutcomes: string[] = config.learnOutcomes || [];
   const currentQuestion = questions[currentQuestionIndex];
-  const totalQuestions = questions.filter((q: any) => !q.lessonOnly && !q.isSection && !q.isDownloads).length;
+  const totalQuestions = questions.filter(isScorableSlide).length;
   const totalSlides = questions.length;
   const answerMetaKey = (id: string) => `__meta_${id}`;
   const buildAnswerMeta = () => JSON.stringify({
@@ -658,7 +702,9 @@ export function CourseTaker({
           // stored answers (the last lesson was not saved before completion in older attempts).
           const restoredAnswers: Record<string, string> = { ...(prev.answers ?? {}) };
           for (const q of questions) {
-            if ((q.lessonOnly || (q as any).isDownloads) && !restoredAnswers[q.id]) {
+            // Share slides are deliberately excluded: their answer is the claimed post URL, so a
+            // 'viewed' stamp would make an unshared slide look complete.
+            if (isViewedOnlySlide(q) && !restoredAnswers[q.id]) {
               restoredAnswers[q.id] = 'viewed';
             }
           }
@@ -843,6 +889,96 @@ export function CourseTaker({
     }).catch(() => {});
   }, [formId, studentEmail, studentName, reviewMode]);
 
+  /**
+   * Claim a LinkedIn post for a share slide.
+   *
+   * Unlike saveProgress this awaits the response, because the server is the only thing that knows
+   * whether the post is already claimed by someone else -- a fire-and-forget write could not report
+   * that. The server writes the answer itself, so on success we mirror the canonical URL it returns
+   * into local state rather than saving our own.
+   */
+  const submitLinkedInShare = useCallback(async (q: any) => {
+    const draft = (shareDrafts[q.id] ?? '').trim();
+    if (!draft || reviewMode) return;
+    const pre = preflightLinkedInPostUrl(draft);
+    if (!pre.ok) {
+      setShareErrors(prev => ({ ...prev, [q.id]: shareClaimErrorMessage(pre.code) }));
+      return;
+    }
+    setShareErrors(prev => { const next = { ...prev }; delete next[q.id]; return next; });
+    setShareSaving(q.id);
+    // Captured before the write below: a re-claim (student correcting their link) must not add the
+    // bonus a second time.
+    const wasAlreadyClaimed = !!answersRef.current[q.id];
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (sessionTokenRef.current) headers['Authorization'] = `Bearer ${sessionTokenRef.current}`;
+      const res = await fetch('/api/course', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ action: 'claim-linkedin-share', course_id: formId, question_id: q.id, post_url: draft }),
+      });
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        // No profile on file to check the author against -- ask for it inline instead of erroring.
+        if (json?.error === 'no_profile') {
+          setNeedsProfile(q.id);
+                    setProfileError('');
+          return;
+        }
+        setShareErrors(prev => ({ ...prev, [q.id]: shareClaimErrorMessage(json?.error) }));
+        // Deliberately NOT offering to change the saved profile here. Letting a student edit it in
+        // response to a mismatch turns the check into a formality: paste a stranger's post, enter that
+        // stranger's profile as your own, retry. Setting a profile for the first time is fine (above);
+        // changing one to match a post that just failed is not.
+        return;
+      }
+
+      const savedUrl = typeof json.url === 'string' ? json.url : draft;
+      const newAnswers = { ...answersRef.current, [q.id]: savedUrl };
+      answersRef.current = newAnswers;
+      setAnswers(newAnswers);
+      setShareDrafts(prev => ({ ...prev, [q.id]: savedUrl }));
+      // The claim route mirrors the URL into an ACTIVE attempt, but a student whose first action is
+      // this slide has no attempt row yet. Saving here creates it so the link survives a reload
+      // even if they never press Continue.
+      saveProgress(newAnswers, currentQuestionIndex, score, totalPoints, streak, hintsUsed);
+      // Optimistic bonus so the header counter moves now; complete-attempt recomputes the
+      // authoritative total from the live claim. Read the flag off config rather than the
+      // pointsEnabled const, which is declared further down this component.
+      const shareXpOn = (config as any).pointsSystem?.enabled !== false;
+      const earned = typeof json.points === 'number' ? json.points : 0;
+      if (shareXpOn && !wasAlreadyClaimed && earned > 0) {
+        setTotalPoints(p => p + earned);
+        // Same reward language the course already uses for a correct answer, so sharing reads as a
+        // real win rather than a form submission.
+        setFloatingPoints({ id: Date.now(), text: `+${earned} XP`, x: 50, y: 60 });
+        setTimeout(() => setFloatingPoints(null), 1400);
+      }
+      if (!wasAlreadyClaimed && confettiRef.current) burstConfetti(confettiRef.current, accent);
+    } catch {
+      setShareErrors(prev => ({ ...prev, [q.id]: 'Could not save your link. Please try again.' }));
+    } finally {
+      setShareSaving(null);
+    }
+  }, [shareDrafts, reviewMode, formId, config, saveProgress, accent,
+      currentQuestionIndex, score, totalPoints, streak, hintsUsed]);
+
+  /** Save the student's LinkedIn profile, then retry the claim it was blocking. */
+  const saveProfileAndRetry = useCallback(async (q: any) => {
+    setProfileSaving(true);
+    setProfileError('');
+    try {
+      const result = await saveMyLinkedInProfileUrl(profileDraft);
+      if (!result.ok) { setProfileError(result.error); return; }
+      setNeedsProfile(null);
+      await submitLinkedInShare(q);
+    } finally {
+      setProfileSaving(false);
+    }
+  }, [profileDraft, submitLinkedInShare]);
+
   // Persist a completed AI review: stores the full latest report (+ attempt count) under a
   // __review_<id> shadow key so it survives reload and is readable by instructors, and records
   // the pass/fail answer used for scoring. Manual document review has no report (report: null).
@@ -926,8 +1062,17 @@ export function CourseTaker({
             points: typeof json.points === 'number' ? json.points : totalPoints,
           };
         }
+        // The server refuses to complete while a required share is outstanding. Not retryable --
+        // nothing changes by asking again -- so surface it immediately.
+        if (res.status === 409) {
+          const json = await res.json().catch(() => ({}));
+          if (json?.error === 'share_required') {
+            throw new ShareRequiredError(Array.isArray(json.missing) ? json.missing.map(String) : []);
+          }
+        }
         lastErr = new Error(`complete-attempt failed: ${res.status}`);
       } catch (err) {
+        if (err instanceof ShareRequiredError) throw err;
         lastErr = err;
       }
     }
@@ -958,12 +1103,25 @@ export function CourseTaker({
         studentToken: sessionTokenRef.current,
       }) as any);
       setPhase('complete'); // triggers SQL runtime cleanup via useEffect
-    } catch {
+    } catch (err) {
+      // Server refused: a required share is outstanding. Send them to the slide instead of an error
+      // they cannot act on. Normally unreachable -- the player already blocks this path -- so this
+      // covers local state drifting from the server, e.g. a second tab or a slide made required
+      // after this attempt was loaded.
+      if (err instanceof ShareRequiredError) {
+        const missing = questions.filter((q: any) =>
+          err.missingIds.includes(String(q.id)) || (err.missingIds.length === 0 && q.isLinkedInShare));
+        setFinishPending(missing.length > 0 ? missing : null);
+        if (missing.length === 0) {
+          setSubmitError('A required LinkedIn share is still outstanding. Please refresh and try again.');
+        }
+        return;
+      }
       setSubmitError('Could not save your result. Please check your connection and try again.');
     } finally {
       setSubmitSaving(false);
     }
-  }, [clearProgress, onSubmit, studentName, studentEmail, totalQuestions, passmark, totalPoints, streak]);
+  }, [clearProgress, onSubmit, studentName, studentEmail, totalQuestions, passmark, totalPoints, streak, questions]);
 
   // Resume from saved progress
   const handleResume = useCallback(() => {
@@ -1952,7 +2110,7 @@ export function CourseTaker({
   if (phase === 'complete') {
     const percentage = totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 100;
     const passed = totalQuestions === 0 ? true : percentage >= passmark;
-    const unansweredCount = questions.filter((q: any) => !q.lessonOnly && !q.isSection && !q.isDownloads && !answers[q.id]).length;
+    const unansweredCount = questions.filter((q: any) => isScorableSlide(q) && !answers[q.id]).length;
 
     const handleGoBack = (idx: number) => {
       setCurrentQuestionIndex(idx);
@@ -1998,7 +2156,7 @@ export function CourseTaker({
               </div>
               <div className="flex flex-wrap gap-1.5 pl-6">
                 {questions
-                  .filter((q: any) => !q.lessonOnly && !q.isSection && !q.isDownloads && !answers[q.id])
+                  .filter((q: any) => isScorableSlide(q) && !answers[q.id])
                   .map((q: any) => {
                     const idx = questions.findIndex((qq: any) => qq.id === q.id);
                     return (
@@ -2017,7 +2175,7 @@ export function CourseTaker({
 
           {totalQuestions > 0 && (
             <p className={`text-xs ${mutedColor}`}>
-              You answered {Object.keys(answers).filter(id => !questions.find((q: any) => q.id === id)?.lessonOnly).length} of {totalQuestions} question{totalQuestions !== 1 ? 's' : ''}.
+              You answered {answeredScorableCount(questions, answers)} of {totalQuestions} question{totalQuestions !== 1 ? 's' : ''}.
             </p>
           )}
           <button
@@ -2153,9 +2311,13 @@ export function CourseTaker({
   };
 
   const doFinish = (finalScore: number) => {
-    const pending = questions.filter((q: any) =>
-      !q.lessonOnly && !q.isSection && !q.isDownloads && !getSlideProgressStatus(q).completed
-    );
+    const pending = questions.filter((q: any) => {
+      if (getSlideProgressStatus(q).completed) return false;
+      // A required share slide blocks finishing even though it is not scorable -- otherwise the
+      // sidebar lets a student jump straight past it to the end.
+      if (q.isLinkedInShare) return q.linkedInShareRequired !== false;
+      return isScorableSlide(q);
+    });
     if (!reviewMode && pending.length > 0) {
       setFinishPending(pending);
     } else {
@@ -2172,7 +2334,7 @@ export function CourseTaker({
 
     if (currentQuestionIndex < totalSlides - 1) {
       const nextIndex = currentQuestionIndex + 1;
-      if (currentQuestion?.lessonOnly || (currentQuestion as any)?.isDownloads) {
+      if (isViewedOnlySlide(currentQuestion)) {
         const newAnswers = { ...answersRef.current, [currentQuestion.id]: 'viewed' };
         answersRef.current = newAnswers;
         setAnswers(newAnswers);
@@ -2195,7 +2357,7 @@ export function CourseTaker({
       } else {
         // Mark the last lessonOnly / isDownloads slide as viewed before finishing so
         // it shows as completed when the student later opens the course in review mode.
-        if (currentQuestion?.lessonOnly || (currentQuestion as any)?.isDownloads) {
+        if (isViewedOnlySlide(currentQuestion)) {
           const newAnswers = { ...answersRef.current, [currentQuestion.id]: 'viewed' };
           answersRef.current = newAnswers;
           setAnswers(newAnswers);
@@ -2390,9 +2552,12 @@ export function CourseTaker({
     saveProgress(newAnswers, (countsAsPassed || payload.skipped) ? currentQuestionIndex + 1 : currentQuestionIndex, newScore, newPoints, newStreak, hintsUsed);
   };
 
-  const countableSlides = questions.filter((q: any) => !q.isSection);
-  const completedSlides = countableSlides.filter((q: any) => getSlideProgressStatus(q).completed).length;
-  const progressPct = countableSlides.length > 0 ? (completedSlides / countableSlides.length) * 100 : 0;
+  // Shared rule (lib/course-progress): an optional share the student has not claimed leaves the
+  // denominator, so skipping it cannot hold the bar below 100%.
+  const slideCounts = courseProgressCounts(questions, answers);
+  const completedSlides = slideCounts.done;
+  const progressPct = slideCounts.total > 0 ? (slideCounts.done / slideCounts.total) * 100
+    : slideCounts.authored > 0 ? 100 : 0;
   const timerWarning = timeLeft !== null && timeLeft <= 60;
 
   // -- Correct answer display for after-check feedback --
@@ -2575,6 +2740,9 @@ export function CourseTaker({
       setIsChecking(false);
       setIsCorrect(null);
     };
+    // A required share slide is a hard gate, so it must not be escapable via "Submit anyway".
+    const pendingShares = finishPending.filter((q: any) => q.isLinkedInShare);
+    const pendingQuestions = finishPending.length - pendingShares.length;
     const modal = (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
         <div className={`w-full max-w-sm rounded-2xl p-6 space-y-4 ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-white border border-zinc-200'}`}>
@@ -2582,10 +2750,14 @@ export function CourseTaker({
             <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
             <div>
               <p className={`font-semibold ${textColor}`}>
-                {finishPending.length} question{finishPending.length > 1 ? 's' : ''} unanswered
+                {pendingShares.length > 0 && pendingQuestions === 0
+                  ? `${pendingShares.length} LinkedIn share${pendingShares.length > 1 ? 's' : ''} outstanding`
+                  : `${finishPending.length} item${finishPending.length > 1 ? 's' : ''} outstanding`}
               </p>
               <p className={`text-sm mt-0.5 ${mutedColor}`}>
-                Go back to answer them or submit anyway.
+                {pendingShares.length > 0
+                  ? 'Submit your post link to finish this course.'
+                  : 'Go back to answer them or submit anyway.'}
               </p>
             </div>
           </div>
@@ -2599,18 +2771,20 @@ export function CourseTaker({
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors"
                   style={{ borderColor: accent, color: accent, background: `${accent}15` }}
                 >
-                  Q{idx + 1}
+                  {q.isLinkedInShare ? 'Share' : `Q${idx + 1}`}
                 </button>
               );
             })}
           </div>
           <div className="flex gap-2 pt-1">
+            {pendingShares.length === 0 && (
             <button
               onClick={() => { setFinishPending(null); finishCourse(score); }}
               className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'bg-zinc-800 text-[#A8B5C2] hover:bg-zinc-700' : 'bg-zinc-100 text-[#555555] hover:bg-zinc-200'}`}
             >
               Submit anyway
             </button>
+            )}
             <button
               onClick={() => setFinishPending(null)}
               className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
@@ -3044,7 +3218,9 @@ export function CourseTaker({
                             const isCurrent = idx === currentQuestionIndex;
                             const locked = isSlideLocked(idx);
 
-                            const title = (q as any).isDownloads
+                            const title = (q as any).isLinkedInShare
+                              ? ((q as any).linkedInShareTitle || 'LinkedIn Share')
+                              : (q as any).isDownloads
                               ? ((q as any).downloadsTitle || 'Downloads')
                               : (q as any).lessonOnly
                                 ? ((q as any).lesson?.title || 'Lesson Content')
@@ -3057,8 +3233,10 @@ export function CourseTaker({
                                       : 'Test Your Knowledge';
 
                             let kind = 'Quiz';
-                            let KindIcon = ListChecks;
-                            if ((q as any).isDownloads) { kind = 'Downloads'; KindIcon = Download; }
+                            // Widened past the lucide type so the LinkedIn brand mark can be used here too.
+                            let KindIcon: React.ComponentType<{ className?: string }> = ListChecks;
+                            if ((q as any).isLinkedInShare) { kind = 'Share'; KindIcon = LinkedInIcon; }
+                            else if ((q as any).isDownloads) { kind = 'Downloads'; KindIcon = Download; }
                             else if ((q as any).lessonOnly) {
                               if ((q as any).lesson?.videoUrl) { kind = 'Video'; KindIcon = Play; }
                               else { kind = 'Reading'; KindIcon = FileText; }
@@ -3245,8 +3423,230 @@ export function CourseTaker({
           >
             <div className="max-w-4xl mx-auto w-full">
                 <div key={currentQuestionIndex}>
-                  {/* -- Downloads slide -- */}
-                  {(currentQuestion as any).isDownloads ? (() => {
+                  {/* -- LinkedIn share slide -- */}
+                  {(currentQuestion as any).isLinkedInShare ? (() => {
+                    const q: any = currentQuestion;
+                    const isLast = currentQuestionIndex >= totalSlides - 1;
+                    const required = q.linkedInShareRequired !== false;
+                    const claimed = answers[q.id] || '';
+                    const draft = shareDrafts[q.id] ?? claimed;
+                    const saving = shareSaving === q.id;
+                    const error = shareErrors[q.id];
+                    const bonus = Number(q.linkedInSharePoints ?? DEFAULT_LINKEDIN_SHARE_POINTS) || 0;
+                    // Deep link to LinkedIn's composer, prefilled with this course's public page --
+                    // same share-offsite pattern the certificate and badge pages use. app/[id]
+                    // resolves either a slug or an id, so formId is enough.
+                    const composeUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
+                      typeof window !== 'undefined' ? `${window.location.origin}/${formId}` : '',
+                    )}`;
+
+                    return (
+                      <div className="rounded-xl overflow-hidden" style={{ background: isDark ? '#1E1F26' : '#ffffff' }}>
+                        {/* Header: brand mark, title, and the reward as something to win rather than
+                            a line of fine print. Once claimed the same slot becomes the receipt. */}
+                        <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-4 sm:pb-5" style={{ borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#F2F5FA'}` }}>
+                          <div className="flex items-start gap-3.5">
+                            <span className="flex-shrink-0 flex items-center justify-center rounded-xl"
+                              style={{ width: 44, height: 44, background: '#0A66C2' }}>
+                              <LinkedInIcon className="w-6 h-6" style={{ color: '#fff' }} />
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: txtFaint }}>
+                                Build your profile
+                              </p>
+                              <h1 className="text-xl font-bold leading-snug" style={{ color: isDark ? '#ACB8C5' : '#111' }}>
+                                {q.linkedInShareTitle || 'Share your work on LinkedIn'}
+                              </h1>
+                            </div>
+                          </div>
+
+                          {pointsEnabled && bonus > 0 && (
+                            <div className="mt-4 flex items-center gap-3 rounded-xl px-3.5 py-3"
+                              style={{ background: claimed ? 'rgba(16,185,129,0.10)' : `${accent}12` }}>
+                              <XpBadgeStack size={60} className="flex-shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-[15px] font-bold leading-tight flex items-center gap-1.5"
+                                  style={{ color: claimed ? '#10b981' : accent }}>
+                                  {claimed && <Check className="w-4 h-4 flex-shrink-0" strokeWidth={3} />}
+                                  {claimed ? `${bonus} XP earned` : `${bonus} XP up for grabs`}
+                                </p>
+                                <p className="text-[12px] leading-snug mt-0.5" style={{ color: txtMuted }}>
+                                  {claimed
+                                    ? 'Your work is out in front of your network. That is how opportunities find you.'
+                                    : 'Post about what you built, then paste the link below to claim it.'}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {q.linkedInShareDescription && (
+                          <div className="px-4 sm:px-8 pt-4 pb-1">
+                            <div
+                              className={`prose prose-sm max-w-none ${isDark ? '[&_*]:!text-[#A8B5C2] [&_strong]:!text-[#ACB8C5] [&_b]:!text-[#ACB8C5]' : '[&_*]:!text-[#555555]'}`}
+                              style={{ color: txtMuted }}
+                              dangerouslySetInnerHTML={{ __html: sanitizeRichText(q.linkedInShareDescription) }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Suggested caption, copyable */}
+                        {q.linkedInSharePrompt && (
+                          <div className="px-4 sm:px-8 pt-4">
+                            <div className="rounded-xl p-4" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : '#F7F9FC', border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'}` }}>
+                              <div className="flex items-center justify-between gap-3 mb-2">
+                                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: txtFaint }}>Suggested post</p>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard?.writeText(q.linkedInSharePrompt).then(() => {
+                                      setSharePromptCopied(q.id);
+                                      setTimeout(() => setSharePromptCopied(null), 1800);
+                                    }).catch(() => {});
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold transition-all active:scale-[0.97]"
+                                  style={{ background: isDark ? 'rgba(255,255,255,0.07)' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)'}`, color: txt }}
+                                >
+                                  {sharePromptCopied === q.id ? <><Check className="w-3.5 h-3.5" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy</>}
+                                </button>
+                              </div>
+                              <p className="text-[13.5px] leading-relaxed whitespace-pre-wrap" style={{ color: txtMuted }}>
+                                {q.linkedInSharePrompt}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Compose, then paste the resulting post link back */}
+                        <div className="px-4 sm:px-8 pt-4 space-y-3">
+                          <a
+                            href={composeUrl} target="_blank" rel="noopener noreferrer"
+                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 sm:py-3 rounded-xl text-[14px] font-semibold transition-all active:scale-[0.98] hover:opacity-90"
+                            style={{ background: '#0A66C2', color: '#fff' }}
+                          >
+                            <LinkedInIcon className="w-[18px] h-[18px]" /> Write my post
+                          </a>
+
+                          <div className="space-y-2">
+                            <label className="block text-[12.5px] font-semibold" style={{ color: txt }}>
+                              Paste the link to your post
+                            </label>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <input
+                                type="url"
+                                inputMode="url"
+                                value={draft}
+                                readOnly={reviewMode}
+                                onChange={e => {
+                                  setShareDrafts(prev => ({ ...prev, [q.id]: e.target.value }));
+                                  if (shareErrors[q.id]) setShareErrors(prev => { const n = { ...prev }; delete n[q.id]; return n; });
+                                }}
+                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitLinkedInShare(q); } }}
+                                placeholder="https://www.linkedin.com/posts/..."
+                                className="flex-1 min-w-0 px-4 py-3 rounded-xl text-[13.5px] outline-none"
+                                style={{
+                                  background: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
+                                  border: `1px solid ${error ? '#f43f5e' : claimed ? `${accent}60` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                                  color: txt,
+                                }}
+                              />
+                              {!reviewMode && (
+                                <button
+                                  type="button"
+                                  onClick={() => submitLinkedInShare(q)}
+                                  disabled={saving || !draft.trim() || draft.trim() === claimed}
+                                  className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-[13.5px] font-semibold transition-all active:scale-[0.98] disabled:opacity-45"
+                                  style={{ background: accent, color: '#fff' }}
+                                >
+                                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : claimed ? 'Update link' : 'Submit link'}
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Asked for once, when there is no profile to check the post's author
+                                against. Saving it retries the claim straight away. */}
+                            {needsProfile === q.id && (
+                              <div className="rounded-xl p-3.5 space-y-2.5" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : '#F7F9FC' }}>
+                                <p className="text-[12.5px] font-semibold" style={{ color: txt }}>
+                                  First, add your LinkedIn profile
+                                </p>
+                                <p className="text-[12px] leading-relaxed" style={{ color: txtMuted }}>
+                                  We check that the post you paste was written by you, so we need to know which profile is yours. This is saved to your profile once.
+                                </p>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                  <input
+                                    type="url" inputMode="url" value={profileDraft}
+                                    onChange={e => { setProfileDraft(e.target.value); if (profileError) setProfileError(''); }}
+                                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveProfileAndRetry(q); } }}
+                                    placeholder="linkedin.com/in/your-name"
+                                    className="flex-1 min-w-0 px-4 py-3 rounded-xl text-[13.5px] outline-none"
+                                    style={{
+                                      background: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                                      border: `1px solid ${profileError ? '#f43f5e' : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                                      color: txt,
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => saveProfileAndRetry(q)}
+                                    disabled={profileSaving || !profileDraft.trim()}
+                                    className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-[13.5px] font-semibold transition-all active:scale-[0.98] disabled:opacity-45"
+                                    style={{ background: accent, color: '#fff' }}
+                                  >
+                                    {profileSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save and submit'}
+                                  </button>
+                                </div>
+                                {profileError && (
+                                  <p className="text-[12.5px] font-medium flex items-start gap-1.5" style={{ color: '#f43f5e' }}>
+                                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> {profileError}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+
+                            {error && (
+                              <p className="text-[12.5px] font-medium flex items-start gap-1.5" style={{ color: '#f43f5e' }}>
+                                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> {error}
+                              </p>
+                            )}
+                            {!error && claimed && (
+                              <a href={claimed} target="_blank" rel="noopener noreferrer"
+                                className="text-[12.5px] font-semibold flex items-center gap-1.5 hover:underline" style={{ color: '#10b981' }}>
+                                <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" /> Verified. View your post
+                              </a>
+                            )}
+                            {!error && !claimed && (
+                              <p className="text-[12px] leading-relaxed" style={{ color: txtFaint }}>
+                                Open your post on LinkedIn, copy its full address from the browser bar, and paste it
+                                here. Shortened lnkd.in links cannot be checked.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="px-4 sm:px-8 pb-5 sm:pb-7 pt-5">
+                          <button
+                            onClick={handleNext}
+                            disabled={required && !claimed && !reviewMode}
+                            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 sm:py-3 rounded-xl text-[14px] font-semibold transition-all active:scale-[0.98] disabled:opacity-45"
+                            style={{ background: accent, color: 'white' }}
+                          >
+                            {required || claimed
+                              ? (isLast ? 'Finish Course' : 'Continue')
+                              : (isLast ? 'Skip and finish' : 'Skip for now')}
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                          {required && !claimed && !reviewMode && (
+                            <p className="text-[12px] mt-2" style={{ color: txtFaint }}>
+                              Submit your post link to continue.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })() :
+                  /* -- Downloads slide -- */
+                  (currentQuestion as any).isDownloads ? (() => {
                     const dlItems: DownloadItem[] = (currentQuestion as any).downloadItems || [];
                     const isLast = currentQuestionIndex >= totalSlides - 1;
                     return (
@@ -3959,7 +4359,9 @@ export function CourseTaker({
                               {answered ? '✓' : locked ? <Lock className="w-3 h-3" /> : (q as any).lessonOnly ? '◉' : idx + 1}
                             </span>
                             <span className="flex-1 text-[13px] leading-snug line-clamp-2" style={{ color: isCurrent ? txt : txtMuted }}>
-                              {(q as any).isDownloads
+                              {(q as any).isLinkedInShare
+                                ? ((q as any).linkedInShareTitle || 'LinkedIn Share')
+                                : (q as any).isDownloads
                                 ? ((q as any).downloadsTitle || 'Downloads')
                                 : (q as any).lessonOnly
                                   ? ((q as any).lesson?.title || 'Lesson Content')

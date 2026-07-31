@@ -17,6 +17,9 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import FormEditor from '@/components/FormEditor';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
+import { LinkedInIcon } from '@/components/LinkedInIcon';
+import { veProgressPct, veCompletionCounts } from '@/lib/ve-completion';
+import { courseProgressCounts, courseProgressPct } from '@/lib/course-progress';
 import { ReviewReportView, LegacyReviewSummary, REVIEW_TYPES, REVIEW_LABELS } from '@/components/ReviewReportView';
 import { parseReviewNotes } from '@/lib/reviewRecord';
 import { pointsSystemFromCourseRow } from '@/lib/course-schema';
@@ -87,10 +90,11 @@ function useCopy(timeout = 2000) {
 // -- Responses Tab ---
 function ResponsesTab({
   form, responses, totalCount, page, pageLoading,
-  onExport, onPageChange, courseProgress, cohortStudents,
+  onExport, onPageChange, courseProgress, cohortStudents, linkedInShares = [],
 }: {
   form: any; responses: any[]; totalCount: number; page: number; pageLoading: boolean;
   onExport: () => void; onPageChange: (p: number) => void; courseProgress: any[]; cohortStudents: any[];
+  linkedInShares?: any[];
 }) {
   const { theme } = useTheme();
   const isDark = theme !== 'light';
@@ -108,6 +112,8 @@ function ResponsesTab({
   const [eventAttendance, setEventAttendance] = useState<any[]>([]);
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
   const [reviewStudent, setReviewStudent] = useState<any | null>(null);
+  const [shares, setShares] = useState<any[]>(linkedInShares);
+  useEffect(() => { setShares(linkedInShares); }, [linkedInShares]);
 
   useEffect(() => {
     if (!isEvent || !form.id) return;
@@ -196,7 +202,8 @@ function ResponsesTab({
       : null;
     const topScore = completedAttempts.length ? Math.max(...completedAttempts.map((p: any) => p.score ?? 0)) : 0;
 
-    const questionStats = questions.map((q: any) => {
+    // Share slides carry a post URL, not an answer, so they would always read as 0% correct.
+    const questionStats = questions.filter((q: any) => !q.isLinkedInShare).map((q: any) => {
       const answered = completedAttempts.filter((p: any) => p.answers?.[q.id]);
       const correct = answered.filter((p: any) => {
         const answer = p.answers?.[q.id];
@@ -291,6 +298,41 @@ function ResponsesTab({
                     <span className="flex items-center gap-1 text-xs text-rose-400"><XCircle className="w-3.5 h-3.5" /> {q.incorrect}</span>
                     <span className="text-xs font-semibold w-10 text-right" style={{ color: q.pct >= 50 ? '#10b981' : '#f43f5e' }}>{q.pct}%</span>
                   </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* LinkedIn shares -- post URLs are only pattern-checked, so spot-check them by hand. */}
+        {shares.length > 0 && (
+          <div className={`rounded-3xl border overflow-hidden ${card}`}>
+            <div className={`px-6 py-4 border-b ${cardHeader}`}>
+              <h3 className={`text-base font-semibold flex items-center gap-2 ${textPrim}`}>
+                <LinkedInIcon className="w-4 h-4" style={{ color: '#0A66C2' }} /> LinkedIn Shares
+              </h3>
+              <p className={`text-xs mt-0.5 ${textMut}`}>
+                Each link was checked when submitted: a real LinkedIn post URL, naming the profile saved
+                on that student&apos;s account, and not already claimed. That is a consistency check and a
+                deterrent, not proof the LinkedIn account belongs to them -- and it says nothing about
+                whether the post is still live.
+              </p>
+            </div>
+            <div className={`divide-y ${dividerCls}`}>
+              {shares.map((s: any) => (
+                <div key={s.id} className="px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium truncate ${textPrim}`}>
+                      {s.studentName || s.studentEmail || 'Unknown'}
+                    </p>
+                    <a href={s.postUrl} target="_blank" rel="noreferrer"
+                      className="text-xs break-all hover:underline" style={{ color: '#0A66C2' }}>
+                      {s.postUrl}
+                    </a>
+                  </div>
+                  <span className={`text-[11px] font-medium flex-shrink-0 ${textMut}`}>
+                    {s.points > 0 ? `${s.points} XP` : 'Recorded'}
+                  </span>
                 </div>
               ))}
             </div>
@@ -394,8 +436,10 @@ function ResponsesTab({
                   ))}
                   {/* In-progress students */}
                   {inProgressStudents.map((p: any) => {
-                    const qTotal = questions.length || 1;
-                    const progressPct = Math.min(100, Math.round(((p.current_question_index ?? 0) / qTotal) * 100));
+                    // Shared rule: slide-index over raw length both ignored section dividers and
+                    // counted an optional share this student may have skipped.
+                    const progressCounts = courseProgressCounts(questions, p.answers ?? {});
+                    const progressPct = courseProgressPct(questions, p.answers ?? {});
                     const submittedDocs = reviewQuestions.filter((q: any) => {
                       const ans = p.answers?.[q.id];
                       if (!ans) return false;
@@ -416,7 +460,7 @@ function ResponsesTab({
                             <div className={`h-1.5 w-16 sm:w-20 rounded-full overflow-hidden ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
                               <div className="h-full rounded-full bg-amber-400" style={{ width: `${progressPct}%` }} />
                             </div>
-                            <span className={`text-xs ${textMut}`}>{p.current_question_index ?? 0}/{qTotal}</span>
+                            <span className={`text-xs ${textMut}`}>{progressCounts.done}/{progressCounts.total}</span>
                           </div>
                         </td>
                         <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>
@@ -960,14 +1004,6 @@ function TwitterXIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
       <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.259 5.63L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z" />
-    </svg>
-  );
-}
-
-function LinkedInIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
     </svg>
   );
 }
@@ -2036,8 +2072,9 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
 
   const cfg     = form.config || {};
   const modules = cfg.modules || [];
-  const totalReqs = modules.reduce((a: number, m: any) =>
-    a + (m.lessons || []).reduce((b: number, l: any) => b + (l.requirements?.length || 0), 0), 0);
+  // No raw requirement total here on purpose: per-student counts come from veCompletionCounts, which
+  // excludes a skipped optional LinkedIn share. A shared denominator cannot express that, because
+  // whether a share counts depends on whether THAT student claimed it.
   const needsReview = modules.some((m: any) =>
     (m.lessons || []).some((l: any) =>
       (l.requirements || []).some((r: any) => r.type === 'text' || r.type === 'upload')));
@@ -2090,11 +2127,11 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
   const exportCSV = () => {
     const headers = ['Name', 'Email', 'Status', 'Requirements Done', 'Score', 'Last Active'];
     const rows = attempts.map(a => {
-      const doneReqs = a.progress ? Object.values(a.progress as Record<string, any>).filter((v: any) => v.completed).length : 0;
+      const counts = veCompletionCounts(modules, a.progress ?? {});
       const status = !a.started_at ? 'Not Started' : a.completed_at ? 'Completed' : 'In Progress';
       const score = a.review?.score !== undefined ? `${a.review.score}/100` : '';
       const lastActive = a.updated_at ? new Date(a.updated_at).toLocaleDateString() : '';
-      return [a.student_name || '', a.student_email || '', status, `${doneReqs}/${totalReqs}`, score, lastActive];
+      return [a.student_name || '', a.student_email || '', status, `${counts.doneReqs}/${counts.totalReqs}`, score, lastActive];
     });
     const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -2145,10 +2182,10 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
             </thead>
             <tbody className={`divide-y ${divider}`}>
               {attempts.map((a, i) => {
-                const doneReqs = a.progress
-                  ? Object.values(a.progress as Record<string, any>).filter((v: any) => v.completed).length
-                  : 0;
-                const pct         = totalReqs ? Math.round((doneReqs / totalReqs) * 100) : 0;
+                // Shared rule, so a skipped optional LinkedIn share is not reported as outstanding work.
+                const counts      = veCompletionCounts(modules, a.progress ?? {});
+                const doneReqs    = counts.doneReqs;
+                const pct         = veProgressPct(modules, a.progress ?? {});
                 const isCompleted = !!a.completed_at;
                 const isStarted   = !!a.started_at;
                 return (
@@ -2168,7 +2205,7 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
                           <div className={`h-1.5 w-20 rounded-full overflow-hidden ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
                             <div className="h-full rounded-full" style={{ width: `${pct}%`, background: isCompleted ? '#10b981' : '#6366f1' }} />
                           </div>
-                          <span className={`text-xs ${textMut}`}>{doneReqs}/{totalReqs}</span>
+                          <span className={`text-xs ${textMut}`}>{doneReqs}/{counts.totalReqs}</span>
                         </div>
                       ) : (
                         <span className={`text-xs ${textMut}`}>--</span>
@@ -2212,7 +2249,7 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
         modules.forEach((m: any) => {
           (m.lessons || []).forEach((l: any) => {
             (l.requirements || []).forEach((r: any) => {
-              if (r.type === 'text' || r.type === 'upload') {
+              if (r.type === 'text' || r.type === 'upload' || r.type === 'linkedin_share') {
                 reviewableReqs.push({ moduleTitle: m.title, lessonTitle: l.title, label: r.label || r.description || 'Requirement', type: r.type, reqId: r.id });
               } else if (REVIEW_TYPES.includes(r.type)) {
                 aiReviewReqs.push({ moduleTitle: m.title, lessonTitle: l.title, label: r.label || r.description || REVIEW_LABELS[r.type] || 'AI Review', type: r.type, reqId: r.id });
@@ -2247,7 +2284,15 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
                         <div key={req.reqId} className={`rounded-xl p-4 ${isDark ? 'bg-zinc-800' : 'bg-[#f8f8f5]'}`}>
                           <p className={`text-[11px] font-semibold uppercase tracking-wide mb-0.5 ${textMut}`}>{req.moduleTitle} - {req.lessonTitle}</p>
                           <p className={`text-sm font-medium mb-2 ${textPrim}`}>{req.label}</p>
-                          {req.type === 'upload' ? (
+                          {req.type === 'linkedin_share' ? (
+                            entry?.linkUrl
+                              ? <a href={entry.linkUrl} target="_blank" rel="noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg break-all"
+                                  style={{ background: 'rgba(10,102,194,0.1)', color: '#0A66C2' }}>
+                                  Open LinkedIn post
+                                </a>
+                              : <p className={`text-xs italic ${textMut}`}>No post submitted</p>
+                          ) : req.type === 'upload' ? (
                             fileUrl
                               ? <a href={fileUrl} target="_blank" rel="noreferrer"
                                   className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg"
@@ -2332,6 +2377,7 @@ export default function FormDetailPage() {
   const [loading, setLoading] = useState(true);
   const [pageLoading, setPageLoading] = useState(false);
   const [courseProgress, setCourseProgress] = useState<any[]>([]);
+  const [linkedInShares, setLinkedInShares] = useState<any[]>([]);
   const [cohortStudents, setCohortStudents] = useState<any[]>([]);
   const [formCohorts, setFormCohorts]       = useState<{ id: string; name: string }[]>([]);
   const [isStaff, setIsStaff] = useState(false);
@@ -2459,6 +2505,17 @@ export default function FormDetailPage() {
         if (progressRes.ok) {
           const progressJson = await progressRes.json();
           setCourseProgress(progressJson.progress ?? []);
+        }
+
+        // LinkedIn share claims, only when this course actually has a share slide.
+        if ((formData.config.questions ?? []).some((q: any) => q?.isLinkedInShare)) {
+          const shareRes = await fetch(`/api/linkedin-share?contentId=${encodeURIComponent(id as string)}`, {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+          if (shareRes.ok) {
+            const shareJson = await shareRes.json();
+            setLinkedInShares(shareJson.shares ?? []);
+          }
         }
       }
 
@@ -2686,6 +2743,7 @@ export default function FormDetailPage() {
                           onPageChange={fetchPage}
                           courseProgress={courseProgress}
                           cohortStudents={cohortStudents}
+                          linkedInShares={linkedInShares}
                         />
                       )}
                       {activeTab === 'responses' && type === 'virtual_experience' && (
