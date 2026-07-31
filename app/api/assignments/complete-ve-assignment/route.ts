@@ -5,6 +5,8 @@ import { Resend } from 'resend';
 import { submissionConfirmEmail } from '@/lib/email-templates';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { sendGroupSubmissionNotifications } from '@/lib/group-submission-notifications';
+import { countCompletedRequirements, isVeComplete } from '@/lib/ve-completion';
+import { loadClaimedShareItemIds } from '@/lib/linkedin-share';
 
 export const dynamic = 'force-dynamic';
 
@@ -153,27 +155,19 @@ export async function POST(req: NextRequest) {
   const mergedProgress = mergeProgress(existingAttempt?.progress, progress);
   const current = chooseCurrentLesson(modules, existingAttempt, currentModuleId, currentLessonId);
 
-  // Server-validate completion. MCQ requires correct answer; all other types trust the completed flag.
-  let totalReqs = 0;
-  let doneReqs = 0;
-  for (const mod of modules) {
-    for (const lesson of mod.lessons ?? []) {
-      for (const req of lesson.requirements ?? []) {
-        totalReqs++;
-        const entry = (mergedProgress ?? {})[req.id];
-        if (!entry) continue;
-        if (req.type === 'mcq') {
-          if (entry.selectedAnswer === req.correctAnswer) doneReqs++;
-        } else {
-          if (entry.completed) doneReqs++;
-        }
-      }
-    }
-  }
+  // Server-validate completion through the SHARED rule (lib/ve-completion). This route used to carry
+  // its own copy of the loop, which trusted progress[share].completed -- so a direct request could
+  // forge a required LinkedIn share -- and counted optional shares as required, rejecting a student
+  // who legitimately skipped one. linkedin_share is validated against the claim table only.
+  const claimedShareItemIds = await loadClaimedShareItemIds(supabase, {
+    studentId: user.id,
+    contentId: veFormId,
+  });
+  const counts = countCompletedRequirements(modules, mergedProgress, claimedShareItemIds);
 
-  if (totalReqs === 0 || doneReqs < totalReqs) {
+  if (!isVeComplete(counts)) {
     return NextResponse.json(
-      { error: `Not all requirements are complete (${doneReqs} of ${totalReqs} done)` },
+      { error: `Not all requirements are complete (${counts.doneReqs} of ${counts.totalReqs} done)` },
       { status: 400 },
     );
   }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole, isAuthError } from '@/lib/api-auth';
+import { veProgressPct } from '@/lib/ve-completion';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,10 +83,8 @@ export async function GET(req: NextRequest) {
 
   const ves = (cohortVEs ?? []).map((v: any) => {
     const att = gpMap[v.id];
-    const totalReqs = (v.modules ?? []).reduce((sum: number, m: any) =>
-      sum + (m.lessons ?? []).reduce((s2: number, l: any) => s2 + (l.requirements ?? []).length, 0), 0);
-    const doneReqs  = att ? Object.values(att.progress ?? {}).filter((x: any) => x?.completed).length : 0;
-    const pct = totalReqs > 0 ? Math.round((doneReqs / totalReqs) * 100) : 0;
+    // Shared rule, so a skipped optional LinkedIn share does not show as unfinished work.
+    const pct = veProgressPct(v.modules ?? [], att?.progress ?? {});
     return {
       id: v.id, title: v.title, slug: v.slug,
       status: att ? (att.completed_at ? 'completed' : 'in_progress') : 'not_started',

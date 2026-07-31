@@ -5,12 +5,16 @@ import Link from 'next/link';
 import {
   CheckCircle2, Circle, ChevronRight, ChevronLeft, ChevronDown,
   X, Loader2, Trophy, BookOpen, Lock, Download, Award, Star, Clock,
-  Link as LinkIcon, Upload as UploadIcon, Paperclip, Send, Reply, AlertTriangle,
+  Link as LinkIcon, Upload as UploadIcon, Paperclip, Send, Reply, AlertTriangle, Eye,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText, sanitizeEmailContent } from '@/lib/sanitize';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { applyNameTags } from '@/lib/merge-tags';
+import { preflightLinkedInPostUrl } from '@/lib/linkedin-post-url';
+import { saveMyLinkedInProfileUrl, shareClaimErrorMessage } from '@/lib/linkedin-profile';
+import { veCompletionCounts, lessonCompletionPct, isVeComplete, reqCountsForCompletion } from '@/lib/ve-completion';
+import { LinkedInIcon } from '@/components/LinkedInIcon';
 import { LessonRenderer } from '@/components/lesson/LessonRenderer';
 import type { LessonDoc } from '@/lib/lesson-doc';
 import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
@@ -47,7 +51,9 @@ interface Requirement {
   id: string;
   label: string;
   description: string;
-  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review';
+  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review' | 'linkedin_share';
+  sharePrompt?: string;   // linkedin_share: suggested post text the student can copy
+  shareRequired?: boolean; // linkedin_share: absent/true = required; false = optional, never blocks the lesson
   options?: string[];
   optionFeedback?: string[];
   correctAnswer?: string;
@@ -132,15 +138,16 @@ const REQ_META: Record<string, { label: string; color: string; bg: string }> = {
   scenario_update: { label: 'Scenario Update', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
   decision:    { label: 'Decision', color: '#0ea5e9', bg: 'rgba(14,165,233,0.12)' },
   debrief:     { label: 'Debrief', color: '#14b8a6', bg: 'rgba(20,184,166,0.12)' },
+  linkedin_share: { label: 'LinkedIn Share', color: '#0A66C2', bg: 'rgba(10,102,194,0.12)' },
 };
 
 import { safeEmbedUrl as getVideoEmbedUrl, isHtmlEmbedUrl } from '@/lib/safe-embed-url';
 import { HtmlEmbedFrame } from '@/components/HtmlEmbedFrame';
 
+// Lesson percentage comes from the shared rule so the player, the progress route and the
+// assignment-completion route cannot disagree about what "done" means.
 function lessonProgress(lesson: Lesson, progress: Progress): number {
-  if (!lesson.requirements.length) return 100;
-  const done = lesson.requirements.filter(r => progress[r.id]?.completed).length;
-  return Math.round((done / lesson.requirements.length) * 100);
+  return lessonCompletionPct(lesson, progress);
 }
 
 function isAnswerCorrect(studentAnswer: string, expectedAnswer: string): boolean {
@@ -240,6 +247,16 @@ export default function VirtualExperienceTaker({
   const [certLoading,  setCertLoading]  = useState(false);
   const [certError,    setCertError]    = useState<string | null>(null);
   const [uploadingReq, setUploadingReq] = useState<string | null>(null);
+  // linkedin_share deliverables: draft URL per requirement, plus claim state.
+  const [shareDrafts, setShareDrafts] = useState<Record<string, string>>({});
+  const [shareSaving, setShareSaving] = useState<string | null>(null);
+  const [shareErrors, setShareErrors] = useState<Record<string, string>>({});
+  const [shareCopied, setShareCopied] = useState<string | null>(null);
+  // Set when the server has no LinkedIn profile to check a post's author against.
+  const [needsProfile, setNeedsProfile] = useState<string | null>(null);
+  const [profileDraft, setProfileDraft] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
   const [aiReviewing,  setAiReviewing]  = useState<Record<string, boolean>>({});
   // `errored: true` marks a review that never actually ran (validation / rate-limit / server /
   // network) - it is shown as a neutral "could not review" state, never a pass/fail grade.
@@ -264,9 +281,14 @@ export default function VirtualExperienceTaker({
   const currentLes = currentMod?.lessons.find(l => l.id === currentLesId);
   const embedUrl   = currentLes?.videoUrl ? getVideoEmbedUrl(currentLes.videoUrl) : null;
 
-  const totalReqs  = flat.reduce((acc, { lesson }) => acc + lesson.requirements.length, 0);
-  const doneReqs   = Object.values(progress).filter(v => v.completed).length;
-  const overallPct = totalReqs ? Math.round((doneReqs / totalReqs) * 100) : 0;
+  // Same rule the server uses. Counting Object.values(progress) instead would include stale
+  // entries for deleted requirements, and counting every requirement would let a skipped
+  // optional share hold the bar below 100% and keep Complete disabled forever.
+  const overallCounts = veCompletionCounts(modules, progress);
+  const totalReqs  = overallCounts.totalReqs;
+  const doneReqs   = overallCounts.doneReqs;
+  const overallPct = totalReqs ? Math.round((doneReqs / totalReqs) * 100) : 100;
+  const canComplete = isVeComplete(overallCounts);
 
   const flatIdx = flat.findIndex(f => f.lesson.id === currentLesId);
   const hasPrev = flatIdx > 0;
@@ -372,6 +394,66 @@ export default function VirtualExperienceTaker({
       saveProgress(next, currentModId, currentLesId);
       return next;
     });
+  };
+
+  /**
+   * Claim a LinkedIn post for a linkedin_share deliverable.
+   *
+   * Awaited rather than debounced through saveProgress: only the server knows whether the post is
+   * already claimed, and the requirement only counts as complete once it says so. The route writes
+   * the progress entry itself, so we mirror its canonical URL instead of saving our own.
+   */
+  const submitShareLink = async (reqId: string) => {
+    const draft = (shareDrafts[reqId] ?? '').trim();
+    if (!draft || !canPersistProgress) return;
+    const pre = preflightLinkedInPostUrl(draft);
+    if (!pre.ok) {
+      setShareErrors(prev => ({ ...prev, [reqId]: shareClaimErrorMessage(pre.code) }));
+      return;
+    }
+    setShareErrors(prev => { const n = { ...prev }; delete n[reqId]; return n; });
+    setShareSaving(reqId);
+    try {
+      const res = await fetch('/api/guided-project-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({ action: 'claim-linkedin-share', veId: formId, requirementId: reqId, post_url: draft }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // No profile on file to check the author against -- ask for it inline instead of erroring.
+        if (json?.error === 'no_profile') {
+          setNeedsProfile(reqId); setProfileError(''); return;
+        }
+        setShareErrors(prev => ({ ...prev, [reqId]: shareClaimErrorMessage(json?.error) }));
+        // Deliberately NOT offering to change the saved profile here. Letting a student edit it in
+        // response to a mismatch turns the check into a formality: paste a stranger's post, enter that
+        // stranger's profile as your own, retry. Setting a profile for the first time is fine (above);
+        // changing one to match a post that just failed is not.
+        return;
+      }
+      const savedUrl = typeof json.url === 'string' ? json.url : draft;
+      setShareDrafts(prev => ({ ...prev, [reqId]: savedUrl }));
+      setProgress(prev => ({ ...prev, [reqId]: { ...prev[reqId], linkUrl: savedUrl, completed: true } }));
+    } catch {
+      setShareErrors(prev => ({ ...prev, [reqId]: 'Could not save your link. Please try again.' }));
+    } finally {
+      setShareSaving(null);
+    }
+  };
+
+  /** Save the student's LinkedIn profile, then retry the claim it was blocking. */
+  const saveProfileAndRetry = async (reqId: string) => {
+    setProfileSaving(true);
+    setProfileError('');
+    try {
+      const result = await saveMyLinkedInProfileUrl(profileDraft);
+      if (!result.ok) { setProfileError(result.error); return; }
+      setNeedsProfile(null);
+      await submitShareLink(reqId);
+    } finally {
+      setProfileSaving(false);
+    }
   };
 
   const navigate = (modId: string, lesId: string, idx: number) => {
@@ -498,12 +580,6 @@ export default function VirtualExperienceTaker({
       return `https://www.linkedin.com/profile/add?${params}`;
     };
 
-    const LinkedInIcon = () => (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" aria-hidden="true">
-        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-      </svg>
-    );
-
     return (
       <div className="min-h-screen flex flex-col font-sans" style={{ background: isDark ? '#0e0e0e' : '#F3F4F2', color: text, fontFamily: "'Google Sans', 'Inter', sans-serif" }}>
 
@@ -619,7 +695,7 @@ export default function VirtualExperienceTaker({
                   className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-[15px] transition-all hover:opacity-90"
                   style={{ background: '#0A66C2', color: '#fff', boxShadow: '0 8px 24px rgba(10,102,194,0.35)' }}
                 >
-                  <LinkedInIcon /> Add to LinkedIn Profile
+                  <LinkedInIcon className="w-5 h-5" /> Add to LinkedIn Profile
                 </a>
                 <a
                   href={`/certificate/${certId}`}
@@ -1014,8 +1090,10 @@ export default function VirtualExperienceTaker({
                       // Messages arrive sequentially: a requirement only appears once
                       // everything before it is done AND the manager has finished
                       // replying (review/preview show the whole conversation).
+                      // An optional, unclaimed share must not hold back the requirements after it.
                       if (!reviewMode && !previewMode && qi > 0 && !currentLes.requirements.slice(0, qi).every(r =>
-                        progress[r.id]?.completed && !typingAcks.has(r.id) && !typingDecisions.has(r.id) && !efTyping[r.id]
+                        (!reqCountsForCompletion(r, progress) || progress[r.id]?.completed)
+                        && !typingAcks.has(r.id) && !typingDecisions.has(r.id) && !efTyping[r.id]
                       )) return null;
 
                       const rowStyle: React.CSSProperties = {
@@ -1833,6 +1911,177 @@ export default function VirtualExperienceTaker({
                       }
 
                       // File Upload question
+                      if (req.type === 'linkedin_share') {
+                        const claimed = progress[req.id]?.linkUrl || '';
+                        const draft   = shareDrafts[req.id] ?? claimed;
+                        const saving  = shareSaving === req.id;
+                        const error   = shareErrors[req.id];
+                        const meta    = REQ_META.linkedin_share;
+                        return (
+                          <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5 space-y-3">
+                            <div className="flex items-start gap-2.5">
+                              <span className="flex-shrink-0 flex items-center justify-center rounded-lg mt-0.5"
+                                style={{ width: 30, height: 30, background: '#0A66C2' }}>
+                                <LinkedInIcon className="w-4 h-4" style={{ color: '#fff' }} />
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[14.5px] font-semibold flex items-center gap-2" style={{ color: isDark ? '#f0f0f0' : '#111' }}>
+                                  {req.label}
+                                  {req.shareRequired === false && (
+                                    <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded flex-shrink-0"
+                                      style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', color: isDark ? '#888' : '#666' }}>
+                                      Optional
+                                    </span>
+                                  )}
+                                </p>
+                                {req.description && <p className="text-[12.5px] mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}
+                              </div>
+                              {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accentColor }} />}
+                            </div>
+
+                            {/* No XP on the VE side, so the payoff is framed as the work being seen. */}
+                            {!claimed && (
+                              <div className="flex items-center gap-2 rounded-lg px-3 py-2.5"
+                                style={{ background: `${accentColor}10` }}>
+                                <Eye className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accentColor }} />
+                                <p className="text-[12px] leading-snug" style={{ color: isDark ? '#aaa' : '#555' }}>
+                                  Real work, shared publicly. This is the part hiring managers actually see.
+                                </p>
+                              </div>
+                            )}
+
+                            {req.sharePrompt && (
+                              <div className="rounded-lg p-3.5" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8', border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
+                                <div className="flex items-center justify-between gap-3 mb-1.5">
+                                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: isDark ? '#666' : '#aaa' }}>Suggested post</p>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard?.writeText(req.sharePrompt || '').then(() => {
+                                        setShareCopied(req.id);
+                                        setTimeout(() => setShareCopied(null), 1800);
+                                      }).catch(() => {});
+                                    }}
+                                    className="px-2.5 py-1.5 rounded-md text-[11.5px] font-semibold transition-all active:scale-[0.97]"
+                                    style={{ background: isDark ? 'rgba(255,255,255,0.07)' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)'}`, color: isDark ? '#ddd' : '#333' }}
+                                  >
+                                    {shareCopied === req.id ? 'Copied' : 'Copy'}
+                                  </button>
+                                </div>
+                                <p className="text-[12.5px] leading-relaxed whitespace-pre-wrap" style={{ color: isDark ? '#aaa' : '#555' }}>{req.sharePrompt}</p>
+                              </div>
+                            )}
+
+                            <a
+                              href="https://www.linkedin.com/feed/?shareActive=true"
+                              target="_blank" rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-lg text-[12.5px] font-semibold transition-all active:scale-[0.98] hover:opacity-90"
+                              style={{ background: '#0A66C2', color: '#fff' }}
+                            >
+                              <LinkedInIcon className="w-4 h-4" /> Write my post
+                            </a>
+
+                            <div className="space-y-1.5">
+                              <p className="text-[12.5px] font-medium" style={{ color: isDark ? '#888' : '#666' }}>Paste the link to your post</p>
+                              <div className="flex flex-col sm:flex-row gap-2">
+                                {/* The input carries the border and radius itself, rather than sitting bare
+                                    inside a bordered wrapper: the global focus ring in globals.css is an
+                                    outline on the INPUT, and an outline follows that element's own radius --
+                                    so a bare field would ring as a sharp rectangle inside the rounded box. */}
+                                <div className="flex-1 min-w-0 relative">
+                                  <LinkIcon className="w-3 h-3 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                                    style={{ color: isDark ? '#666' : '#aaa' }} />
+                                  <input
+                                    type="url" inputMode="url" value={draft} readOnly={reviewMode}
+                                    onChange={e => {
+                                      setShareDrafts(prev => ({ ...prev, [req.id]: e.target.value }));
+                                      if (shareErrors[req.id]) setShareErrors(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                                    }}
+                                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitShareLink(req.id); } }}
+                                    placeholder="https://www.linkedin.com/posts/..."
+                                    className="w-full min-w-0 pl-8 pr-3 py-2.5 rounded-lg text-[12.5px] outline-none"
+                                    style={{
+                                      background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
+                                      border: `1px solid ${error ? '#f43f5e' : claimed ? `${accentColor}60` : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
+                                      color: isDark ? '#f0f0f0' : '#111',
+                                    }}
+                                  />
+                                </div>
+                                {!reviewMode && (
+                                  <button
+                                    type="button"
+                                    onClick={() => submitShareLink(req.id)}
+                                    disabled={saving || !draft.trim() || draft.trim() === claimed}
+                                    className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[12.5px] font-semibold transition-all active:scale-[0.98] disabled:opacity-45"
+                                    style={{ background: accentColor, color: '#fff' }}
+                                  >
+                                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : claimed ? 'Update' : 'Submit'}
+                                  </button>
+                                )}
+                              </div>
+                              {/* Asked for once, when there is no profile to check the post's author
+                                  against. Saving it retries the claim straight away. */}
+                              {needsProfile === req.id && (
+                                <div className="rounded-lg p-3 space-y-2" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8' }}>
+                                  <p className="text-[12.5px] font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>
+                                    First, add your LinkedIn profile
+                                  </p>
+                                  <p className="text-[11.5px] leading-relaxed" style={{ color: isDark ? '#888' : '#666' }}>
+                                    We check that the post you paste was written by you, so we need to know which profile is yours. This is saved to your profile once.
+                                  </p>
+                                  <div className="flex flex-col sm:flex-row gap-2">
+                                    <input
+                                      type="url" inputMode="url" value={profileDraft}
+                                      onChange={e => { setProfileDraft(e.target.value); if (profileError) setProfileError(''); }}
+                                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveProfileAndRetry(req.id); } }}
+                                      placeholder="linkedin.com/in/your-name"
+                                      className="flex-1 min-w-0 px-3 py-2.5 rounded-lg text-[12.5px] outline-none"
+                                      style={{
+                                        background: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                                        border: `1px solid ${profileError ? '#f43f5e' : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                                        color: isDark ? '#f0f0f0' : '#111',
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => saveProfileAndRetry(req.id)}
+                                      disabled={profileSaving || !profileDraft.trim()}
+                                      className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[12.5px] font-semibold transition-all active:scale-[0.98] disabled:opacity-45"
+                                      style={{ background: accentColor, color: '#fff' }}
+                                    >
+                                      {profileSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Save and submit'}
+                                    </button>
+                                  </div>
+                                  {profileError && (
+                                    <p className="text-[12px] font-medium flex items-start gap-1.5" style={{ color: '#f43f5e' }}>
+                                      <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> {profileError}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
+                              {error && (
+                                <p className="text-[12px] font-medium flex items-start gap-1.5" style={{ color: '#f43f5e' }}>
+                                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> {error}
+                                </p>
+                              )}
+                              {!error && claimed && (
+                                <a href={claimed} target="_blank" rel="noreferrer"
+                                  className="text-[12px] font-semibold flex items-center gap-1.5 hover:underline" style={{ color: '#10b981' }}>
+                                  <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" /> Verified. View your post
+                                </a>
+                              )}
+                              {!error && !claimed && (
+                                <p className="text-[11.5px] leading-relaxed" style={{ color: isDark ? '#666' : '#999' }}>
+                                  Open your post on LinkedIn, copy its full address, and paste it here. Shortened
+                                  lnkd.in links cannot be checked.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }
+
                       if (req.type === 'upload') {
                         const fileUrl  = progress[req.id]?.fileUrl || '';
                         const linkUrl  = progress[req.id]?.linkUrl || '';
@@ -2461,9 +2710,9 @@ export default function VirtualExperienceTaker({
                     <Trophy className="w-4 h-4" /> <span className="hidden xs:inline">Summary</span>
                   </button>
                 ) : (
-                  <button onClick={handleComplete} disabled={saving || overallPct < 100}
+                  <button onClick={handleComplete} disabled={saving || !canComplete}
                     className="flex items-center gap-1.5 px-3 sm:px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-all hover:opacity-80 flex-shrink-0"
-                    style={{ background: overallPct === 100 ? accentColor : border, color: overallPct === 100 ? (isDark ? '#111' : '#fff') : muted }}>
+                    style={{ background: canComplete ? accentColor : border, color: canComplete ? (isDark ? '#111' : '#fff') : muted }}>
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
                     <span className="hidden xs:inline">Complete</span>
                   </button>

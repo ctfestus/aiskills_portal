@@ -167,6 +167,10 @@ CREATE TABLE public.courses (
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
 
+-- Lightweight id/type/slide-kind projection so save-progress never loads the whole questions JSONB
+-- (migration 136, widened in 154). The flags and share bonus let save-progress clamp the client's
+-- reported points total to what the course could actually award. Values pass through as raw jsonb --
+-- no casts -- because a cast failure on one hand-edited course would break saves for that course.
 CREATE OR REPLACE FUNCTION public.question_types(c public.courses)
 RETURNS jsonb
 LANGUAGE sql
@@ -174,8 +178,13 @@ IMMUTABLE
 AS $$
   SELECT COALESCE(
     jsonb_agg(jsonb_build_object(
-      'id',   q->>'id',
-      'type', COALESCE(q->>'type', 'multiple_choice')
+      'id',                  q->>'id',
+      'type',                COALESCE(q->>'type', 'multiple_choice'),
+      'lessonOnly',          COALESCE(q->'lessonOnly',      'false'::jsonb),
+      'isSection',           COALESCE(q->'isSection',       'false'::jsonb),
+      'isDownloads',         COALESCE(q->'isDownloads',     'false'::jsonb),
+      'isLinkedInShare',     COALESCE(q->'isLinkedInShare', 'false'::jsonb),
+      'linkedInSharePoints', COALESCE(q->'linkedInSharePoints', 'null'::jsonb)
     )),
     '[]'::jsonb
   )
@@ -1242,6 +1251,12 @@ CREATE TRIGGER trg_prevent_student_role_change
   FOR EACH ROW EXECUTE FUNCTION public.prevent_student_role_change();
 
 -- XP recalculation after each course attempt.
+-- Counts in-progress attempts as well as finished ones. That is only safe because save-progress does
+-- not trust the browser's running total: it computes points from the stored answers via
+-- lib/attempt-points.ts, the same function complete-attempt uses. If that ever changes back to
+-- accepting a client-reported number, this trigger must stop counting unfinished attempts.
+-- Quirk: the fallback picks the most recently STARTED attempt, so beginning a retake replaces a
+-- completed attempt's points with the new attempt's (0 at the start) until the student works back up.
 CREATE OR REPLACE FUNCTION public.recalc_student_xp()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -3876,3 +3891,68 @@ CREATE POLICY "agpv: own update" ON public.assignment_group_poll_votes FOR UPDAT
                 WHERE p.id = post_id AND p.kind = 'poll' AND p.deleted_at IS NULL
                   AND public.can_access_group_forum(t.assignment_id, t.group_id)));
 -- No DELETE policy: no "unvote" in v1 (you can change your choice via update/upsert).
+
+-- ============================================================================
+-- LinkedIn post share claims (migrations 153, 155, 156)
+-- ============================================================================
+-- Students paste the URL of the LinkedIn post where they shared their work. A course share slide
+-- awards bonus XP; a VE linkedin_share deliverable is a plain completion requirement.
+--
+-- There is no human review. A row in this table carries exactly one meaning, all of it decided at
+-- claim time, which is why no status column exists:
+--
+--   the URL was a LinkedIn post, it names this student as its author, and nobody had claimed it
+--   before.
+--
+--   * post_key is the post's IDENTITY, not the pasted URL: every URL form pointing at one post
+--     (/posts/ share link, regional host, utm_ params, differing profile slug) collapses to one key,
+--     so UNIQUE(post_key) actually stops a cohort passing one link around.
+--   * UNIQUE(student_id, content_id, item_id) makes one row per share slot, so a student fixing a
+--     mistyped link UPDATEs in place (freeing their old post_key) instead of stacking claims.
+--   * author_vanity is the vanity read out of the post URL, which must equal the student's own
+--     (students.social_links->>'linkedin') or the claim is refused and never written. Kept as the
+--     evidence the check ran, and as a record of what matched if the student later renames.
+--     URL forms carrying no author -- /feed/update/ permalinks, /pulse/ articles -- are rejected,
+--     because with no reviewer an unchecked claim is indistinguishable from a checked one.
+--   * points is an informational snapshot of the configured bonus. It is NOT the XP source --
+--     course XP stays in course_attempts.points, which recalc_student_xp() already sums.
+--   * content_id has no FK: a claim must outlive a deleted course/VE.
+--   * NO client write policy: writes go only through the service-role claim actions.
+
+CREATE TABLE IF NOT EXISTS public.linkedin_shares (
+  id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id    uuid        NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  content_type  text        NOT NULL CHECK (content_type IN ('course', 'virtual_experience')),
+  content_id    uuid        NOT NULL,
+  item_id       text        NOT NULL CHECK (char_length(item_id) BETWEEN 1 AND 200),
+  post_url      text        NOT NULL CHECK (char_length(post_url) BETWEEN 1 AND 2048),
+  post_key      text        NOT NULL CHECK (char_length(post_key) BETWEEN 1 AND 512),
+  points        integer     NOT NULL DEFAULT 0 CHECK (points >= 0),
+  author_vanity text,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT linkedin_shares_post_key_unique UNIQUE (post_key),
+  CONSTRAINT linkedin_shares_slot_unique     UNIQUE (student_id, content_id, item_id)
+);
+
+CREATE INDEX IF NOT EXISTS linkedin_shares_content_idx
+  ON public.linkedin_shares (content_id, student_id);
+
+ALTER TABLE public.linkedin_shares ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "linkedin_shares: student read own" ON public.linkedin_shares;
+CREATE POLICY "linkedin_shares: student read own"
+  ON public.linkedin_shares FOR SELECT
+  USING (student_id = (SELECT auth.uid()));
+
+DROP POLICY IF EXISTS "linkedin_shares: instructor read" ON public.linkedin_shares;
+CREATE POLICY "linkedin_shares: instructor read"
+  ON public.linkedin_shares FOR SELECT
+  USING ((SELECT public.is_instructor_or_admin()));
+
+DROP POLICY IF EXISTS "linkedin_shares: staff select" ON public.linkedin_shares;
+CREATE POLICY "linkedin_shares: staff select"
+  ON public.linkedin_shares FOR SELECT
+  USING ((SELECT public.is_staff()));
+
+-- No INSERT / UPDATE / DELETE policy by design.

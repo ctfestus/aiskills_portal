@@ -12,6 +12,7 @@ import { useTheme } from '@/components/ThemeProvider';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { LIGHT_C } from '@/lib/theme';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
+import { veProgressPct, veCompletionCounts } from '@/lib/ve-completion';
 import { CarouselSkeleton, EmptyState, ProgressBar, HoverPreviewCard } from '@/components/student/shared';
 import {
   Briefcase, Check, CheckCircle, ChevronLeft, ChevronRight, FileText, Play, RefreshCw, Star, X, Zap,
@@ -32,11 +33,12 @@ function VirtualExperienceCard({ form, attempt, deadline, C, onDetails }: {
   const cfg = form.config || {};
   const color = IND_COLORS[cfg.industry] || '#6366f1';
   const slug  = form.slug || form.id;
-  const totalReqs = (cfg.modules || []).reduce((a: number, m: any) =>
-    a + (m.lessons || []).reduce((b: number, l: any) => b + (l.requirements?.length || 0), 0), 0);
-  const doneReqs = attempt?.progress
-    ? Object.values(attempt.progress as Record<string, any>).filter((v: any) => v.completed).length : 0;
-  const pct = totalReqs ? Math.round((doneReqs / totalReqs) * 100) : 0;
+  // Shared rule, so a skipped optional LinkedIn share cannot hold this below 100% while the
+  // status beside it reads Completed.
+  const veCounts = veCompletionCounts(cfg.modules || [], attempt?.progress ?? {});
+  const totalReqs = veCounts.totalReqs;
+  const doneReqs = veCounts.doneReqs;
+  const pct = veProgressPct(cfg.modules || [], attempt?.progress ?? {});
   const isCompleted = !!attempt?.completed_at;
   const isStarted   = !!attempt && !isCompleted;
   const actionLabel = isCompleted ? 'Review' : isStarted ? 'Continue' : 'Start';
@@ -159,12 +161,13 @@ function VirtualExperienceDetailPane({ form, attempt, C, onClose }: {
   const [imgErr, setImgErr] = useState(false);
 
   const modules = cfg.modules || [];
-  const totalReqs = modules.reduce((a: number, m: any) =>
-    a + (m.lessons || []).reduce((b: number, l: any) => b + (l.requirements?.length || 0), 0), 0);
   const totalLessons = modules.reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
-  const doneReqs = attempt?.progress
-    ? Object.values(attempt.progress as Record<string, any>).filter((v: any) => v.completed).length : 0;
-  const pct = totalReqs ? Math.round((doneReqs / totalReqs) * 100) : 0;
+  // Shared rule, so a skipped optional LinkedIn share cannot hold this below 100% while the
+  // status beside it reads Completed.
+  const veCounts = veCompletionCounts(modules, attempt?.progress ?? {});
+  const totalReqs = veCounts.totalReqs;
+  const doneReqs = veCounts.doneReqs;
+  const pct = veProgressPct(modules, attempt?.progress ?? {});
   const isCompleted = !!attempt?.completed_at;
   const isStarted   = !!attempt && !isCompleted;
   const actionLabel = isCompleted ? 'Review Project' : isStarted ? 'Continue Project' : 'Start Project';

@@ -1,21 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole, isAuthError } from '@/lib/api-auth';
+import { veProgressPct } from '@/lib/ve-completion';
 
 export const dynamic = 'force-dynamic';
 
-function totalRequirements(modules: any): number {
-  let total = 0;
-  for (const mod of modules ?? []) {
-    for (const lesson of mod.lessons ?? []) {
-      total += (lesson.requirements ?? []).length;
-    }
-  }
-  return total;
-}
-
-function completedCount(progress: any): number {
-  if (!progress || typeof progress !== 'object') return 0;
-  return Object.values(progress).filter((v: any) => v?.completed).length;
+// Percentage comes from the shared completion rule (lib/ve-completion), so a student who finished
+// by skipping an optional LinkedIn share is not reported as still mid-experience.
+function progressPercent(modules: any, progress: any): number {
+  return veProgressPct(Array.isArray(modules) ? modules : [], progress ?? {});
 }
 
 // GET /api/ve-attempt?veId=xxx&studentId=yyy
@@ -66,10 +58,10 @@ export async function GET(req: NextRequest) {
 
   if (attemptsError) return NextResponse.json({ error: attemptsError.message }, { status: 500 });
 
-  const total = totalRequirements(ve?.modules);
+  const veModules = ve?.modules;
   const rows = (attempts ?? []).map((a: any) => ({
     studentId:   a.student_id,
-    progressPct: total > 0 ? Math.round((completedCount(a.progress) / total) * 100) : 0,
+    progressPct: progressPercent(veModules, a.progress),
     completedAt: a.completed_at ?? null,
     updatedAt:   a.updated_at ?? null,
   }));

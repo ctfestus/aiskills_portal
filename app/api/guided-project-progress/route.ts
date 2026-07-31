@@ -6,6 +6,8 @@ import { milestoneEmail, courseResultEmail, badgeEarnedEmail } from '@/lib/email
 import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { updateLearningPathProgress } from '@/lib/learning-path-progress';
+import { claimLinkedInShare, loadClaimedShareItemIds } from '@/lib/linkedin-share';
+import { countCompletedRequirements, isVeComplete } from '@/lib/ve-completion';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,28 +59,93 @@ function chooseCurrentLesson(modules: any[], existing: any, incomingModuleId?: s
   return { moduleId: incomingModuleId || null, lessonId: incomingLessonId || null };
 }
 
-function countCompletedRequirements(modules: any[], progress: any) {
-  let totalReqs = 0;
-  let doneReqs  = 0;
-  for (const mod of modules) {
-    for (const lesson of mod.lessons ?? []) {
-      for (const req of lesson.requirements ?? []) {
-        totalReqs++;
-        const entry = (progress ?? {})[req.id];
-        if (!entry) continue;
-        if (req.type === 'mcq') {
-          if (entry.selectedAnswer === req.correctAnswer) doneReqs++;
-        } else {
-          if (entry.completed) doneReqs++;
-        }
+const adminClient = () =>
+  createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
+/**
+ * Student-side VE access: published, and reachable via the student's cohort, a published learning
+ * path, or the assignment that embeds this VE. Shared by the progress save and the LinkedIn share
+ * claim so the two can never enforce different rules.
+ */
+async function authorizeVeStudent(
+  supabase: ReturnType<typeof adminClient>,
+  req: NextRequest,
+  opts: { veId: string; assignmentId?: string },
+) {
+  const auth = await requireStudentUser(req);
+  if (isAuthError(auth)) return { error: auth.error };
+  const user = auth.user;
+
+  const [{ data: ve }, { data: studentRow }] = await Promise.all([
+    supabase.from('virtual_experiences')
+      .select('status, cohort_ids, modules, title, slug')
+      .eq('id', opts.veId).single(),
+    supabase.from('students').select('cohort_id').eq('id', user.id).single(),
+  ]);
+
+  if (!ve || ve.status !== 'published') {
+    return { error: NextResponse.json({ error: 'Not found' }, { status: 404 }) };
+  }
+
+  const hasDirectAccess = !!studentRow?.cohort_id &&
+    (ve.cohort_ids as string[] ?? []).includes(studentRow.cohort_id);
+
+  let hasLpAccess = false;
+  if (!hasDirectAccess && studentRow?.cohort_id) {
+    const { data: lpRow } = await supabase
+      .from('learning_paths')
+      .select('id')
+      .eq('status', 'published')
+      .contains('cohort_ids', [studentRow.cohort_id])
+      .contains('item_ids', [opts.veId])
+      .limit(1)
+      .maybeSingle();
+    hasLpAccess = !!lpRow;
+  }
+
+  let hasAssignmentAccess = false;
+  if (!hasDirectAccess && !hasLpAccess && opts.assignmentId) {
+    const { data: asgn } = await supabase
+      .from('assignments')
+      .select('status, config, cohort_ids, group_ids')
+      .eq('id', opts.assignmentId)
+      .maybeSingle();
+    if (asgn?.status === 'published' && asgn.config?.ve_form_id === opts.veId) {
+      const cohortIds: string[] = Array.isArray(asgn.cohort_ids) ? asgn.cohort_ids : [];
+      const groupIds: string[]  = Array.isArray(asgn.group_ids)  ? asgn.group_ids  : [];
+      if (studentRow?.cohort_id && cohortIds.includes(studentRow.cohort_id)) {
+        hasAssignmentAccess = true;
+      } else if (groupIds.length > 0) {
+        const { data: membership } = await supabase
+          .from('group_members')
+          .select('group_id')
+          .eq('student_id', user.id)
+          .in('group_id', groupIds)
+          .limit(1)
+          .maybeSingle();
+        hasAssignmentAccess = !!membership;
       }
     }
   }
-  return { totalReqs, doneReqs };
+
+  if (!hasDirectAccess && !hasLpAccess && !hasAssignmentAccess) {
+    return { error: NextResponse.json({ error: 'Access denied' }, { status: 403 }) };
+  }
+
+  return { ve, user };
 }
 
-const adminClient = () =>
-  createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+/** Find a linkedin_share requirement by id anywhere in a VE's modules. */
+function findShareRequirement(modules: any[], requirementId: string) {
+  for (const mod of modules ?? []) {
+    for (const lesson of mod?.lessons ?? []) {
+      for (const req of lesson?.requirements ?? []) {
+        if (req?.id === requirementId && req?.type === 'linkedin_share') return req;
+      }
+    }
+  }
+  return null;
+}
 
 
 // -- GET /api/guided-project-progress?veId= ---
@@ -389,6 +456,76 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ certId: cert.id });
   }
 
+  // -- Claim a LinkedIn post for a linkedin_share deliverable --
+  // Synchronous so the student learns inline that a post is already claimed. VE shares award no XP;
+  // they are a plain completion requirement, enforced in countCompletedRequirements below.
+  if (body.action === 'claim-linkedin-share') {
+    const shareVeId = body.veId ?? body.formId;
+    const { requirementId, post_url } = body;
+    if (!shareVeId || !requirementId) {
+      return NextResponse.json({ error: 'veId and requirementId are required' }, { status: 400 });
+    }
+    if (typeof post_url !== 'string' || !post_url.trim()) {
+      return NextResponse.json({ error: 'invalid_url' }, { status: 400 });
+    }
+
+    const shareAccess = await authorizeVeStudent(supabase, req, { veId: shareVeId, assignmentId: body.assignmentId });
+    if (shareAccess.error) return shareAccess.error;
+
+    const shareModules = Array.isArray(shareAccess.ve.modules) ? shareAccess.ve.modules : [];
+    if (!findShareRequirement(shareModules, requirementId)) {
+      return NextResponse.json({ error: 'Requirement not found' }, { status: 404 });
+    }
+
+    // Their own LinkedIn profile, collected at onboarding, is what the post's author is checked
+    // against. Read server-side so the client cannot supply whichever profile fits the post.
+    const { data: shareProfileRow } = await supabase
+      .from('students').select('social_links').eq('id', shareAccess.user.id).maybeSingle();
+
+    const claim = await claimLinkedInShare(supabase, {
+      studentId:   shareAccess.user.id,
+      contentType: 'virtual_experience',
+      contentId:   shareVeId,
+      itemId:      requirementId,
+      postUrl:     post_url,
+      points:      0,
+      studentProfileUrl: (shareProfileRow as any)?.social_links?.linkedin ?? null,
+    });
+
+    if (!claim.ok) {
+      if (claim.code === 'already_claimed') return NextResponse.json({ error: 'already_claimed' }, { status: 409 });
+      if (claim.code === 'author_mismatch') return NextResponse.json({ error: 'author_mismatch' }, { status: 403 });
+      if (claim.code === 'no_profile')      return NextResponse.json({ error: 'no_profile' }, { status: 422 });
+      if (claim.code === 'no_author_in_url') return NextResponse.json({ error: 'no_author_in_url' }, { status: 400 });
+      if (claim.code === 'invalid_url')      return NextResponse.json({ error: 'invalid_url' }, { status: 400 });
+      return NextResponse.json({ error: 'Failed to save your link.' }, { status: 500 });
+    }
+
+    // Record the link in progress too, so the player and the instructor review modal can show it.
+    // Completion itself is derived from the claim registry, not from this flag.
+    const { data: shareAttempt } = await supabase
+      .from('guided_project_attempts')
+      .select('progress')
+      .eq('ve_id', shareVeId)
+      .eq('student_id', shareAccess.user.id)
+      .maybeSingle();
+
+    const basedOn = shareAttempt?.progress && typeof shareAttempt.progress === 'object' ? shareAttempt.progress : {};
+    const { error: shareUpsertError } = await supabase
+      .from('guided_project_attempts')
+      .upsert({
+        ve_id:      shareVeId,
+        student_id: shareAccess.user.id,
+        progress:   { ...basedOn, [requirementId]: { ...(basedOn as any)[requirementId], linkUrl: claim.url, completed: true } },
+      }, { onConflict: 'student_id,ve_id' });
+    if (shareUpsertError) {
+      console.error('[guided-project-progress/claim-linkedin-share] upsert', shareUpsertError);
+      return NextResponse.json({ error: 'Failed to save your link.' }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, url: claim.url });
+  }
+
   // -- Student progress save --
   const { veId, formId, assignmentId, studentName, progress, currentModuleId, currentLessonId } = body;
   // completedAt is intentionally excluded - completion is always computed server-side
@@ -396,65 +533,10 @@ export async function POST(req: NextRequest) {
 
   if (!resolvedVeId) return NextResponse.json({ error: 'veId required' }, { status: 400 });
 
-  const progressAuth = await requireStudentUser(req);
-  if (isAuthError(progressAuth)) return progressAuth.error;
-  const progressUser = progressAuth.user;
-
-  // Verify VE access before saving progress
-  const [{ data: ve }, { data: progressStudentRow }] = await Promise.all([
-    supabase.from('virtual_experiences')
-      .select('status, cohort_ids, modules, title, slug')
-      .eq('id', resolvedVeId).single(),
-    supabase.from('students').select('cohort_id').eq('id', progressUser.id).single(),
-  ]);
-
-  if (!ve || ve.status !== 'published') {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  }
-  const hasDirectAccess = !!progressStudentRow?.cohort_id &&
-    (ve.cohort_ids as string[] ?? []).includes(progressStudentRow.cohort_id);
-
-  let hasLpAccess = false;
-  if (!hasDirectAccess && progressStudentRow?.cohort_id) {
-    const { data: lpRow } = await supabase
-      .from('learning_paths')
-      .select('id')
-      .eq('status', 'published')
-      .contains('cohort_ids', [progressStudentRow.cohort_id])
-      .contains('item_ids', [resolvedVeId])
-      .limit(1)
-      .maybeSingle();
-    hasLpAccess = !!lpRow;
-  }
-
-  let hasAssignmentAccess = false;
-  if (!hasDirectAccess && !hasLpAccess && assignmentId) {
-    const { data: asgn } = await supabase
-      .from('assignments')
-      .select('status, config, cohort_ids, group_ids')
-      .eq('id', assignmentId)
-      .maybeSingle();
-    if (asgn?.status === 'published' && asgn.config?.ve_form_id === resolvedVeId) {
-      const cohortIds: string[] = Array.isArray(asgn.cohort_ids) ? asgn.cohort_ids : [];
-      const groupIds: string[]  = Array.isArray(asgn.group_ids)  ? asgn.group_ids  : [];
-      if (progressStudentRow?.cohort_id && cohortIds.includes(progressStudentRow.cohort_id)) {
-        hasAssignmentAccess = true;
-      } else if (groupIds.length > 0) {
-        const { data: membership } = await supabase
-          .from('group_members')
-          .select('group_id')
-          .eq('student_id', progressUser.id)
-          .in('group_id', groupIds)
-          .limit(1)
-          .maybeSingle();
-        hasAssignmentAccess = !!membership;
-      }
-    }
-  }
-
-  if (!hasDirectAccess && !hasLpAccess && !hasAssignmentAccess) {
-    return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-  }
+  const progressAccess = await authorizeVeStudent(supabase, req, { veId: resolvedVeId, assignmentId });
+  if (progressAccess.error) return progressAccess.error;
+  const ve = progressAccess.ve;
+  const progressUser = progressAccess.user;
 
   const modules = Array.isArray(ve.modules) ? ve.modules : [];
   const { data: existingAttempt } = await supabase
@@ -467,10 +549,16 @@ export async function POST(req: NextRequest) {
   const mergedProgress = mergeProgress(existingAttempt?.progress, progress);
   const current = chooseCurrentLesson(modules, existingAttempt, currentModuleId, currentLessonId);
 
-  // Completion derived server-side. MCQ requirements are validated against correctAnswer;
-  // honor-system types (task, upload, reflection, etc.) trust the completed flag.
-  const { totalReqs, doneReqs } = countCompletedRequirements(modules, mergedProgress);
-  const resolvedCompletedAt = (totalReqs > 0 && doneReqs >= totalReqs) ? new Date().toISOString() : null;
+  // Completion derived server-side. MCQ requirements are validated against correctAnswer,
+  // linkedin_share against a claim in linkedin_shares; honor-system types (task, upload,
+  // reflection, etc.) trust the completed flag.
+  const claimedShareItemIds = await loadClaimedShareItemIds(supabase, {
+    studentId: progressUser.id,
+    contentId: resolvedVeId,
+  });
+  const counts = countCompletedRequirements(modules, mergedProgress, claimedShareItemIds);
+  const { totalReqs, doneReqs } = counts;
+  const resolvedCompletedAt = isVeComplete(counts) ? new Date().toISOString() : null;
 
   const { error } = await supabase
     .from('guided_project_attempts')
