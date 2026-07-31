@@ -1250,13 +1250,13 @@ CREATE TRIGGER trg_prevent_student_role_change
   BEFORE UPDATE OF role ON public.students
   FOR EACH ROW EXECUTE FUNCTION public.prevent_student_role_change();
 
--- XP recalculation after each course attempt.
--- Counts in-progress attempts as well as finished ones. That is only safe because save-progress does
--- not trust the browser's running total: it computes points from the stored answers via
--- lib/attempt-points.ts, the same function complete-attempt uses. If that ever changes back to
--- accepting a client-reported number, this trigger must stop counting unfinished attempts.
--- Quirk: the fallback picks the most recently STARTED attempt, so beginning a retake replaces a
--- completed attempt's points with the new attempt's (0 at the start) until the student works back up.
+-- XP recalculation after each course attempt (migration 157).
+-- Per course, the BEST attempt: a retake can only improve the total, never reduce it, and newly
+-- earned points land immediately rather than waiting for completion. Maxed rather than summed, so
+-- repeat attempts cannot farm XP.
+-- Counting in-progress attempts is only safe because save-progress computes points server-side from
+-- the stored answers via lib/attempt-points.ts rather than accepting the browser's running total. If
+-- that ever changes back, this trigger must stop counting unfinished attempts.
 CREATE OR REPLACE FUNCTION public.recalc_student_xp()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -1273,21 +1273,11 @@ BEGIN
   SELECT
     v_id,
     COALESCE((
-      SELECT SUM(course_xp) FROM (
-        SELECT
-          course_id,
-          CASE
-            WHEN MAX(CASE WHEN passed = true THEN 1 ELSE 0 END) = 1
-              THEN MAX(CASE WHEN passed = true THEN points ELSE 0 END)
-            ELSE (
-              SELECT points FROM public.course_attempts ca2
-              WHERE  ca2.student_id = v_id AND ca2.course_id = ca.course_id
-              ORDER  BY started_at DESC LIMIT 1
-            )
-          END AS course_xp
+      SELECT SUM(best_points) FROM (
+        SELECT MAX(points) AS best_points
         FROM   public.course_attempts ca
         WHERE  ca.student_id = v_id
-        GROUP  BY course_id
+        GROUP  BY ca.course_id
       ) sub
     ), 0),
     now()

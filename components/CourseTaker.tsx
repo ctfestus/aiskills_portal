@@ -295,6 +295,10 @@ export function CourseTaker({
   const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now());
   const [floatingPoints, setFloatingPoints] = useState<{ id: number; text: string; x: number; y: number } | null>(null);
   const [displayedPoints, setDisplayedPoints] = useState(0);
+  // Highest points this student has reached on this course across all attempts -- the value the XP
+  // trigger banks (migration 157). On a retake the global total only moves once the current attempt
+  // passes it, so the player has to show the bar being cleared or the counter looks stuck.
+  const [personalBest, setPersonalBest] = useState(0);
 
   // Chapters drawer
   const [showChapters, setShowChapters] = useState(false);
@@ -684,6 +688,7 @@ export function CourseTaker({
         body: JSON.stringify({ action: 'get-progress', course_id: formId }),
       });
       const d = await res.json();
+      setPersonalBest(typeof d.personalBest === 'number' ? d.personalBest : 0);
 
       // Review check comes first -- a student who passed must always be able to review,
       // even if they have since used all their remaining attempts.
@@ -2939,6 +2944,14 @@ export function CourseTaker({
                     <span className="text-[13px] font-bold tabular-nums" style={{ color: accent }}>
                       {displayedPoints.toLocaleString()}
                     </span>
+                    {/* Only while a previous attempt still beats this one -- once it is passed, every
+                        further point is a real gain and the reminder would just be noise. */}
+                    {personalBest > totalPoints && (
+                      <span className="text-[11px] font-medium tabular-nums" style={{ color: txtFaint }}
+                        title={`Your best on this course is ${personalBest.toLocaleString()} XP. Your total only grows once this attempt passes it.`}>
+                        best {personalBest.toLocaleString()} &middot; {(personalBest - totalPoints).toLocaleString()} to beat
+                      </span>
+                    )}
                     {streak >= 2 && <span className="text-[12px] text-orange-400">🔥{streak}</span>}
                   </div>
                 )}

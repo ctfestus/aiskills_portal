@@ -493,7 +493,7 @@ export async function POST(req: NextRequest) {
       const access = await loadAccessibleCourse(supabase, course_id, sessionUser, 'id, user_id, status, cohort_ids');
       if (access.error) return access.error;
 
-      const [{ data: cert }, { data: progress }, { count: attemptCount }, { data: passingAttempt }] = await Promise.all([
+      const [{ data: cert }, { data: progress }, { count: attemptCount }, { data: passingAttempt }, { data: bestPoints }] = await Promise.all([
         supabase.from('certificates').select('id')
           .eq('course_id', course_id).eq('student_id', sessionUser.id).eq('revoked', false)
           .maybeSingle(),
@@ -512,8 +512,23 @@ export async function POST(req: NextRequest) {
           .eq('course_id', course_id).eq('student_id', sessionUser.id)
           .eq('passed', true).not('completed_at', 'is', null)
           .order('score', { ascending: false }).limit(1).maybeSingle(),
+        // Highest points across ALL attempts -- the same value the XP trigger banks for this course
+        // (migration 157). The player shows it so a student on a retake can see what they have to beat
+        // before their global total moves; without it their attempt counter climbs while the banked
+        // number sits still, which reads as broken.
+        supabase.from('course_attempts')
+          .select('points')
+          .eq('course_id', course_id).eq('student_id', sessionUser.id)
+          .order('points', { ascending: false }).limit(1).maybeSingle(),
       ]);
-      return NextResponse.json({ cert, progress, attemptCount: attemptCount ?? 0, hasPassed: !!passingAttempt, passingAttempt });
+      return NextResponse.json({
+        cert,
+        progress,
+        attemptCount: attemptCount ?? 0,
+        hasPassed: !!passingAttempt,
+        passingAttempt,
+        personalBest: (bestPoints as any)?.points ?? 0,
+      });
     } catch (err: any) {
       console.error('[course/get-progress]', err);
       return NextResponse.json({ error: 'Failed to load progress.' }, { status: 500 });
