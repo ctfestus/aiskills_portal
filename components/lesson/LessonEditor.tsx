@@ -21,7 +21,7 @@ import {
   List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote,
   Image as ImageIcon, Table as TableIcon, Info, ChevronsUpDown, LayoutGrid, HelpCircle, Terminal, GalleryHorizontal,
   Layers, ListChecks, History, BookMarked, Braces, AudioLines,
-  MessageSquareCode,
+  MessageSquareCode, PanelsTopLeft,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { StyleMenu, MenuRow, Segmented, ColorField } from '@/components/lesson/nodes/StyleControls';
@@ -35,6 +35,7 @@ import { ImageLibrary } from '@/components/ImageLibrary';
 import { AudioPicker } from '@/components/lesson/AudioPicker';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { collectRunnableSetup, inlineGlossaryDefinitions, sameContent, type LessonDoc } from '@/lib/lesson-doc';
+import { insertStepCards } from '@/lib/lesson-step-cards';
 
 interface LessonEditorProps {
   doc?: LessonDoc;
@@ -42,11 +43,13 @@ interface LessonEditorProps {
   onChange: (value: { doc: LessonDoc; body: string }) => void;
   placeholder?: string;
   isDark?: boolean;
+  accentColor?: string;
 }
 
-export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write the lesson...', isDark }: LessonEditorProps) {
+export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write the lesson...', isDark, accentColor }: LessonEditorProps) {
   const { theme } = useTheme();
   const { primaryColor } = useTenant();
+  const lessonAccent = accentColor || primaryColor;
   const dark = isDark ?? theme === 'dark';
   const [showLibrary, setShowLibrary] = useState(false);
   const [showAudioPicker, setShowAudioPicker] = useState(false);
@@ -141,6 +144,15 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
     }
   }, [editor]);
 
+  const handleStepCards = useCallback(() => {
+    if (!editor) return;
+    // Structured/isolating blocks can reject a block insertion at the current
+    // selection. TipTap reports that as a false command with no visible error,
+    // which made this toolbar control appear unresponsive. Prefer the caret,
+    // then append at the document boundary when that context cannot accept it.
+    insertStepCards(editor);
+  }, [editor]);
+
   if (!editor) return null;
 
   // Combined shared setup, recomputed each render (the toolbar already re-renders on
@@ -179,6 +191,7 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
         <Btn dark={dark} title="Carousel (stepped slides)" onClick={() => editor.chain().focus().insertContent({ type: 'carousel', content: [{ type: 'carouselSlide', content: [{ type: 'paragraph' }] }, { type: 'carouselSlide', content: [{ type: 'paragraph' }] }] }).run()}><GalleryHorizontal className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Flashcards (flip cards)" onClick={() => editor.chain().focus().insertContent({ type: 'flipCardDeck', content: [{ type: 'flipCard', attrs: { front: '', back: '' } }, { type: 'flipCard', attrs: { front: '', back: '' } }] }).run()}><Layers className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Steps (vertical stepper)" onClick={() => editor.chain().focus().insertContent({ type: 'stepper', content: [{ type: 'step', attrs: { title: '' }, content: [{ type: 'paragraph' }] }, { type: 'step', attrs: { title: '' }, content: [{ type: 'paragraph' }] }] }).run()}><ListChecks className="w-3.5 h-3.5" /></Btn>
+        <Btn dark={dark} title="Step cards" onClick={handleStepCards}><PanelsTopLeft className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Timeline" onClick={() => editor.chain().focus().insertContent({ type: 'timeline', content: [{ type: 'timelineEntry', attrs: { date: '', title: '' }, content: [{ type: 'paragraph' }] }, { type: 'timelineEntry', attrs: { date: '', title: '' }, content: [{ type: 'paragraph' }] }] }).run()}><History className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Knowledge check" onClick={() => editor.chain().focus().insertContent({ type: 'knowledgeCheck', attrs: { question: '', options: ['', ''], correctIndex: 0, explanation: '' } }).run()}><HelpCircle className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="AI prompt card" onClick={() => editor.chain().focus().insertContent({ type: 'promptBlock', attrs: { title: 'Try this prompt', prompt: '', showChatGpt: true, showClaude: true } }).run()}><MessageSquareCode className="w-3.5 h-3.5" /></Btn>
@@ -223,7 +236,7 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
 
       <div
         className={`lesson-content ${dark ? 'dark' : ''} px-3 py-2.5 min-h-[140px] max-h-[460px] overflow-y-auto`}
-        style={primaryColor ? ({ '--lesson-accent-base': primaryColor } as React.CSSProperties) : undefined}
+        style={lessonAccent ? ({ '--lesson-accent-base': lessonAccent } as React.CSSProperties) : undefined}
       >
         <LessonRuntimeProvider setupSql={sharedSetupSql} setupPython={sharedSetupPython} dark={dark}>
           <EditorContent editor={editor} />
