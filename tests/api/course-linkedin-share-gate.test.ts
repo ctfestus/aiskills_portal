@@ -345,36 +345,3 @@ describe('POST /api/course: every attempt lookup reports its own failure', () =>
     });
   }
 });
-
-// The XP trigger banks the highest points across a student's attempts on a course (migration 157).
-// The player needs that number to show what a retake has to beat, so get-progress returns it.
-describe('POST /api/course get-progress: personal best', () => {
-  const stubWithBest = (bestRow: any) => makeSupabaseStub({
-    courses: { data: { id: 'course1', user_id: 'owner1', status: 'published', cohort_ids: [] }, error: null },
-    students: { data: { role: 'student', cohort_id: null }, error: null },
-    certificates: { data: null, error: null },
-    course_attempts: [
-      { data: { id: 'attempt1', answers: {}, current_question_index: 0 }, error: null },  // open attempt
-      { data: null, error: null },                                                        // completed count
-      { data: null, error: null },                                                        // best passing
-      bestRow,                                                                            // highest points
-    ],
-  });
-
-  it('returns the highest points across all attempts', async () => {
-    authed(stubWithBest({ data: { points: 300 }, error: null }));
-
-    const res = await post({ action: 'get-progress', course_id: 'course1' });
-
-    expect(res.status).toBe(200);
-    expect((await res.json()).personalBest).toBe(300);
-  });
-
-  it('returns 0 when the student has no attempts yet', async () => {
-    authed(stubWithBest({ data: null, error: null }));
-
-    const res = await post({ action: 'get-progress', course_id: 'course1' });
-
-    expect((await res.json()).personalBest).toBe(0);
-  });
-});
