@@ -513,7 +513,13 @@ export async function POST(req: NextRequest) {
           .eq('passed', true).not('completed_at', 'is', null)
           .order('score', { ascending: false }).limit(1).maybeSingle(),
       ]);
-      return NextResponse.json({ cert, progress, attemptCount: attemptCount ?? 0, hasPassed: !!passingAttempt, passingAttempt });
+      return NextResponse.json({
+        cert,
+        progress,
+        attemptCount: attemptCount ?? 0,
+        hasPassed: !!passingAttempt,
+        passingAttempt,
+      });
     } catch (err: any) {
       console.error('[course/get-progress]', err);
       return NextResponse.json({ error: 'Failed to load progress.' }, { status: 500 });
