@@ -21,6 +21,7 @@ import {
   List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote,
   Image as ImageIcon, Table as TableIcon, Info, ChevronsUpDown, LayoutGrid, HelpCircle, Terminal, GalleryHorizontal,
   Layers, ListChecks, History, BookMarked, Braces, AudioLines,
+  MessageSquareCode,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { StyleMenu, MenuRow, Segmented, ColorField } from '@/components/lesson/nodes/StyleControls';
@@ -180,6 +181,7 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
         <Btn dark={dark} title="Steps (vertical stepper)" onClick={() => editor.chain().focus().insertContent({ type: 'stepper', content: [{ type: 'step', attrs: { title: '' }, content: [{ type: 'paragraph' }] }, { type: 'step', attrs: { title: '' }, content: [{ type: 'paragraph' }] }] }).run()}><ListChecks className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Timeline" onClick={() => editor.chain().focus().insertContent({ type: 'timeline', content: [{ type: 'timelineEntry', attrs: { date: '', title: '' }, content: [{ type: 'paragraph' }] }, { type: 'timelineEntry', attrs: { date: '', title: '' }, content: [{ type: 'paragraph' }] }] }).run()}><History className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Knowledge check" onClick={() => editor.chain().focus().insertContent({ type: 'knowledgeCheck', attrs: { question: '', options: ['', ''], correctIndex: 0, explanation: '' } }).run()}><HelpCircle className="w-3.5 h-3.5" /></Btn>
+        <Btn dark={dark} title="AI prompt card" onClick={() => editor.chain().focus().insertContent({ type: 'promptBlock', attrs: { title: 'Try this prompt', prompt: '', showChatGpt: true, showClaude: true } }).run()}><MessageSquareCode className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Runnable code (SQL)" onClick={() => editor.chain().focus().insertContent({ type: 'runnableCode', attrs: { language: 'sql', code: '', setupSql: '', setupPython: '' } }).run()}><Terminal className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Runnable code (Python)" onClick={() => editor.chain().focus().insertContent({ type: 'runnableCode', attrs: { language: 'python', code: '', setupSql: '', setupPython: '' } }).run()}><Braces className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Table" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><TableIcon className="w-3.5 h-3.5" /></Btn>

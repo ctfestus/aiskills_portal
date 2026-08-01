@@ -1,6 +1,7 @@
 const BASE = 'https://wbbcxctblfoyoboskazr.supabase.co/storage/v1/object/public/Tools%20icons';
 
 export const TOOL_ICONS: Record<string, string> = {
+  'chatgpt':        'https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/openai-chatgpt-logo-icon-free-png.webp',
   'claude':         `${BASE}/Claude.png`,
   'excel':          `${BASE}/Excel.png`,
   'perplexity ai':  `${BASE}/Perplexity%20AI.png`,
