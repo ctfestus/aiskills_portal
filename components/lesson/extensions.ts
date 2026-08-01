@@ -29,6 +29,7 @@ import { FlipCard, FlipCardDeck } from '@/components/lesson/nodes/FlipCards';
 import { Stepper, Step } from '@/components/lesson/nodes/Stepper';
 import { Timeline, TimelineEntry } from '@/components/lesson/nodes/Timeline';
 import { GlossaryTerm } from '@/components/lesson/nodes/GlossaryTerm';
+import { PromptBlock } from '@/components/lesson/nodes/PromptBlock';
 
 // Border styling lives on the CELLS, not the table. TipTap's resizable Table renders
 // through its own TableView, which ignores custom table-level attributes (and the
@@ -88,6 +89,7 @@ export const lessonExtensions: Extensions = [
   Timeline,
   TimelineEntry,
   GlossaryTerm,
+  PromptBlock,
 ];
 
 /**
