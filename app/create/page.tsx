@@ -4331,6 +4331,7 @@ const [isSaving, setIsSaving] = useState(false);
                                 bodyFallback={q.lesson.body}
                                 onChange={({ doc, body }) => handleUpdateQuestion(q.id, { lesson: { ...q.lesson, doc, body } })}
                                 placeholder="Explain the theory behind this question..."
+                                accentColor={accentColor}
                               />
                               <div className="grid grid-cols-2 gap-2 items-start">
                               {q.lesson.imageUrl ? (

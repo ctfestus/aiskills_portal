@@ -480,6 +480,60 @@ export function LessonContentStyles() {
 .lesson-content.dark .lesson-flip-deck__add { color: #a1a1aa; border-color: #3f3f46; }
 
 /* Vertical stepper */
+/* Step cards: scan-friendly numbered instruction cards with optional guidance. */
+.lesson-content .lesson-step-cards { margin: 0.9rem 0; }
+/* TipTap places the individual step-card node views in an inner content wrapper. */
+.lesson-content .lesson-step-cards__items > [data-node-view-content-react] { display: flex; flex-direction: column; gap: 16px; }
+.lesson-content .lesson-step-card { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 14px; padding: 18px 20px 18px 16px; border: 0; border-radius: 16px; background: #ffffff; box-shadow: 0 7px 22px rgba(15,23,42,0.05); }
+.lesson-content.dark .lesson-step-card { border: 0; background: rgba(255,255,255,0.035); box-shadow: none; }
+.lesson-content .lesson-step-card__number { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 999px; color: #fff; background: var(--lesson-accent); box-shadow: 0 5px 14px var(--lesson-accent-ring); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; user-select: none; }
+.lesson-content .lesson-step-card__main { min-width: 0; }
+.lesson-content .lesson-step-card__header { display: flex; align-items: center; gap: 8px; min-height: 36px; margin-bottom: 3px; }
+.lesson-content .lesson-step-card__title { flex: 1; margin: 0; color: #18181b; font-size: 1.18rem; font-weight: 750; letter-spacing: -0.01em; line-height: 1.35; }
+.lesson-content.dark .lesson-step-card__title { color: #fafafa; }
+.lesson-content .lesson-step-card__title-input { flex: 1; min-width: 0; padding: 2px 0; border: 0; border-bottom: 1px dashed #d4d4d8; outline: 0; color: #18181b; background: transparent; font: inherit; font-size: 1.18rem; font-weight: 750; line-height: 1.35; }
+.lesson-content.dark .lesson-step-card__title-input { border-bottom-color: #3f3f46; color: #fafafa; }
+.lesson-content .lesson-step-card__title-input::placeholder { color: #a1a1aa; font-weight: 650; }
+.lesson-content .lesson-step-card__controls { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; transition: opacity 0.15s ease; }
+.lesson-content .lesson-step-card__action { display: inline-flex; align-items: center; justify-content: center; width: 25px; height: 25px; padding: 0; border: 0; border-radius: 7px; color: #a1a1aa; background: transparent; cursor: pointer; }
+.lesson-content .lesson-step-card__action:hover { color: var(--lesson-accent-ink); background: var(--lesson-accent-ring); }
+.lesson-content .lesson-step-card__action:disabled { opacity: 0.28; color: #a1a1aa; background: transparent; cursor: not-allowed; }
+.lesson-content .lesson-step-card__remove:hover { color: #ef4444; background: rgba(239,68,68,0.08); }
+@media (hover: hover) {
+  .lesson-content .lesson-step-card__controls { opacity: 0; }
+  .lesson-content .lesson-step-card:hover .lesson-step-card__controls, .lesson-content .lesson-step-card:focus-within .lesson-step-card__controls { opacity: 1; }
+}
+.lesson-content .lesson-step-card__body { color: #52525b; }
+.lesson-content.dark .lesson-step-card__body { color: #b4b4bc; }
+.lesson-content .lesson-step-card__body > :last-child { margin-bottom: 0; }
+.lesson-content .lesson-step-card__highlight { margin-top: 15px; padding: 12px 14px 12px 15px; border-left: 3px solid var(--lesson-accent); border-radius: 0 11px 11px 0; background: color-mix(in oklab, var(--lesson-accent-base) 8%, #f8fafc); }
+.lesson-content .lesson-step-card__highlight[data-editing="true"] { position: relative; padding-right: 38px; }
+.lesson-content.dark .lesson-step-card__highlight { background: color-mix(in oklab, var(--lesson-accent-base) 10%, rgba(255,255,255,0.035)); }
+.lesson-content .lesson-step-card__highlight[data-empty="true"] { border-left-color: #cbd5e1; }
+.lesson-content.dark .lesson-step-card__highlight[data-empty="true"] { border-left-color: #52525b; }
+.lesson-content .lesson-step-card__highlight-title { margin: 0 0 5px; color: var(--lesson-accent-ink); font-size: 10.5px; font-weight: 800; letter-spacing: 0.12em; line-height: 1.4; text-transform: uppercase; }
+.lesson-content .lesson-step-card__highlight-body { margin: 0; color: #3f3f46; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; }
+.lesson-content.dark .lesson-step-card__highlight-body { color: #d4d4d8; }
+.lesson-content .lesson-step-card__highlight-title-input { display: block; width: 100%; padding: 0 0 5px; border: 0; outline: 0; color: var(--lesson-accent-ink); background: transparent; font: inherit; font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; line-height: 1.4; text-transform: uppercase; }
+.lesson-content .lesson-step-card__highlight-title-input::placeholder { color: #8b8b93; }
+.lesson-content .lesson-step-card__highlight-body-input { display: block; width: 100%; min-height: 50px; padding: 0; border: 0; outline: 0; resize: vertical; color: #3f3f46; background: transparent; font: inherit; font-size: 13.5px; line-height: 1.55; }
+.lesson-content.dark .lesson-step-card__highlight-body-input { color: #d4d4d8; }
+.lesson-content .lesson-step-card__highlight-body-input::placeholder { color: #a1a1aa; }
+.lesson-content .lesson-step-card__add-guidance { display: inline-flex; align-items: center; gap: 5px; margin-top: 9px; padding: 4px 7px; border: 0; border-radius: 7px; color: var(--lesson-accent-ink); background: transparent; cursor: pointer; font: inherit; font-size: 11px; font-weight: 650; }
+.lesson-content .lesson-step-card__add-guidance:hover { background: var(--lesson-accent-ring); }
+.lesson-content .lesson-step-card__remove-guidance { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; color: #a1a1aa; background: transparent; cursor: pointer; }
+.lesson-content .lesson-step-card__remove-guidance:hover { color: #ef4444; background: rgba(239,68,68,0.08); }
+.lesson-content .lesson-step-cards__add { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; padding: 6px 11px; border: 1px dashed #cbd5e1; border-radius: 8px; color: #52525b; background: transparent; cursor: pointer; font: inherit; font-size: 12px; font-weight: 650; }
+.lesson-content .lesson-step-cards__add:hover { background: rgba(0,0,0,0.03); }
+.lesson-content.dark .lesson-step-cards__add { border-color: #3f3f46; color: #a1a1aa; }
+@media (max-width: 560px) {
+  .lesson-content .lesson-step-cards__items > [data-node-view-content-react] { gap: 12px; }
+  .lesson-content .lesson-step-card { grid-template-columns: 34px minmax(0, 1fr); gap: 10px; padding: 15px 14px 15px 12px; border-radius: 14px; }
+  .lesson-content .lesson-step-card__number { width: 32px; height: 32px; font-size: 13px; }
+  .lesson-content .lesson-step-card__header { min-height: 32px; }
+  .lesson-content .lesson-step-card__title, .lesson-content .lesson-step-card__title-input { font-size: 1.06rem; }
+}
+
 .lesson-content .lesson-stepper { margin: 0.9rem 0; }
 .lesson-content .lesson-step { display: none; gap: 14px; margin-top: 22px; position: relative; }
 .lesson-content .lesson-step[data-step-index="0"] { margin-top: 0; }

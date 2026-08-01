@@ -21,10 +21,12 @@ interface LessonRendererProps {
   doc: LessonDoc;
   isDark?: boolean;
   className?: string;
+  accentColor?: string;
 }
 
-export function LessonRenderer({ doc, isDark = false, className = '' }: LessonRendererProps) {
+export function LessonRenderer({ doc, isDark = false, className = '', accentColor }: LessonRendererProps) {
   const { primaryColor } = useTenant();
+  const lessonAccent = accentColor || primaryColor;
   // Combined setup from the lesson's shared runnable blocks seeds one shared runtime.
   const { setupSql, setupPython } = useMemo(() => collectRunnableSetup(doc), [doc]);
   // The doc last loaded into the editor, so a re-render passing an identical-but-new object does
@@ -58,7 +60,7 @@ export function LessonRenderer({ doc, isDark = false, className = '' }: LessonRe
   return (
     <div
       className={`lesson-content ${isDark ? 'dark' : ''} ${className}`.trim()}
-      style={primaryColor ? ({ '--lesson-accent-base': primaryColor } as React.CSSProperties) : undefined}
+      style={lessonAccent ? ({ '--lesson-accent-base': lessonAccent } as React.CSSProperties) : undefined}
     >
       <LessonContentStyles />
       <LessonRuntimeProvider setupSql={setupSql} setupPython={setupPython} dark={isDark}>

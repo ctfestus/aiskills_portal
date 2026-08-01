@@ -27,6 +27,7 @@ import { RunnableCode } from '@/components/lesson/nodes/RunnableCode';
 import { Carousel, CarouselSlide } from '@/components/lesson/nodes/Carousel';
 import { FlipCard, FlipCardDeck } from '@/components/lesson/nodes/FlipCards';
 import { Stepper, Step } from '@/components/lesson/nodes/Stepper';
+import { StepCards, StepCard } from '@/components/lesson/nodes/StepCards';
 import { Timeline, TimelineEntry } from '@/components/lesson/nodes/Timeline';
 import { GlossaryTerm } from '@/components/lesson/nodes/GlossaryTerm';
 import { PromptBlock } from '@/components/lesson/nodes/PromptBlock';
@@ -86,6 +87,8 @@ export const lessonExtensions: Extensions = [
   FlipCard,
   Stepper,
   Step,
+  StepCards,
+  StepCard,
   Timeline,
   TimelineEntry,
   GlossaryTerm,
