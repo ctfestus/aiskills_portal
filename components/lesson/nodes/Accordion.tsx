@@ -4,46 +4,52 @@
 //
 // `accordion` holds one or more `accordionItem`s and (in the editor) shows an
 // "Add section" button. Each item has a title and a foldable body: in the editor the
-// body is always expanded for authoring and the title is an inline input; in the
-// player the header toggles the body. Open/closed visibility and theming are handled
+// title remains directly editable and the body can be collapsed to reduce visual
+// noise; in the player the full header toggles the body. Visibility and theming are handled
 // by CSS keyed off `.lesson-accordion__item[data-open]` (see LessonContentStyles).
 
 import { useState } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react';
-import { ChevronRight, Plus } from 'lucide-react';
+import { Minus, Plus } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
 import { ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
 
 function AccordionItemView({ node, updateAttributes, editor }: NodeViewProps) {
   const editable = editor.isEditable;
-  const [open, setOpen] = useState<boolean>(!!node.attrs.open);
-  const isOpen = editable ? true : open; // always expanded while authoring
+  const [open, setOpen] = useState<boolean>(editable ? true : !!node.attrs.open);
   const title = (node.attrs.title as string) || '';
+  const toggle = () => setOpen((current) => !current);
+  const toggleIcon = (
+    <span className="lesson-accordion__toggle-icon" aria-hidden="true">
+      <Plus className="lesson-accordion__plus" width={17} height={17} />
+      <Minus className="lesson-accordion__minus" width={17} height={17} />
+    </span>
+  );
 
   return (
-    <NodeViewWrapper className="lesson-accordion__item" data-open={isOpen ? 'true' : 'false'}>
-      <div
-        className="lesson-accordion__head"
-        contentEditable={false}
-        onClick={editable ? undefined : () => setOpen((o) => !o)}
-        role={editable ? undefined : 'button'}
-        tabIndex={editable ? undefined : 0}
-        onKeyDown={editable ? undefined : (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((o) => !o); } }}
-      >
-        <ChevronRight className="lesson-accordion__chevron" width={15} height={15} />
-        {editable ? (
+    <NodeViewWrapper className="lesson-accordion__item" data-open={open ? 'true' : 'false'}>
+      {editable ? (
+        <div className="lesson-accordion__head" contentEditable={false}>
           <NodeTextInput
             className="lesson-accordion__title-input"
             value={title}
             placeholder="Section title"
             onCommit={(v) => updateAttributes({ title: v })}
           />
-        ) : (
+          <button type="button" className="lesson-accordion__editor-toggle" aria-label={open ? 'Collapse section' : 'Expand section'} aria-expanded={open} onMouseDown={(event) => { event.preventDefault(); toggle(); }}>
+            {toggleIcon}
+          </button>
+        </div>
+      ) : (
+        <button type="button" className="lesson-accordion__head" aria-expanded={open} onClick={toggle}>
           <span className="lesson-accordion__title">{title || 'Section'}</span>
-        )}
+          {toggleIcon}
+        </button>
+      )}
+      <div className="lesson-accordion__body-shell">
+        <NodeViewContent className="lesson-accordion__body" />
       </div>
-      <NodeViewContent className="lesson-accordion__body" />
     </NodeViewWrapper>
   );
 }
