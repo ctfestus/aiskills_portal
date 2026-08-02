@@ -2314,8 +2314,9 @@ export function CourseTaker({
     const pending = questions.filter((q: any) => {
       if (getSlideProgressStatus(q).completed) return false;
       // A required share slide blocks finishing even though it is not scorable -- otherwise the
-      // sidebar lets a student jump straight past it to the end.
-      if (q.isLinkedInShare) return q.linkedInShareRequired !== false;
+      // sidebar lets a student jump straight past it to the end. Mirrors the server's `=== true`
+      // (complete-attempt): an unset flag is optional, so only a deliberate gate stops the finish.
+      if (q.isLinkedInShare) return q.linkedInShareRequired === true;
       return isScorableSlide(q);
     });
     if (!reviewMode && pending.length > 0) {
@@ -3427,7 +3428,7 @@ export function CourseTaker({
                   {(currentQuestion as any).isLinkedInShare ? (() => {
                     const q: any = currentQuestion;
                     const isLast = currentQuestionIndex >= totalSlides - 1;
-                    const required = q.linkedInShareRequired !== false;
+                    const required = q.linkedInShareRequired === true;
                     const claimed = answers[q.id] || '';
                     const draft = shareDrafts[q.id] ?? claimed;
                     const saving = shareSaving === q.id;

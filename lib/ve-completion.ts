@@ -6,8 +6,11 @@
  * to compute this independently (the progress route, the assignment-completion route, and each
  * player's own progress bar) and they disagreed; everything now funnels through here.
  *
- * A LinkedIn Share deliverable can be marked optional (shareRequired === false), in which case it
- * never blocks the VE. Every other requirement type always counts. VE shares carry no XP either way.
+ * A LinkedIn Share deliverable only blocks the VE when the author deliberately gated it
+ * (shareRequired === true); anything else, including an unset flag, is optional. That default is
+ * chosen so a share added without touching the toggle cannot strand a student who has no LinkedIn
+ * account -- there is no per-student exemption path. Every other requirement type always counts.
+ * VE shares carry no XP either way.
  *
  * Requirement types are trusted differently on purpose:
  *   mcq             validated against correctAnswer -- the client's `completed` flag is ignored
@@ -36,7 +39,7 @@ export interface CompletionCounts {
  * server reads the claim table, the client reads the flag the claim action wrote into progress.
  */
 function isSkippedOptionalShare(req: any, claimed: boolean): boolean {
-  return req?.type === 'linkedin_share' && req.shareRequired === false && !claimed;
+  return req?.type === 'linkedin_share' && req.shareRequired !== true && !claimed;
 }
 
 export function countCompletedRequirements(
