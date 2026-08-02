@@ -13,6 +13,7 @@ import { createAdmissionRecord, activateEnrollment } from '@/lib/db-payments';
 import { studentAccountCreatedEmail } from '@/lib/email-templates';
 import { addToResendAudience } from '@/lib/resend-audience';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
+import { markAdmissionsProvisioned, markExistingAccountAdmitted } from '@/lib/account-state-server';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -90,12 +91,14 @@ async function provisionStudentAccount(
         updated_at:  now,
       }, { onConflict: 'id' });
     if (profileError) throw profileError;
+
   } else {
     const profilePatch: any = { cohort_id: cohortId, updated_at: new Date().toISOString() };
     if (fullName && !existingStudent?.full_name) profilePatch.full_name = fullName;
     if (!existingStudent?.account_provisioned_at) profilePatch.account_provisioned_at = new Date().toISOString();
     const { error: profileError } = await db.from('students').update(profilePatch).eq('id', studentId);
     if (profileError) throw profileError;
+
   }
 
   try {
@@ -114,6 +117,13 @@ async function provisionStudentAccount(
 
     // Clean up any stale allowlist entry from the old signup-based flow.
     await db.from('cohort_allowed_emails').delete().eq('email', email);
+
+    // Release access only after enrollment is valid. Doing this before activation made
+    // a failed admission report an error while leaving a pending/denied account active.
+    // New accounts owe a password; established accounts retain their existing password
+    // state and merely have an old pending/denied block lifted.
+    if (createdUserId) await markAdmissionsProvisioned(db, studentId);
+    else await markExistingAccountAdmitted(db, studentId);
   } catch (err) {
     if (createdUserId) await db.auth.admin.deleteUser(createdUserId).catch(() => {});
     throw err;

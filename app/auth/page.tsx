@@ -71,13 +71,31 @@ export default function AuthPage() {
   const [loading, setLoading]   = useState(false);
   const [message, setMessage]   = useState('');
   const [showPass, setShowPass] = useState(false);
+  const [canRetrySignup, setCanRetrySignup] = useState(false);
   // CAPTCHA SUSPENDED -- const [captchaToken, setCaptchaToken] = useState('');
   // CAPTCHA SUSPENDED -- const turnstileRef = useRef<TurnstileInstance>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('error') === 'not_allowed') {
+    const error  = params.get('error');
+    if (error === 'not_allowed') {
       setMessage('You do not have access to this portal. Contact your Learning Advisor.');
+    }
+    if (error === 'invalid_link') {
+      // Setup and reset links work once and then expire. Drop straight into the
+      // request form so a fresh link is one step away instead of a dead end.
+      setIsForgot(true);
+      setMessage('That setup link has already been used or has expired. Enter your email below and we will send you a new one.');
+    }
+    if (error === 'no_admission_record') {
+      setMessage('We could not find an admission record for that email. Contact your Learning Advisor.');
+    }
+    if (error === 'try_again') {
+      // The original PKCE code was consumed already, but the callback deliberately
+      // retained its restricted session. Retry through that session instead of telling
+      // the student to click a one-use email link again.
+      setCanRetrySignup(true);
+      setMessage('We could not finish setting up your account just now. Please try again in a few minutes.');
     }
     if (params.get('mode') === 'signup') {
       setMessage('If your Learning Advisor has added you, use the setup link in your email, then sign in here.');
@@ -92,7 +110,11 @@ export default function AuthPage() {
     setMessage('');
     try {
       if (isForgot) {
-        const { error } = await supabase.auth.resetPasswordForEmail(email);
+        // Supabase sends and rate-limits the recovery email. The exact destination must
+        // be listed under Authentication -> URL Configuration -> Redirect URLs.
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth/recover`,
+        });
         if (error) throw error;
         setMessage('Check your email for the password reset link.');
         return;
@@ -125,6 +147,13 @@ export default function AuthPage() {
         if (signUpData.user && signUpData.user.identities?.length === 0) {
           setMessage('An account with this email already exists. Please sign in instead. You will be directed to the sign in page.');
           setTimeout(() => { setIsLogin(true); setMessage(''); }, 3000);
+          return;
+        }
+        // With email confirmation disabled Supabase returns a session immediately and
+        // sends no confirmation message. Resolve that still-pending signup through the
+        // same server-side checks the email callback uses.
+        if (signUpData.session) {
+          window.location.href = '/auth/callback?retry=1';
           return;
         }
         setMessage('Check your email for the confirmation link. If you do not see it in your inbox, please check your spam.');
@@ -340,6 +369,17 @@ export default function AuthPage() {
                 ? <Loader2 className="w-4 h-4 animate-spin" />
                 : <>{isForgot ? 'Send Reset Link' : isLogin ? 'Sign In' : 'Create Account'} <ArrowRight className="w-3.5 h-3.5" /></>}
             </button>
+
+            {canRetrySignup && (
+              <button
+                type="button"
+                onClick={() => { window.location.href = '/auth/callback?retry=1'; }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold border transition-all hover:bg-gray-50"
+                style={{ borderColor: t.inputBorder, color: t.headingColor }}
+              >
+                Retry Account Setup <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </form>
 
           {/* Mode toggle */}

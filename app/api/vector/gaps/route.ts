@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient }              from '@supabase/supabase-js';
+import { requireUser, isAuthError }  from '@/lib/api-auth';
 import { getVectorIndex }            from '@/lib/vector';
 
 // Topic probes: broad queries used to discover what areas exist in the catalog
@@ -13,16 +13,17 @@ const TOPIC_PROBES = [
 ];
 
 export async function GET(req: NextRequest) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return NextResponse.json({ gaps: [] });
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-
-  const { data: { user } } = await supabase.auth.getUser(token);
-  if (!user?.email) return NextResponse.json({ gaps: [] });
+  // Authenticate through the shared boundary rather than reading the bearer token here.
+  // Hand-rolled token checks skip the account-state gate in lib/api-auth, which is how
+  // this route stayed reachable by a session that had not finished password setup.
+  // The empty-payload shape is preserved on failure -- this is a display widget and its
+  // callers parse the body without checking status.
+  const auth = await requireUser(req);
+  if (isAuthError(auth)) {
+    return NextResponse.json({ gaps: [] }, { status: auth.error.status });
+  }
+  const { user, supabase } = auth;
+  if (!user.email) return NextResponse.json({ gaps: [] });
 
   // Get student cohort + completed course IDs in parallel
   const [{ data: student }, { data: completedAttempts }] = await Promise.all([

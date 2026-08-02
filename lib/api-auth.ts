@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminClient } from '@/lib/admin-client';
+import { restrictionFor, isPathOpenToBearer, denialMessageFor } from '@/lib/account-state';
 
 type Supabase = ReturnType<typeof adminClient>;
 
@@ -44,6 +45,18 @@ export async function requireUser(req: NextRequest): Promise<AuthedUser | { erro
   if (error || !user) {
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
+
+  // A session can be authenticated and still restricted: created by a setup link before
+  // a password exists, or belonging to a signup that was never admitted. Middleware
+  // cannot enforce that for API calls -- it builds its client from cookies alone, so a
+  // bearer-only request is invisible to it. This is the shared boundary every
+  // user-authenticated route already passes through, including requireRole and
+  // requireStudentUser, so one check here covers all of them.
+  const restriction = restrictionFor(user);
+  if (restriction !== 'none' && !isPathOpenToBearer(restriction, req.nextUrl.pathname)) {
+    return { error: NextResponse.json({ error: denialMessageFor(restriction) }, { status: 403 }) };
+  }
+
   const actor = { id: user.id, email: user.email ?? undefined };
   return { user: actor, actor, isStudentMode: false, supabase, token: jwt };
 }

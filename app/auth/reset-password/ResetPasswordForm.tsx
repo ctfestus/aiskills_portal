@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/components/TenantProvider';
 import { motion } from 'motion/react';
@@ -58,16 +59,26 @@ export default function ResetPasswordForm({ error }: { error?: string }) {
     setLoading(true);
     setMessage('');
     try {
-      const { error: err } = await supabase.auth.updateUser({ password });
-      if (err) throw err;
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.id) {
-        const { error: trackErr } = await supabase
-          .from('students')
-          .update({ password_set_at: new Date().toISOString() })
-          .eq('id', user.id);
-        if (trackErr) console.error('[password_set_at] update failed:', trackErr.message);
+      // The server sets the password and clears the setup claim in one step. Doing the
+      // change here rather than via supabase.auth.updateUser is what guarantees the
+      // gate can only be released by an actual password change.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Your reset link has expired. Please request a new one.');
       }
+      const res = await fetch('/api/account/complete-setup', {
+        method:  'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          Authorization:   `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Could not complete password setup. Please try again.');
+      }
+
       await supabase.auth.signOut();
       setDone(true);
       setTimeout(() => { window.location.href = '/auth'; }, 2500);
@@ -103,9 +114,18 @@ export default function ResetPasswordForm({ error }: { error?: string }) {
           </div>
 
           {error ? (
-            <div className="text-xs px-3 py-2.5 rounded-lg leading-relaxed" style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
-              {error}
-            </div>
+            <>
+              <div className="text-xs px-3 py-2.5 rounded-lg leading-relaxed" style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
+                {error}
+              </div>
+              <Link
+                href="/auth?error=invalid_link"
+                className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all hover:brightness-95 active:scale-[0.99]"
+                style={{ background: brand, color: btnText }}
+              >
+                Request a new link <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </>
           ) : done ? (
             <div className="flex items-center gap-2 text-sm px-3 py-2.5 rounded-lg" style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' }}>
               <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
