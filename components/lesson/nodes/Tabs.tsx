@@ -13,7 +13,7 @@
 
 import { useState } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
-import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react';
+import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, useEditorState, type NodeViewProps } from '@tiptap/react';
 import { Plus, X } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
 import { ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
@@ -26,11 +26,11 @@ function TabsView({ node, editor, getPos, updateAttributes }: NodeViewProps) {
   const [active, setActive] = useState(0);
   const current = Math.min(active, count - 1);
 
-  const borderStyle = (node.attrs.borderStyle as BorderStyle) || 'solid';
+  const borderStyle = (node.attrs.borderStyle as BorderStyle) || 'none';
   const borderColor = (node.attrs.borderColor as string) || '';
   const wrapperStyle: React.CSSProperties = borderStyle === 'none'
     ? { border: 'none' }
-    : { borderStyle, borderWidth: 1, ...(borderColor ? { borderColor } : {}) };
+    : { borderStyle, borderWidth: 1, borderColor: borderColor || 'var(--tabs-border)' };
 
   const labels: string[] = [];
   node.forEach((child) => labels.push((child.attrs.label as string) || ''));
@@ -68,12 +68,31 @@ function TabsView({ node, editor, getPos, updateAttributes }: NodeViewProps) {
     if (pos == null) return;
     const size = node.child(index).nodeSize;
     editor.chain().focus().deleteRange({ from: pos, to: pos + size }).run();
-    setActive((a) => Math.max(0, Math.min(a, count - 2)));
+    setActive((currentActive) => {
+      if (index < currentActive) return currentActive - 1;
+      if (index === currentActive) return Math.min(currentActive, count - 2);
+      return currentActive;
+    });
+  };
+
+  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? count - 1
+        : (index + (event.key === 'ArrowRight' ? 1 : -1) + count) % count;
+    const rail = event.currentTarget.closest('.lesson-tabs__bar');
+    setActive(next);
+    requestAnimationFrame(() => {
+      rail?.querySelector<HTMLButtonElement>(`[role="tab"][data-tab-index="${next}"]`)?.focus();
+    });
   };
 
   return (
     <NodeViewWrapper className="lesson-tabs" data-active={current} style={wrapperStyle}>
-      <div className="lesson-tabs__bar" contentEditable={false}>
+      <div className="lesson-tabs__bar" contentEditable={false} role={editable ? undefined : 'tablist'} aria-label={editable ? undefined : 'Lesson sections'}>
         {labels.map((label, i) => (
           <div key={i} className="lesson-tabs__tab" data-active={i === current ? 'true' : 'false'}>
             {editable ? (
@@ -97,7 +116,7 @@ function TabsView({ node, editor, getPos, updateAttributes }: NodeViewProps) {
                 )}
               </>
             ) : (
-              <button type="button" onClick={() => setActive(i)}>{label || `Tab ${i + 1}`}</button>
+              <button type="button" className="lesson-tabs__trigger" role="tab" data-tab-index={i} aria-selected={i === current} tabIndex={i === current ? 0 : -1} onClick={() => setActive(i)} onKeyDown={(event) => handleTabKeyDown(event, i)}>{label || `Tab ${i + 1}`}</button>
             )}
           </div>
         ))}
@@ -132,15 +151,20 @@ function TabPanelView({ getPos, editor }: NodeViewProps) {
   // tags itself with its own index (data-tab-index); the parent wrapper carries
   // data-active. CSS pairs them with a descendant selector, so visibility does not
   // depend on the DOM nesting that ReactNodeViewRenderer produces.
-  let index = 0;
-  if (typeof getPos === 'function') {
-    const pos = getPos();
-    if (pos != null) {
-      try { index = editor.state.doc.resolve(pos).index(); } catch { index = 0; }
-    }
-  }
+  const index = useEditorState({
+    editor,
+    selector: ({ editor: currentEditor }) => {
+      if (typeof getPos !== 'function') return 0;
+      try {
+        const pos = getPos();
+        return pos == null ? 0 : currentEditor.state.doc.resolve(pos).index();
+      } catch {
+        return 0;
+      }
+    },
+  });
   return (
-    <NodeViewWrapper className="lesson-tab-panel" data-tab-index={index}>
+    <NodeViewWrapper className="lesson-tab-panel" data-tab-index={index} role={editor.isEditable ? undefined : 'tabpanel'}>
       <NodeViewContent />
     </NodeViewWrapper>
   );
@@ -191,7 +215,7 @@ export const Tabs = Node.create({
 
   addAttributes() {
     return {
-      borderStyle: { default: 'solid' },
+      borderStyle: { default: 'none' },
       borderColor: { default: '' },
     };
   },
