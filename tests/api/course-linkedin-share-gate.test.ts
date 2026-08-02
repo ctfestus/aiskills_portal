@@ -84,7 +84,7 @@ describe('POST /api/course complete-attempt: required LinkedIn share is enforced
   });
 
   it('names every outstanding required share so the player can link to them', async () => {
-    const second = { id: 'share3', isLinkedInShare: true, linkedInSharePoints: 50 };
+    const second = { id: 'share3', isLinkedInShare: true, linkedInShareRequired: true, linkedInSharePoints: 50 };
     authed(stub([quizQuestion, requiredShare, second], []));
 
     const res = await post({ action: 'complete-attempt', course_id: 'course1', final_answers: { q1: 'A' } });
@@ -93,15 +93,16 @@ describe('POST /api/course complete-attempt: required LinkedIn share is enforced
     expect((await res.json()).missing).toEqual(['share1', 'share3']);
   });
 
-  // linkedInShareRequired is optional in the contract, so an absent flag must mean required --
-  // matching the !== false test used by the player and the authoring default.
-  it('treats an absent linkedInShareRequired flag as required', async () => {
+  // linkedInShareRequired is optional in the contract, and an absent flag means OPTIONAL. The gate
+  // fails open on purpose: a student with no LinkedIn account who lands behind it cannot be exempted
+  // by anyone, so only a deliberate `=== true` may block a submission. Forgetting the toggle, or any
+  // authoring path that never writes the field, must not strand them.
+  it('treats an absent linkedInShareRequired flag as optional', async () => {
     authed(stub([quizQuestion, { id: 'share9', isLinkedInShare: true }], []));
 
     const res = await post({ action: 'complete-attempt', course_id: 'course1', final_answers: { q1: 'A' } });
 
-    expect(res.status).toBe(409);
-    expect((await res.json()).missing).toEqual(['share9']);
+    expect(res.status).toBe(200);
   });
 
   it('completes when the required share has been claimed', async () => {

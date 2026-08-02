@@ -1056,8 +1056,11 @@ export async function POST(req: NextRequest) {
         const claimedShares = shareSlideIds.size > 0
           ? await loadClaimedShareItemIds(supabase, { studentId: sessionUser.id, contentId: course_id })
           : new Set<string>();
+        // `=== true`, not `!== false`: only a share the author deliberately gated can block a
+        // submission. An unset flag means optional, so forgetting the toggle cannot leave a student
+        // unable to finish the course -- there is no per-student exemption path to rescue them.
         const missingRequiredShares = questions.filter(q =>
-          q?.isLinkedInShare && q.linkedInShareRequired !== false && !claimedShares.has(String(q.id)));
+          q?.isLinkedInShare && q.linkedInShareRequired === true && !claimedShares.has(String(q.id)));
         if (missingRequiredShares.length > 0) {
           return NextResponse.json({
             error: 'share_required',

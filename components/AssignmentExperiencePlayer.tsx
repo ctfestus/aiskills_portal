@@ -40,7 +40,8 @@ interface Requirement {
   description: string;
   type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review' | 'linkedin_share';
   sharePrompt?: string;   // linkedin_share: suggested post text the student can copy
-  shareRequired?: boolean; // linkedin_share: absent/true = required; false = optional, never blocks the lesson
+  // linkedin_share: only an explicit `true` gates the lesson. Absent/false = optional, never blocks.
+  shareRequired?: boolean;
   options?: string[];
   optionFeedback?: string[];
   correctAnswer?: string;
@@ -1386,15 +1387,7 @@ export default function AssignmentExperiencePlayer({
                                 <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
                                   style={{ background: `${accent}12`, color: accent }}>MCQ</span>
                                 <div>
-                                  <p className="text-sm font-semibold flex items-center gap-2" style={{ color: text }}>
-                                    {req.label}
-                                    {req.shareRequired === false && (
-                                      <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded flex-shrink-0"
-                                        style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', color: muted }}>
-                                        Optional
-                                      </span>
-                                    )}
-                                  </p>
+                                  <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
                                   {req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}
                                 </div>
                                 {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5 ml-auto" style={{ color: accent }}/>}
@@ -1473,7 +1466,15 @@ export default function AssignmentExperiencePlayer({
                                   <LinkedInIcon className="w-4 h-4" style={{ color: '#fff' }} />
                                 </span>
                                 <div className="flex-1">
-                                  <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
+                                  <p className="text-sm font-semibold flex items-center gap-2" style={{ color: text }}>
+                                    {req.label}
+                                    {req.shareRequired !== true && (
+                                      <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded flex-shrink-0"
+                                        style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', color: muted }}>
+                                        Optional
+                                      </span>
+                                    )}
+                                  </p>
                                   {req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}
                                 </div>
                                 {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accent }}/>}

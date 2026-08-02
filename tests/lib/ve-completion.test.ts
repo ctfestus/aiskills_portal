@@ -10,13 +10,16 @@ const claims = (...ids: string[]) => new Set(ids);
 
 const task  = (id: string) => ({ id, type: 'task' });
 const mcq   = (id: string) => ({ id, type: 'mcq', correctAnswer: 'A' });
-const share = (id: string) => ({ id, type: 'linkedin_share' });
+/** Gating requires a deliberate `true` -- see unsetShare for what an untouched toggle produces. */
+const share = (id: string) => ({ id, type: 'linkedin_share', shareRequired: true });
 const optionalShare = (id: string) => ({ id, type: 'linkedin_share', shareRequired: false });
+/** The flag never written: an author who added a share and left the toggle alone. */
+const unsetShare = (id: string) => ({ id, type: 'linkedin_share' });
 
 const complete = (modules: any[], progress: any, claimed?: Set<string>) =>
   isVeComplete(countCompletedRequirements(modules, progress, claimed));
 
-describe('required linkedin_share (the default)', () => {
+describe('required linkedin_share (opt-in, never the default)', () => {
   it('blocks completion while unclaimed', () => {
     expect(complete(ve(task('t1'), share('s1')), { t1: { completed: true } }, claims())).toBe(false);
   });
@@ -33,10 +36,17 @@ describe('required linkedin_share (the default)', () => {
       .toBe(false);
   });
 
-  // shareRequired is optional in the contract, so absent must mean required.
-  it('treats an absent shareRequired flag as required', () => {
-    expect(countCompletedRequirements(ve(share('s1')), {}, claims()))
-      .toEqual({ totalReqs: 1, doneReqs: 0, authoredReqs: 1 });
+  // shareRequired is optional in the contract, and absent means OPTIONAL. The gate fails open on
+  // purpose: nobody can exempt a student who has no LinkedIn account, so leaving the toggle untouched
+  // must not be able to strand one. It drops out of the denominator like any other skipped optional
+  // share, which is why totalReqs is 0 while authoredReqs still records that it exists.
+  it('treats an absent shareRequired flag as optional', () => {
+    expect(countCompletedRequirements(ve(unsetShare('s1')), {}, claims()))
+      .toEqual({ totalReqs: 0, doneReqs: 0, authoredReqs: 1 });
+  });
+
+  it('does not block a VE whose only share was left on the default', () => {
+    expect(complete(ve(unsetShare('s1')), {}, claims())).toBe(true);
   });
 
   it('blocks a VE made only of an unclaimed required share', () => {

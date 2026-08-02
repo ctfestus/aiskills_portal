@@ -9,8 +9,12 @@ const q        = (id: string) => ({ id, type: 'multiple_choice' });
 const section  = (id: string) => ({ id, isSection: true });
 const lesson   = (id: string) => ({ id, lessonOnly: true });
 const download = (id: string) => ({ id, isDownloads: true });
-const share    = (id: string, points?: number) => ({ id, isLinkedInShare: true, ...(points === undefined ? {} : { linkedInSharePoints: points }) });
-const optionalShare = (id: string, points?: number) => ({ ...share(id, points), linkedInShareRequired: false });
+const shareBase = (id: string, points?: number) => ({ id, isLinkedInShare: true, ...(points === undefined ? {} : { linkedInSharePoints: points }) });
+/** Gating requires a deliberate `true` -- see unsetShare for what an untouched toggle produces. */
+const share    = (id: string, points?: number) => ({ ...shareBase(id, points), linkedInShareRequired: true });
+const optionalShare = (id: string, points?: number) => ({ ...shareBase(id, points), linkedInShareRequired: false });
+/** The flag never written: an author who added a share slide and left the toggle alone. */
+const unsetShare = (id: string, points?: number) => shareBase(id, points);
 
 const answered = (...ids: string[]) => Object.fromEntries(ids.map(id => [id, 'x']));
 
@@ -66,6 +70,9 @@ describe('optional share slides', () => {
     expect(isCountableSlide(optionalShare('s1'), {})).toBe(false);
     expect(isCountableSlide(optionalShare('s1'), answered('s1'))).toBe(true);
     expect(isCountableSlide(share('s1'), {})).toBe(true);
+    // An untouched toggle behaves as optional, not required.
+    expect(isCountableSlide(unsetShare('s1'), {})).toBe(false);
+    expect(isCountableSlide(unsetShare('s1'), answered('s1'))).toBe(true);
     expect(isCountableSlide(section('s'), {})).toBe(false);
     expect(isCountableSlide(q('a'), {})).toBe(true);
   });

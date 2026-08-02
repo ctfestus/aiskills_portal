@@ -12,9 +12,9 @@
  *             downloads blocks (they complete by being viewed). That is what lives here.
  *
  * A LinkedIn share slide is the one slide whose participation depends on the student: an OPTIONAL
- * share (linkedInShareRequired === false) they have not claimed leaves the denominator entirely, so
- * skipping it cannot pin a course below 100%. Claim it and it counts, so the choice to share is still
- * visibly credited.
+ * share (anything but linkedInShareRequired === true) they have not claimed leaves the denominator
+ * entirely, so skipping it cannot pin a course below 100%. Claim it and it counts, so the choice to
+ * share is still visibly credited.
  */
 
 import { linkedInSharePointsFor } from '@/lib/course-schema';
@@ -47,7 +47,7 @@ function isAnswered(question: any, answers: Record<string, any>): boolean {
  */
 function isSkippedOptionalShare(question: any, answers: Record<string, any>): boolean {
   return !!question?.isLinkedInShare
-    && question.linkedInShareRequired === false
+    && question.linkedInShareRequired !== true
     && !isAnswered(question, answers);
 }
 

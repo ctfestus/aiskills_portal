@@ -53,7 +53,8 @@ interface Requirement {
   description: string;
   type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review' | 'linkedin_share';
   sharePrompt?: string;   // linkedin_share: suggested post text the student can copy
-  shareRequired?: boolean; // linkedin_share: absent/true = required; false = optional, never blocks the lesson
+  // linkedin_share: only an explicit `true` gates the lesson. Absent/false = optional, never blocks.
+  shareRequired?: boolean;
   options?: string[];
   optionFeedback?: string[];
   correctAnswer?: string;
@@ -1927,7 +1928,7 @@ export default function VirtualExperienceTaker({
                               <div className="flex-1 min-w-0">
                                 <p className="text-[14.5px] font-semibold flex items-center gap-2" style={{ color: isDark ? '#f0f0f0' : '#111' }}>
                                   {req.label}
-                                  {req.shareRequired === false && (
+                                  {req.shareRequired !== true && (
                                     <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded flex-shrink-0"
                                       style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', color: isDark ? '#888' : '#666' }}>
                                       Optional

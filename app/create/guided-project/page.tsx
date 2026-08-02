@@ -145,7 +145,8 @@ interface Requirement {
   emailBody?: string;
   attachments?: ReqAttachment[];
   sharePrompt?: string;   // linkedin_share: suggested post text the student can copy
-  shareRequired?: boolean; // linkedin_share: absent/true = required; false = optional, never blocks the lesson
+  // linkedin_share: only an explicit `true` gates the lesson. Absent/false = optional, never blocks.
+  shareRequired?: boolean;
 }
 interface Lesson {
   id: string;
@@ -1851,7 +1852,7 @@ function VirtualExperienceCreatePageInner() {
                                                       expectedAnswer: undefined,
                                                       aiReview: type === 'text' ? req.aiReview : undefined,
                                                       sharePrompt: type === 'linkedin_share' ? req.sharePrompt : undefined,
-                                                      shareRequired: type === 'linkedin_share' ? (req.shareRequired ?? true) : undefined,
+                                                      shareRequired: type === 'linkedin_share' ? (req.shareRequired ?? false) : undefined,
                                                     });
                                                   }}
                                                   style={{ padding: '2px 6px', borderRadius: 6, border: `1px solid ${C.cardBorder}`, background: C.card, color: C.text, fontSize: 11, fontWeight: 700 }}>
@@ -1990,19 +1991,19 @@ function VirtualExperienceCreatePageInner() {
                                                         placeholder="Optional suggested post text the student can copy…" />
                                                       <button
                                                         type="button"
-                                                        onClick={() => updateReq(mod.id, les.id, req.id, { shareRequired: req.shareRequired === false })}
+                                                        onClick={() => updateReq(mod.id, les.id, req.id, { shareRequired: req.shareRequired !== true })}
                                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all self-start"
-                                                        style={req.shareRequired === false
+                                                        style={req.shareRequired !== true
                                                           ? { background: C.card, border: `1px solid ${C.cardBorder}`, color: C.muted }
                                                           : { background: C.cta, color: 'white' }}>
-                                                        {req.shareRequired === false ? 'Optional' : 'Required to finish the lesson'}
+                                                        {req.shareRequired !== true ? 'Optional' : 'Required to finish the lesson'}
                                                       </button>
                                                       <p className="text-[11px]" style={{ color: C.faint }}>
                                                         The student pastes the link to their own LinkedIn post. It is checked as a real post
                                                         written by them, and a post someone else already submitted is rejected.
-                                                        {req.shareRequired === false
+                                                        {req.shareRequired !== true
                                                           ? ' Optional: the lesson completes whether or not they share.'
-                                                          : ' Required: the lesson will not complete until they share.'}
+                                                          : ' Required: the lesson will not complete until they share. A student with no LinkedIn account cannot finish, and there is no way to exempt one.'}
                                                       </p>
                                                     </>
                                                   )}

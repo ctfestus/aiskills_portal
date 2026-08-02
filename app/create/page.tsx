@@ -3277,7 +3277,7 @@ const [isSaving, setIsSaving] = useState(false);
                     if (q.isLinkedInShare) {
                       const patch = (changes: Partial<CourseQuestion>) =>
                         updateConfig({ questions: formConfig.questions?.map(qq => qq.id === q.id ? { ...qq, ...changes } : qq) });
-                      const required = q.linkedInShareRequired !== false;
+                      const required = q.linkedInShareRequired === true;
 
                       return (
                         <React.Fragment key={q.id}>

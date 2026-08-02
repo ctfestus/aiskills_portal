@@ -80,7 +80,10 @@ export interface CourseQuestion {
   linkedInShareDescription?: string;   // sanitized HTML
   linkedInSharePrompt?: string;        // suggested post text, offered to the student to copy
   linkedInSharePoints?: number;        // bonus XP; DEFAULT_LINKEDIN_SHARE_POINTS when unset
-  linkedInShareRequired?: boolean;     // defaults to true -- blocks the slide until a valid post URL
+  // Only an explicit `true` gates the course. Absent/unset means optional, so a share slide added
+  // without touching the toggle -- or written by any path that does not set the field -- cannot
+  // strand a student who has no LinkedIn account behind a wall with no exemption path.
+  linkedInShareRequired?: boolean;
   lesson?: {
     title?: string;
     body?: string;          // sanitized HTML; canonical for legacy lessons, lossy fallback when `doc` is present
@@ -328,7 +331,7 @@ export function newLinkedInShareSlide(id: string): CourseQuestion {
     linkedInShareDescription: '',
     linkedInSharePrompt: '',
     linkedInSharePoints: DEFAULT_LINKEDIN_SHARE_POINTS,
-    linkedInShareRequired: true,
+    linkedInShareRequired: false,
     question: '',
     options: [],
     correctAnswer: '',
