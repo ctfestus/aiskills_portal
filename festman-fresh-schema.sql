@@ -89,6 +89,12 @@ CREATE TABLE public.students (
   password_setup_started_at   timestamptz,
   password_set_at             timestamptz,
   onboarding_completed_at     timestamptz,
+  -- migration 159: recorded, never inferred. New rows start 'pending' and must be
+  -- admitted explicitly; 'unknown' origin is a real answer for pre-migration accounts.
+  account_origin     text        NOT NULL DEFAULT 'unknown'
+                                   CHECK (account_origin IN ('self_signup','admissions','unknown')),
+  access_state       text        NOT NULL DEFAULT 'pending'
+                                   CHECK (access_state IN ('pending','active','denied')),
   last_login_at      timestamptz,
   created_at         timestamptz NOT NULL DEFAULT now(),
   updated_at         timestamptz NOT NULL DEFAULT now()
@@ -1011,6 +1017,16 @@ BEGIN
     'student'
   )
   ON CONFLICT (id) DO NOTHING;
+
+  -- migration 159: mirror the students.access_state default into the app_metadata claim
+  -- the middleware / api-auth gate reads. Absent claims are treated as active (every
+  -- pre-migration account has none), so a new signup must carry an explicit 'pending'
+  -- from the instant it exists or it would pass the gate unresolved.
+  UPDATE auth.users
+     SET raw_app_meta_data = COALESCE(raw_app_meta_data, '{}'::jsonb)
+                             || '{"access_state": "pending"}'::jsonb
+   WHERE id = NEW.id;
+
   RETURN NEW;
 END;
 $$;
@@ -3946,3 +3962,20 @@ CREATE POLICY "linkedin_shares: staff select"
   USING ((SELECT public.is_staff()));
 
 -- No INSERT / UPDATE / DELETE policy by design.
+
+-- ── migration 159: account_origin and access_state ─────────────────
+-- Both columns are declared inline on public.students above.
+--
+-- Migration 159 splits the access_state default: the column is added with DEFAULT
+-- 'active' so existing rows backfill without a lockout window, then the default is
+-- switched to 'pending' for new rows. A fresh database has no rows to backfill, so the
+-- table above simply declares the final default of 'pending'.
+--
+-- Enforcement lives in lib/account-state.ts (pure predicates, safe for edge middleware)
+-- and lib/account-state-server.ts (the only writers). The auth user's app_metadata
+-- carries a cached copy of both facts so middleware can gate a request without a
+-- database read; the columns here remain the source of truth.
+--
+-- There is no migration 158. It was drafted as a claim backfill, found to match
+-- long-standing accounts, and removed before release. Its review queries now live in
+-- scripts/preview-password-setup-backfill.sql and are run by hand.

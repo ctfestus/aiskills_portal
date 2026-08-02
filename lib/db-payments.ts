@@ -359,20 +359,24 @@ export async function activateEnrollment(
 ): Promise<void> {
   const { data: enrollment, error } = await db
     .from('bootcamp_enrollments')
-    .select('id, total_fee, deposit_required, payment_plan, amount_paid_initial, bootcamp_starts_at, cohort_id')
+    .select('id, student_id, total_fee, deposit_required, payment_plan, amount_paid_initial, bootcamp_starts_at, cohort_id')
     .eq('email', email.toLowerCase())
     .eq('cohort_id', cohortId)
-    .is('student_id', null)
     .maybeSingle();
 
   if (error) throw error;
   if (!enrollment) throw new Error('No admission record found for this email and cohort.');
+  if (enrollment.student_id && enrollment.student_id !== studentId) {
+    throw new Error('This admission record is already linked to a different student account.');
+  }
 
-  const { error: activateErr } = await db
-    .from('bootcamp_enrollments')
-    .update({ student_id: studentId, updated_at: new Date().toISOString() })
-    .eq('id', enrollment.id);
-  if (activateErr) throw activateErr;
+  if (!enrollment.student_id) {
+    const { error: activateErr } = await db
+      .from('bootcamp_enrollments')
+      .update({ student_id: studentId, updated_at: new Date().toISOString() })
+      .eq('id', enrollment.id);
+    if (activateErr) throw activateErr;
+  }
 
   const { data: settings } = await db
     .from('cohort_payment_settings')
@@ -380,20 +384,42 @@ export async function activateEnrollment(
     .eq('cohort_id', cohortId)
     .maybeSingle();
 
-  const installments = generateInstallments(
-    enrollment.id,
-    Number(enrollment.total_fee),
-    Number(enrollment.amount_paid_initial),
-    settings?.installment_count ?? 3,
-    enrollment.bootcamp_starts_at ? new Date(enrollment.bootcamp_starts_at) : null,
-  );
-  if (installments.length > 0) {
-    const { error: instErr } = await db.from('payment_installments').insert(installments);
-    if (instErr) throw instErr;
+  // Activation is retryable. Linking student_id may have succeeded before a later
+  // database call failed, so resume from existing installments instead of treating the
+  // admission as missing or inserting a duplicate schedule.
+  const { data: existingInstallments, error: existingInstallmentsError } = await db
+    .from('payment_installments')
+    .select('id, amount_paid')
+    .eq('enrollment_id', enrollment.id);
+  if (existingInstallmentsError) throw existingInstallmentsError;
+
+  let installmentRows = existingInstallments ?? [];
+  if (installmentRows.length === 0) {
+    const installments = generateInstallments(
+      enrollment.id,
+      Number(enrollment.total_fee),
+      Number(enrollment.amount_paid_initial),
+      settings?.installment_count ?? 3,
+      enrollment.bootcamp_starts_at ? new Date(enrollment.bootcamp_starts_at) : null,
+    );
+    if (installments.length > 0) {
+      const { data: inserted, error: instErr } = await db
+        .from('payment_installments')
+        .insert(installments)
+        .select('id, amount_paid');
+      if (instErr) throw instErr;
+      installmentRows = inserted ?? [];
+    }
   }
 
-  if (Number(enrollment.amount_paid_initial) > 0) {
-    await applyAmountToInstallments(db, enrollment.id, Number(enrollment.amount_paid_initial));
+  const initialAmount = Number(enrollment.amount_paid_initial);
+  const alreadyApplied = installmentRows.reduce(
+    (sum: number, row: { amount_paid?: number | string | null }) => sum + Number(row.amount_paid ?? 0),
+    0,
+  );
+  const initialAmountRemaining = Math.max(0, initialAmount - alreadyApplied);
+  if (initialAmountRemaining > 0) {
+    await applyAmountToInstallments(db, enrollment.id, initialAmountRemaining);
   }
 
   await recomputeEnrollmentAccess(db, enrollment.id, settings?.post_bootcamp_access_months ?? 3);
