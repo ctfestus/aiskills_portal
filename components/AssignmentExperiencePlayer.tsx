@@ -4,8 +4,9 @@ import { useState, useCallback, useRef } from 'react';
 import {
   CheckCircle2, Circle, ChevronDown, ChevronUp, ChevronRight, ChevronLeft,
   Loader2, Lock, Upload as UploadIcon, Link as LinkIcon, CheckCircle, Download, Eye,
-  Paperclip, Send, Reply, X, AlertTriangle,
+  Paperclip, Send, Reply, X, AlertTriangle, Check,
 } from 'lucide-react';
+import { XpBadgeStack } from '@/components/XpBadge';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText, sanitizeEmailContent } from '@/lib/sanitize';
 import { applyNameTags } from '@/lib/merge-tags';
@@ -1485,17 +1486,35 @@ export default function AssignmentExperiencePlayer({
                                 {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accent }}/>}
                               </div>
 
-                              {/* The bonus is only advertised when one is actually configured -- a share
-                                  requirement left at 0 must not promise XP the claim will not pay. */}
-                              {!claimed && (
+                              {/* The same reward banner the course share slide uses, so the offer reads
+                                  identically wherever a student meets it. Only when a bonus is actually
+                                  configured -- a requirement left at 0 must not promise XP the claim will
+                                  not pay, and falls back to the plain framing. */}
+                              {(req.sharePoints ?? 0) > 0 ? (
+                                <div className="flex items-center gap-3 rounded-xl px-3.5 py-3"
+                                  style={{ background: claimed ? 'rgba(16,185,129,0.10)' : `${accent}12` }}>
+                                  <XpBadgeStack size={60} className="flex-shrink-0" />
+                                  <div className="min-w-0">
+                                    <p className="text-[15px] font-bold leading-tight flex items-center gap-1.5"
+                                      style={{ color: claimed ? '#10b981' : accent }}>
+                                      {claimed && <Check className="w-4 h-4 flex-shrink-0" strokeWidth={3} />}
+                                      {claimed
+                                        ? `${(req.sharePoints ?? 0).toLocaleString()} XP earned`
+                                        : `${(req.sharePoints ?? 0).toLocaleString()} XP up for grabs`}
+                                    </p>
+                                    <p className="text-[12px] leading-snug mt-0.5" style={{ color: muted }}>
+                                      {claimed
+                                        ? 'Your work is out in front of your network. That is how opportunities find you.'
+                                        : 'Post about what you built, then paste the link below to claim it.'}
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : !claimed && (
                                 <div className="flex items-center gap-2 rounded-xl px-3 py-2.5"
                                   style={{ background: `${accent}10` }}>
                                   <Eye className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accent }}/>
                                   <p className="text-[12px] leading-snug" style={{ color: muted }}>
                                     Real work, shared publicly. This is the part hiring managers actually see.
-                                    {(req.sharePoints ?? 0) > 0 && (
-                                      <> Share on LinkedIn and earn <b style={{ color: accent }}>{(req.sharePoints ?? 0).toLocaleString()} XP</b>.</>
-                                    )}
                                   </p>
                                 </div>
                               )}
