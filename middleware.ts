@@ -1,8 +1,29 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  restrictionFor,
+  isPathOpenTo,
+  redirectPathFor,
+  denialMessageFor,
+} from '@/lib/account-state';
+import { SESSION_LOOKUP_FREE_API_PATH_SET } from '@/lib/middleware-session-policy';
 
 // App routes that must never be iframed
 const APP_ROUTE = /^\/(dashboard|settings|create|admin|auth|onboarding|student)/;
+
+function hasSupabaseSessionCookie(req: NextRequest): boolean {
+  return req.cookies.getAll().some(({ name }) =>
+    name === 'supabase-auth-token'
+      || (name.startsWith('sb-') && name.includes('-auth-token')),
+  );
+}
+
+function needsSessionLookup(req: NextRequest): boolean {
+  const { pathname } = req.nextUrl;
+  if (pathname === '/auth' || pathname.startsWith('/auth/')) return false;
+  if (SESSION_LOOKUP_FREE_API_PATH_SET.has(pathname)) return false;
+  return hasSupabaseSessionCookie(req);
+}
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -16,10 +37,14 @@ function generateNonce(): string {
 export async function middleware(req: NextRequest) {
   // Fallback: if a code lands on the root (Supabase fell back to the site URL),
   // send it to the callback Route Handler so it can exchange the code properly.
-  const recoveryCode = req.nextUrl.searchParams.get('code');
-  if (recoveryCode && req.nextUrl.pathname === '/') {
+  const authCode = req.nextUrl.searchParams.get('code');
+  if (authCode && req.nextUrl.pathname === '/') {
     const dest = new URL('/auth/callback', req.url);
-    dest.searchParams.set('code', recoveryCode);
+    dest.searchParams.set('code', authCode);
+    // The code reached the Site URL because Supabase could not use a more specific
+    // redirect. After exchange, the callback can safely distinguish an established
+    // account recovering its password from a pending signup completing admission.
+    dest.searchParams.set('site_fallback', '1');
     return NextResponse.redirect(dest);
   }
 
@@ -60,25 +85,41 @@ export async function middleware(req: NextRequest) {
 
   let res = NextResponse.next({ request: { headers: requestHeaders } });
 
-  // Refresh Supabase auth session cookies on every request so they don't expire mid-visit
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => req.cookies.getAll(),
-        setAll(cookiesToSet) {
-          // Recreate the response so updated session cookies are sent to the browser
-          res = NextResponse.next({ request: { headers: requestHeaders } });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            res.cookies.set(name, value, options),
-          );
+  if (needsSessionLookup(req)) {
+    // Refresh authenticated sessions only where the request actually needs the account
+    // gate. Anonymous traffic and the setup flow no longer turn into remote Auth calls.
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll: () => req.cookies.getAll(),
+          setAll(cookiesToSet) {
+            // Recreate the response so updated session cookies are sent to the browser
+            res = NextResponse.next({ request: { headers: requestHeaders } });
+            cookiesToSet.forEach(({ name, value, options }) =>
+              res.cookies.set(name, value, options),
+            );
+          },
         },
       },
-    },
-  );
+    );
 
-  try { await supabase.auth.getUser(); } catch { /* session refresh failed -- continue */ }
+    let authedUser: { app_metadata?: unknown } | null = null;
+    try {
+      const { data } = await supabase.auth.getUser();
+      authedUser = data.user;
+    } catch { /* session refresh failed -- continue */ }
+
+    // Account restrictions are enforced platform-wide, from the session. Bearer-only
+    // API calls are enforced independently at the shared boundary in lib/api-auth.
+    const restriction = restrictionFor(authedUser);
+    if (restriction !== 'none' && !isPathOpenTo(restriction, req.nextUrl.pathname)) {
+      return req.nextUrl.pathname.startsWith('/api/')
+        ? NextResponse.json({ error: denialMessageFor(restriction) }, { status: 403 })
+        : NextResponse.redirect(new URL(redirectPathFor(restriction), req.url));
+    }
+  }
 
   // The HTML-embed proxy sets its own CSP (sandbox) on instructor-uploaded
   // pages; the app CSP's nonce-based script-src would block their inline
@@ -91,7 +132,7 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    // Run on all routes except Next.js internals and static assets
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    // Run on application routes, not Next.js internals or browser-requested assets.
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:ico|png|jpg|jpeg|gif|webp|svg|css|js|map|txt|xml|webmanifest|woff2?|ttf|eot)$).*)',
   ],
 };
