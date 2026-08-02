@@ -8,6 +8,7 @@ import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { ImageLibrary } from '@/components/ImageLibrary';
 import type { LessonDoc } from '@/lib/lesson-doc';
 import { safeEmbedUrl, isHtmlEmbedUrl } from '@/lib/safe-embed-url';
+import { clampLinkedInSharePoints, DEFAULT_LINKEDIN_SHARE_POINTS, MAX_LINKEDIN_SHARE_POINTS } from '@/lib/course-schema';
 import { useTheme } from '@/components/ThemeProvider';
 import {
   ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight, ChevronLeft,
@@ -147,6 +148,11 @@ interface Requirement {
   sharePrompt?: string;   // linkedin_share: suggested post text the student can copy
   // linkedin_share: only an explicit `true` gates the lesson. Absent/false = optional, never blocks.
   shareRequired?: boolean;
+  // linkedin_share: bonus XP, clamped server-side to 0..MAX_LINKEDIN_SHARE_POINTS. ABSENT MEANS 0,
+  // not the default amount -- requirements authored before VE shares paid XP must stay at zero
+  // rather than silently start offering a bonus nobody chose. The editor writes the default
+  // explicitly for newly created share requirements.
+  sharePoints?: number;
 }
 interface Lesson {
   id: string;
@@ -1853,6 +1859,10 @@ function VirtualExperienceCreatePageInner() {
                                                       aiReview: type === 'text' ? req.aiReview : undefined,
                                                       sharePrompt: type === 'linkedin_share' ? req.sharePrompt : undefined,
                                                       shareRequired: type === 'linkedin_share' ? (req.shareRequired ?? false) : undefined,
+                                                      // Written explicitly so NEW share requirements offer the default bonus,
+                                                      // while ones authored before VE shares paid XP keep an absent field and
+                                                      // stay at 0 until an instructor sets an amount.
+                                                      sharePoints: type === 'linkedin_share' ? (req.sharePoints ?? DEFAULT_LINKEDIN_SHARE_POINTS) : undefined,
                                                     });
                                                   }}
                                                   style={{ padding: '2px 6px', borderRadius: 6, border: `1px solid ${C.cardBorder}`, background: C.card, color: C.text, fontSize: 11, fontWeight: 700 }}>
@@ -1998,6 +2008,18 @@ function VirtualExperienceCreatePageInner() {
                                                           : { background: C.cta, color: 'white' }}>
                                                         {req.shareRequired !== true ? 'Optional' : 'Required to finish the lesson'}
                                                       </button>
+                                                      {/* Independent of the toggle: an optional share can still pay a bonus. */}
+                                                      <label className="flex items-center gap-2 text-[11px] font-semibold" style={{ color: C.muted }}>
+                                                        Bonus XP
+                                                        <input
+                                                          type="number" min={0} max={MAX_LINKEDIN_SHARE_POINTS}
+                                                          value={req.sharePoints ?? 0}
+                                                          onChange={e => updateReq(mod.id, les.id, req.id, {
+                                                            sharePoints: clampLinkedInSharePoints(e.target.value),
+                                                          })}
+                                                          style={{ ...inp, background: C.card, fontSize: 12, width: 90, padding: '4px 8px' }} />
+                                                        <span style={{ color: C.faint, fontWeight: 500 }}>0 to {MAX_LINKEDIN_SHARE_POINTS}; 0 awards nothing</span>
+                                                      </label>
                                                       <p className="text-[11px]" style={{ color: C.faint }}>
                                                         The student pastes the link to their own LinkedIn post. It is checked as a real post
                                                         written by them, and a post someone else already submitted is rejected.

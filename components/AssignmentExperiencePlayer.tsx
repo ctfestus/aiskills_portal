@@ -42,6 +42,11 @@ interface Requirement {
   sharePrompt?: string;   // linkedin_share: suggested post text the student can copy
   // linkedin_share: only an explicit `true` gates the lesson. Absent/false = optional, never blocks.
   shareRequired?: boolean;
+  // linkedin_share: bonus XP, clamped server-side to 0..MAX_LINKEDIN_SHARE_POINTS. ABSENT MEANS 0,
+  // not the default amount -- requirements authored before VE shares paid XP must stay at zero
+  // rather than silently start offering a bonus nobody chose. The editor writes the default
+  // explicitly for newly created share requirements.
+  sharePoints?: number;
   options?: string[];
   optionFeedback?: string[];
   correctAnswer?: string;
@@ -1480,13 +1485,17 @@ export default function AssignmentExperiencePlayer({
                                 {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accent }}/>}
                               </div>
 
-                              {/* No XP on the VE side, so the payoff is framed as the work being seen. */}
+                              {/* The bonus is only advertised when one is actually configured -- a share
+                                  requirement left at 0 must not promise XP the claim will not pay. */}
                               {!claimed && (
                                 <div className="flex items-center gap-2 rounded-xl px-3 py-2.5"
                                   style={{ background: `${accent}10` }}>
                                   <Eye className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accent }}/>
                                   <p className="text-[12px] leading-snug" style={{ color: muted }}>
                                     Real work, shared publicly. This is the part hiring managers actually see.
+                                    {(req.sharePoints ?? 0) > 0 && (
+                                      <> Share on LinkedIn and earn <b style={{ color: accent }}>{(req.sharePoints ?? 0).toLocaleString()} XP</b>.</>
+                                    )}
                                   </p>
                                 </div>
                               )}

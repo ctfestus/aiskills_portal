@@ -7,6 +7,7 @@ import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { updateLearningPathProgress } from '@/lib/learning-path-progress';
 import { claimLinkedInShare, loadClaimedShareItemIds } from '@/lib/linkedin-share';
+import { clampLinkedInSharePoints } from '@/lib/course-schema';
 import { countCompletedRequirements, isVeComplete } from '@/lib/ve-completion';
 
 export const dynamic = 'force-dynamic';
@@ -457,8 +458,10 @@ export async function POST(req: NextRequest) {
   }
 
   // -- Claim a LinkedIn post for a linkedin_share deliverable --
-  // Synchronous so the student learns inline that a post is already claimed. VE shares award no XP;
-  // they are a plain completion requirement, enforced in countCompletedRequirements below.
+  // Synchronous so the student learns inline that a post is already claimed. The claim row carries
+  // the bonus (migration 160 sums VE claims into student_xp), and separately decides completion via
+  // countCompletedRequirements below -- the two are independent: an optional share can pay XP, and a
+  // required one with a 0 bonus can gate without paying.
   if (body.action === 'claim-linkedin-share') {
     const shareVeId = body.veId ?? body.formId;
     const { requirementId, post_url } = body;
@@ -473,9 +476,21 @@ export async function POST(req: NextRequest) {
     if (shareAccess.error) return shareAccess.error;
 
     const shareModules = Array.isArray(shareAccess.ve.modules) ? shareAccess.ve.modules : [];
-    if (!findShareRequirement(shareModules, requirementId)) {
+    const shareReq = findShareRequirement(shareModules, requirementId);
+    if (!shareReq) {
       return NextResponse.json({ error: 'Requirement not found' }, { status: 404 });
     }
+
+    // The bonus comes from the STORED VE config, never the request, and is clamped to
+    // 0..MAX_LINKEDIN_SHARE_POINTS -- linkedin_shares.points feeds student_xp through
+    // recalc_student_xp (migration 160), so an unclamped value taken on trust would mint XP.
+    // clampLinkedInSharePoints maps an absent amount to 0 rather than to the course default, which is
+    // what grandfathers requirements authored before VE shares paid anything.
+    //
+    // Snapshotting it onto the claim row is deliberate: the amount a student earned is the amount
+    // that was on offer when they posted. An instructor raising the bonus later applies to future
+    // claims only, and cannot retroactively revalue work already done.
+    const sharePoints = clampLinkedInSharePoints((shareReq as any).sharePoints);
 
     // Their own LinkedIn profile, collected at onboarding, is what the post's author is checked
     // against. Read server-side so the client cannot supply whichever profile fits the post.
@@ -488,7 +503,7 @@ export async function POST(req: NextRequest) {
       contentId:   shareVeId,
       itemId:      requirementId,
       postUrl:     post_url,
-      points:      0,
+      points:      sharePoints,
       studentProfileUrl: (shareProfileRow as any)?.social_links?.linkedin ?? null,
     });
 
