@@ -45,6 +45,8 @@ import {
 
 // Sk, CarouselSkeleton, EmptyState, StatusBadge, ProgressBar live in @/components/student/shared
 
+const ACTIVITY_POLL_MIN_GAP_MS = 30_000;
+
 export default function StudentDashboard() {
   const [mounted, setMounted] = useState(false);
   const C = useC();
@@ -72,8 +74,8 @@ export default function StudentDashboard() {
   const [cohortIdForTicker,  setCohortIdForTicker]  = useState<string | null>(null);
   const seenActivityGlobal = useRef<Set<string>>(new Set());
   const tickerTimerGlobal  = useRef<any>(null);
-  // eslint-disable-next-line react-hooks/purity
   const pageLoadTimeGlobal = useRef(Date.now());
+  const lastActivityPollStartedAt = useRef(0);
 
   useEffect(() => installStudentModeFetchBridge(), []);
 
@@ -105,13 +107,24 @@ export default function StudentDashboard() {
     document.title = appName ? `${label} - ${appName}` : label;
   }, [activeSection, appName]);
 
-  // Activity feed polling -- runs on all tabs
+  // Activity feed polling. Background tabs do no network work, and returning to a tab
+  // refreshes immediately rather than waiting for the next interval.
   useEffect(() => {
     if (!cohortIdForTicker) return;
+    let requestInFlight = false;
+
     const poll = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
+      if (document.visibilityState !== 'visible' || requestInFlight) return;
+
+      const now = Date.now();
+      if (now - lastActivityPollStartedAt.current < ACTIVITY_POLL_MIN_GAP_MS) return;
+      // Advance before getSession so expired sessions, refresh attempts, network errors,
+      // and non-OK responses are rate-limited just like successful requests.
+      lastActivityPollStartedAt.current = now;
+      requestInFlight = true;
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
         const res = await fetch(`/api/activity/feed?cohort_id=${cohortIdForTicker}`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
         });
@@ -131,10 +144,22 @@ export default function StudentDashboard() {
           tickerTimerGlobal.current = setTimeout(() => setActiveTicker(null), 7000);
         }
       } catch { /* ignore */ }
+      finally { requestInFlight = false; }
     };
-    poll();
-    const interval = setInterval(poll, 15000);
-    return () => { clearInterval(interval); clearTimeout(tickerTimerGlobal.current); };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void poll();
+    };
+
+    void poll();
+    const interval = window.setInterval(() => void poll(), 60_000);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      clearTimeout(tickerTimerGlobal.current);
+    };
   }, [cohortIdForTicker]);
 
   function goSection(id: SectionId) {
