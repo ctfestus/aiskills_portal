@@ -8,6 +8,7 @@ import {
   Link as LinkIcon, Upload as UploadIcon, Paperclip, Send, Reply, AlertTriangle, Eye, Check,
 } from 'lucide-react';
 import { XpBadgeStack } from '@/components/XpBadge';
+import { clampLinkedInSharePoints } from '@/lib/course-schema';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText, sanitizeEmailContent } from '@/lib/sanitize';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
@@ -1919,6 +1920,10 @@ export default function VirtualExperienceTaker({
 
                       // File Upload question
                       if (req.type === 'linkedin_share') {
+                        // Clamped with the server's own helper rather than rendered raw: an imported,
+                        // synced or hand-edited VE can carry any number, and advertising 999,999 XP for a
+                        // claim that will award 200 is a promise the server does not keep.
+                        const bonus   = clampLinkedInSharePoints(req.sharePoints);
                         const claimed = progress[req.id]?.linkUrl || '';
                         const draft   = shareDrafts[req.id] ?? claimed;
                         const saving  = shareSaving === req.id;
@@ -1950,7 +1955,7 @@ export default function VirtualExperienceTaker({
                                 identically wherever a student meets it. Only when a bonus is actually
                                 configured -- a requirement left at 0 must not promise XP the claim will
                                 not pay, and falls back to the plain framing. */}
-                            {(req.sharePoints ?? 0) > 0 ? (
+                            {bonus > 0 ? (
                               <div className="flex items-center gap-3 rounded-xl px-3.5 py-3"
                                 style={{ background: claimed ? 'rgba(16,185,129,0.10)' : `${accentColor}12` }}>
                                 <XpBadgeStack size={60} className="flex-shrink-0" />
@@ -1959,8 +1964,8 @@ export default function VirtualExperienceTaker({
                                     style={{ color: claimed ? '#10b981' : accentColor }}>
                                     {claimed && <Check className="w-4 h-4 flex-shrink-0" strokeWidth={3} />}
                                     {claimed
-                                      ? `${(req.sharePoints ?? 0).toLocaleString()} XP earned`
-                                      : `${(req.sharePoints ?? 0).toLocaleString()} XP up for grabs`}
+                                      ? `${bonus.toLocaleString()} XP earned`
+                                      : `${bonus.toLocaleString()} XP up for grabs`}
                                   </p>
                                   <p className="text-[12px] leading-snug mt-0.5" style={{ color: isDark ? '#aaa' : '#555' }}>
                                     {claimed
