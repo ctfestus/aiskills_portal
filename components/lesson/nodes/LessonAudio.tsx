@@ -9,10 +9,11 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Segmented, StyleMenu, MenuRow } from '@/components/lesson/nodes/StyleControls';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
+import { NodeDeleteButton } from '@/components/lesson/nodes/NodeControls';
 
 type Align = 'left' | 'center' | 'right';
 
-function AudioView({ node, updateAttributes, editor }: NodeViewProps) {
+function AudioView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
   const editable = editor.isEditable;
   const src = (node.attrs.src as string) || '';
   const title = (node.attrs.title as string) || '';
@@ -33,6 +34,7 @@ function AudioView({ node, updateAttributes, editor }: NodeViewProps) {
               />
             </MenuRow>
           </StyleMenu>
+          <NodeDeleteButton editor={editor} getPos={getPos} nodeSize={node.nodeSize} label="audio" />
         </div>
       )}
 

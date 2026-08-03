@@ -19,6 +19,7 @@ import { ChevronLeft, ChevronRight, Check, Plus, X, Image as ImageIcon } from 'l
 import { ImageLibrary } from '@/components/ImageLibrary';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
 import { ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
+import { NodeDeleteButton } from '@/components/lesson/nodes/NodeControls';
 
 const MAX_SLIDES = 20;
 
@@ -89,6 +90,7 @@ function CarouselView({ node, editor, getPos, updateAttributes }: NodeViewProps)
               <MenuRow label="Color"><ColorField value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} /></MenuRow>
             )}
           </StyleMenu>
+          <NodeDeleteButton editor={editor} getPos={getPos} nodeSize={node.nodeSize} label="carousel" />
         </div>
       )}
 

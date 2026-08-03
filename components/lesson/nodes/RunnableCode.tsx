@@ -15,6 +15,7 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Play, Copy, Check, Loader2, Database, X } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
+import { NodeDeleteButton } from '@/components/lesson/nodes/NodeControls';
 import { CodeMirrorEditor } from '@/components/lesson/CodeMirrorEditor';
 import { useLessonRuntime } from '@/components/lesson/LessonRuntimeContext';
 import { useTheme } from '@/components/ThemeProvider';
@@ -26,7 +27,7 @@ interface DatasetInfo { name: string; columns: string[]; rows: string[][]; rowCo
 const LANGUAGES = ['sql', 'javascript', 'python', 'bash', 'json', 'plaintext'];
 const MAX_VISIBLE_ROWS = 50;
 
-function RunnableCodeView({ node, updateAttributes, editor }: NodeViewProps) {
+function RunnableCodeView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
   const language = (node.attrs.language as string) || 'sql';
   const code = (node.attrs.code as string) || '';
   const setupSql = (node.attrs.setupSql as string) || '';
@@ -51,8 +52,9 @@ function RunnableCodeView({ node, updateAttributes, editor }: NodeViewProps) {
           >
             {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
           </select>
-          {(isSql || isPython) && (
-            <span className="lesson-code__bar-right">
+          <span className="lesson-code__bar-right lesson-block-actions">
+            {(isSql || isPython) && (
+              <>
               <span className="lesson-code__hint" data-on={runnable ? 'true' : 'false'}>
                 {runnable ? 'Runnable' : 'Copyable snippet'}
               </span>
@@ -60,8 +62,10 @@ function RunnableCodeView({ node, updateAttributes, editor }: NodeViewProps) {
                 <button type="button" data-active={dataScope === 'shared' ? 'true' : 'false'} onMouseDown={(e) => { e.preventDefault(); updateAttributes({ dataScope: 'shared' }); }}>Shared data</button>
                 <button type="button" data-active={dataScope === 'own' ? 'true' : 'false'} onMouseDown={(e) => { e.preventDefault(); updateAttributes({ dataScope: 'own' }); }}>This block only</button>
               </span>
-            </span>
-          )}
+              </>
+            )}
+            <NodeDeleteButton editor={editor} getPos={getPos} nodeSize={node.nodeSize} label="code block" />
+          </span>
         </div>
         <NodeTextInput
           multiline

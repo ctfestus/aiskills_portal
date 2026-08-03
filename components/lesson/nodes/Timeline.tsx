@@ -11,6 +11,7 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react';
 import { Plus, X } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
+import { NodeDeleteButton } from '@/components/lesson/nodes/NodeControls';
 
 const MAX_ENTRIES = 30;
 
@@ -73,10 +74,15 @@ function TimelineView({ node, editor, getPos }: NodeViewProps) {
   return (
     <NodeViewWrapper className="lesson-timeline">
       <NodeViewContent className="lesson-timeline__entries" />
-      {editable && count < MAX_ENTRIES && (
-        <button type="button" className="lesson-timeline__add" contentEditable={false} onMouseDown={(e) => { e.preventDefault(); addEntry(); }}>
-          <Plus width={13} height={13} /> Add event
-        </button>
+      {editable && (
+        <div className="lesson-block-footer" contentEditable={false}>
+          {count < MAX_ENTRIES && (
+            <button type="button" className="lesson-timeline__add" onMouseDown={(e) => { e.preventDefault(); addEntry(); }}>
+              <Plus width={13} height={13} /> Add event
+            </button>
+          )}
+          <NodeDeleteButton editor={editor} getPos={getPos} nodeSize={node.nodeSize} label="timeline" />
+        </div>
       )}
     </NodeViewWrapper>
   );

@@ -11,13 +11,14 @@ import {
   ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, borderCss, type BorderStyle,
 } from '@/components/lesson/nodes/StyleControls';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
+import { NodeDeleteButton } from '@/components/lesson/nodes/NodeControls';
 
 type Align = 'left' | 'center' | 'right';
 type Size = 'small' | 'medium' | 'full';
 
 const SIZE_MAX: Record<Size, string> = { small: '320px', medium: '480px', full: '100%' };
 
-function ImageView({ node, updateAttributes, editor }: NodeViewProps) {
+function ImageView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
   const editable = editor.isEditable;
   const src = node.attrs.src as string;
   const alt = (node.attrs.alt as string) || '';
@@ -72,6 +73,7 @@ function ImageView({ node, updateAttributes, editor }: NodeViewProps) {
               <NodeTextInput className="lesson-image__alt-input" value={alt} placeholder="Describe the image" onCommit={(v) => updateAttributes({ alt: v })} />
             </MenuRow>
           </StyleMenu>
+          <NodeDeleteButton editor={editor} getPos={getPos} nodeSize={node.nodeSize} label="image" />
         </div>
       )}
 

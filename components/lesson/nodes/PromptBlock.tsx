@@ -13,6 +13,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
+import { NodeDeleteButton } from '@/components/lesson/nodes/NodeControls';
 import {
   buildChatGptPromptUrl,
   buildClaudePromptUrl,
@@ -87,7 +88,7 @@ function ProviderLink({
   );
 }
 
-function PromptBlockView({ node, updateAttributes, editor }: NodeViewProps) {
+function PromptBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
   const editable = editor.isEditable;
   const title = (node.attrs.title as string) || '';
   const prompt = (node.attrs.prompt as string) || '';
@@ -135,7 +136,10 @@ function PromptBlockView({ node, updateAttributes, editor }: NodeViewProps) {
             <p className="lesson-prompt__title">{title || 'Try this prompt'}</p>
           )}
         </div>
-        <span className="lesson-prompt__status"><span /> Ready to explore</span>
+        <span className="lesson-block-actions" contentEditable={false}>
+          <span className="lesson-prompt__status"><span /> Ready to explore</span>
+          {editable && <NodeDeleteButton editor={editor} getPos={getPos} nodeSize={node.nodeSize} label="AI prompt" />}
+        </span>
       </div>
 
       <div className="lesson-prompt__surface">
