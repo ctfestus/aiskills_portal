@@ -20,7 +20,7 @@ import { XpBadgeStack } from '@/components/XpBadge';
 import { AnimatedField } from '@/components/AnimatedField';
 import { useTheme } from '@/components/ThemeProvider';
 import type { QuestionType, DownloadItem, CourseQuestion } from '@/lib/course-schema';
-import { DEFAULT_LINKEDIN_SHARE_POINTS } from '@/lib/course-schema';
+import { linkedInSharePointsFor } from '@/lib/course-schema';
 import { courseProgressCounts, answeredScorableCount } from '@/lib/course-progress';
 import { preflightLinkedInPostUrl } from '@/lib/linkedin-post-url';
 import { saveMyLinkedInProfileUrl, shareClaimErrorMessage } from '@/lib/linkedin-profile';
@@ -3433,7 +3433,12 @@ export function CourseTaker({
                     const draft = shareDrafts[q.id] ?? claimed;
                     const saving = shareSaving === q.id;
                     const error = shareErrors[q.id];
-                    const bonus = Number(q.linkedInSharePoints ?? DEFAULT_LINKEDIN_SHARE_POINTS) || 0;
+                    // Resolved through the same helper the AWARD uses (lib/attempt-points) and the
+                    // advertised course total uses (lib/course-progress), so the three cannot disagree.
+                    // Reading the raw field meant a config carrying 999999 -- imported, synced or
+                    // hand-edited -- advertised 999,999 XP for a claim the server would clamp to 200,
+                    // and a fractional 49.9 rendered as "49.9 XP" where the award floors it to 49.
+                    const bonus = linkedInSharePointsFor(q);
                     // Deep link to LinkedIn's composer, prefilled with this course's public page --
                     // same share-offsite pattern the certificate and badge pages use. app/[id]
                     // resolves either a slug or an id, so formId is enough.
