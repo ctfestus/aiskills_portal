@@ -19,9 +19,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code2, FileCode2,
   List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote,
-  Image as ImageIcon, Table as TableIcon, Info, ChevronsUpDown, LayoutGrid, HelpCircle, Terminal, GalleryHorizontal,
-  Layers, ListChecks, History, BookMarked, Braces, AudioLines,
-  MessageSquareCode, PanelsTopLeft,
+  Image as ImageIcon, Table as TableIcon, BookMarked, AudioLines,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { StyleMenu, MenuRow, Segmented, ColorField } from '@/components/lesson/nodes/StyleControls';
@@ -33,9 +31,9 @@ import { LessonRuntimeProvider } from '@/components/lesson/LessonRuntimeContext'
 import { useTenant } from '@/components/TenantProvider';
 import { ImageLibrary } from '@/components/ImageLibrary';
 import { AudioPicker } from '@/components/lesson/AudioPicker';
+import { InteractiveInsertMenu } from '@/components/lesson/InteractiveInsertMenu';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { collectRunnableSetup, inlineGlossaryDefinitions, sameContent, type LessonDoc } from '@/lib/lesson-doc';
-import { insertStepCards } from '@/lib/lesson-step-cards';
 
 interface LessonEditorProps {
   doc?: LessonDoc;
@@ -144,15 +142,6 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
     }
   }, [editor]);
 
-  const handleStepCards = useCallback(() => {
-    if (!editor) return;
-    // Structured/isolating blocks can reject a block insertion at the current
-    // selection. TipTap reports that as a false command with no visible error,
-    // which made this toolbar control appear unresponsive. Prefer the caret,
-    // then append at the document boundary when that context cannot accept it.
-    insertStepCards(editor);
-  }, [editor]);
-
   if (!editor) return null;
 
   // Combined shared setup, recomputed each render (the toolbar already re-renders on
@@ -185,18 +174,8 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
         <Btn dark={dark} title="Link" active={editor.isActive('link')} onClick={handleLink}><LinkIcon className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Define term (glossary tooltip)" active={editor.isActive('glossaryTerm')} onClick={handleGlossary}><BookMarked className="w-3.5 h-3.5" /></Btn>
         <Divider dark={dark} />
-        <Btn dark={dark} title="Callout" onClick={() => editor.chain().focus().insertContent({ type: 'callout', attrs: { variant: 'note' }, content: [{ type: 'paragraph' }] }).run()}><Info className="w-3.5 h-3.5" /></Btn>
-        <Btn dark={dark} title="Collapsible sections" onClick={() => editor.chain().focus().insertContent({ type: 'accordion', content: [{ type: 'accordionItem', attrs: { title: '', open: false }, content: [{ type: 'paragraph' }] }] }).run()}><ChevronsUpDown className="w-3.5 h-3.5" /></Btn>
-        <Btn dark={dark} title="Tabs" onClick={() => editor.chain().focus().insertContent({ type: 'tabs', content: [{ type: 'tabPanel', attrs: { label: 'Tab 1' }, content: [{ type: 'paragraph' }] }, { type: 'tabPanel', attrs: { label: 'Tab 2' }, content: [{ type: 'paragraph' }] }] }).run()}><LayoutGrid className="w-3.5 h-3.5" /></Btn>
-        <Btn dark={dark} title="Carousel (stepped slides)" onClick={() => editor.chain().focus().insertContent({ type: 'carousel', content: [{ type: 'carouselSlide', content: [{ type: 'paragraph' }] }, { type: 'carouselSlide', content: [{ type: 'paragraph' }] }] }).run()}><GalleryHorizontal className="w-3.5 h-3.5" /></Btn>
-        <Btn dark={dark} title="Flashcards (flip cards)" onClick={() => editor.chain().focus().insertContent({ type: 'flipCardDeck', content: [{ type: 'flipCard', attrs: { front: '', back: '' } }, { type: 'flipCard', attrs: { front: '', back: '' } }] }).run()}><Layers className="w-3.5 h-3.5" /></Btn>
-        <Btn dark={dark} title="Steps (vertical stepper)" onClick={() => editor.chain().focus().insertContent({ type: 'stepper', content: [{ type: 'step', attrs: { title: '' }, content: [{ type: 'paragraph' }] }, { type: 'step', attrs: { title: '' }, content: [{ type: 'paragraph' }] }] }).run()}><ListChecks className="w-3.5 h-3.5" /></Btn>
-        <Btn dark={dark} title="Step cards" onClick={handleStepCards}><PanelsTopLeft className="w-3.5 h-3.5" /></Btn>
-        <Btn dark={dark} title="Timeline" onClick={() => editor.chain().focus().insertContent({ type: 'timeline', content: [{ type: 'timelineEntry', attrs: { date: '', title: '' }, content: [{ type: 'paragraph' }] }, { type: 'timelineEntry', attrs: { date: '', title: '' }, content: [{ type: 'paragraph' }] }] }).run()}><History className="w-3.5 h-3.5" /></Btn>
-        <Btn dark={dark} title="Knowledge check" onClick={() => editor.chain().focus().insertContent({ type: 'knowledgeCheck', attrs: { question: '', options: ['', ''], correctIndex: 0, explanation: '' } }).run()}><HelpCircle className="w-3.5 h-3.5" /></Btn>
-        <Btn dark={dark} title="AI prompt card" onClick={() => editor.chain().focus().insertContent({ type: 'promptBlock', attrs: { title: 'Try this prompt', prompt: '', showChatGpt: true, showClaude: true } }).run()}><MessageSquareCode className="w-3.5 h-3.5" /></Btn>
-        <Btn dark={dark} title="Runnable code (SQL)" onClick={() => editor.chain().focus().insertContent({ type: 'runnableCode', attrs: { language: 'sql', code: '', setupSql: '', setupPython: '' } }).run()}><Terminal className="w-3.5 h-3.5" /></Btn>
-        <Btn dark={dark} title="Runnable code (Python)" onClick={() => editor.chain().focus().insertContent({ type: 'runnableCode', attrs: { language: 'python', code: '', setupSql: '', setupPython: '' } }).run()}><Braces className="w-3.5 h-3.5" /></Btn>
+        <InteractiveInsertMenu editor={editor} dark={dark} accentColor={lessonAccent} />
+        <Divider dark={dark} />
         <Btn dark={dark} title="Table" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><TableIcon className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Insert image" onClick={() => setShowLibrary(true)}><ImageIcon className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Insert audio" onClick={() => setShowAudioPicker(true)}><AudioLines className="w-3.5 h-3.5" /></Btn>

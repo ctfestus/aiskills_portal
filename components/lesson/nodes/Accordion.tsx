@@ -10,16 +10,35 @@
 
 import { useState } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
-import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react';
-import { Minus, Plus } from 'lucide-react';
+import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, useEditorState, type NodeViewProps } from '@tiptap/react';
+import { Minus, Plus, X } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
 import { ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
+import { NodeDeleteButton } from '@/components/lesson/nodes/NodeControls';
 
-function AccordionItemView({ node, updateAttributes, editor }: NodeViewProps) {
+function AccordionItemView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
   const editable = editor.isEditable;
   const [open, setOpen] = useState<boolean>(editable ? true : !!node.attrs.open);
   const title = (node.attrs.title as string) || '';
   const toggle = () => setOpen((current) => !current);
+  const canRemove = useEditorState({
+    editor,
+    selector: ({ editor: currentEditor }) => {
+      if (!editable || typeof getPos !== 'function') return false;
+      try {
+        const pos = getPos();
+        return pos != null && currentEditor.state.doc.resolve(pos).parent.childCount > 1;
+      } catch {
+        return false;
+      }
+    },
+  });
+  const removeSelf = () => {
+    if (typeof getPos !== 'function') return;
+    const pos = getPos();
+    if (pos == null) return;
+    editor.chain().focus().deleteRange({ from: pos, to: pos + node.nodeSize }).run();
+  };
   const toggleIcon = (
     <span className="lesson-accordion__toggle-icon" aria-hidden="true">
       <Plus className="lesson-accordion__plus" width={17} height={17} />
@@ -40,6 +59,11 @@ function AccordionItemView({ node, updateAttributes, editor }: NodeViewProps) {
           <button type="button" className="lesson-accordion__editor-toggle" aria-label={open ? 'Collapse section' : 'Expand section'} aria-expanded={open} onMouseDown={(event) => { event.preventDefault(); toggle(); }}>
             {toggleIcon}
           </button>
+          {canRemove && (
+            <button type="button" className="lesson-accordion__remove" aria-label="Remove section" title="Remove section" onMouseDown={(event) => event.preventDefault()} onClick={removeSelf}>
+              <X width={12} height={12} aria-hidden="true" />
+            </button>
+          )}
         </div>
       ) : (
         <button type="button" className="lesson-accordion__head" aria-expanded={open} onClick={toggle}>
@@ -81,12 +105,15 @@ function AccordionView({ node, editor, getPos, updateAttributes }: NodeViewProps
     <NodeViewWrapper className="lesson-accordion" style={accVars}>
       {editable && (
         <div className="lesson-accordion__toolbar">
-          <StyleMenu>
-            <MenuRow label="Border"><Segmented<BorderStyle> value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} /></MenuRow>
-            {borderStyle !== 'none' && (
-              <MenuRow label="Color"><ColorField value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} /></MenuRow>
-            )}
-          </StyleMenu>
+          <span className="lesson-block-actions">
+            <StyleMenu>
+              <MenuRow label="Border"><Segmented<BorderStyle> value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} /></MenuRow>
+              {borderStyle !== 'none' && (
+                <MenuRow label="Color"><ColorField value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} /></MenuRow>
+              )}
+            </StyleMenu>
+            <NodeDeleteButton editor={editor} getPos={getPos} nodeSize={node.nodeSize} label="collapsible sections" />
+          </span>
         </div>
       )}
       <NodeViewContent className="lesson-accordion__items" />

@@ -17,6 +17,7 @@ import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, useEditorState
 import { Plus, X } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
 import { ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
+import { NodeDeleteButton } from '@/components/lesson/nodes/NodeControls';
 
 const MAX_TABS = 12;
 
@@ -131,13 +132,14 @@ function TabsView({ node, editor, getPos, updateAttributes }: NodeViewProps) {
           </button>
         )}
         {editable && (
-          <span className="lesson-tabs__style">
+          <span className="lesson-tabs__style lesson-block-actions">
             <StyleMenu>
               <MenuRow label="Border"><Segmented<BorderStyle> value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} /></MenuRow>
               {borderStyle !== 'none' && (
                 <MenuRow label="Color"><ColorField value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} /></MenuRow>
               )}
             </StyleMenu>
+            <NodeDeleteButton editor={editor} getPos={getPos} nodeSize={node.nodeSize} label="tabs" />
           </span>
         )}
       </div>

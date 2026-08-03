@@ -11,6 +11,7 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react';
 import { Plus, X, RefreshCw } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
+import { NodeDeleteButton } from '@/components/lesson/nodes/NodeControls';
 
 const MAX_CARDS = 24;
 
@@ -95,10 +96,15 @@ function FlipDeckView({ node, editor, getPos }: NodeViewProps) {
   return (
     <NodeViewWrapper className="lesson-flip-deck">
       <NodeViewContent className="lesson-flip-deck__grid" />
-      {editable && count < MAX_CARDS && (
-        <button type="button" className="lesson-flip-deck__add" contentEditable={false} onMouseDown={(e) => { e.preventDefault(); addCard(); }}>
-          <Plus width={13} height={13} /> Add card
-        </button>
+      {editable && (
+        <div className="lesson-block-footer" contentEditable={false}>
+          {count < MAX_CARDS && (
+            <button type="button" className="lesson-flip-deck__add" onMouseDown={(e) => { e.preventDefault(); addCard(); }}>
+              <Plus width={13} height={13} /> Add card
+            </button>
+          )}
+          <NodeDeleteButton editor={editor} getPos={getPos} nodeSize={node.nodeSize} label="flip-card deck" />
+        </div>
       )}
     </NodeViewWrapper>
   );

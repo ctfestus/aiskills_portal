@@ -15,9 +15,10 @@ import { createPortal } from 'react-dom';
 import { Check, Plus, X, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
 import { ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
+import { NodeDeleteButton } from '@/components/lesson/nodes/NodeControls';
 import { useTenant } from '@/components/TenantProvider';
 
-function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
+function KnowledgeCheckView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
   const editable = editor.isEditable;
   const question = (node.attrs.question as string) || '';
   const options = (node.attrs.options as string[]) || [];
@@ -60,12 +61,15 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
       <NodeViewWrapper className="lesson-check" data-editing="true" contentEditable={false} style={wrapperStyle}>
         <div className="lesson-check__bar">
           <div className="lesson-check__badge"><HelpCircle width={13} height={13} /> Knowledge check</div>
-          <StyleMenu>
-            <MenuRow label="Border"><Segmented<BorderStyle> value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} /></MenuRow>
-            {borderStyle !== 'none' && (
-              <MenuRow label="Color"><ColorField value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} /></MenuRow>
-            )}
-          </StyleMenu>
+          <span className="lesson-block-actions">
+            <StyleMenu>
+              <MenuRow label="Border"><Segmented<BorderStyle> value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} /></MenuRow>
+              {borderStyle !== 'none' && (
+                <MenuRow label="Color"><ColorField value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} /></MenuRow>
+              )}
+            </StyleMenu>
+            <NodeDeleteButton editor={editor} getPos={getPos} nodeSize={node.nodeSize} label="knowledge check" />
+          </span>
         </div>
         <NodeTextInput
           className="lesson-check__q-input"

@@ -15,6 +15,7 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react';
 import { Plus, X, Check, ArrowDown } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
+import { NodeDeleteButton } from '@/components/lesson/nodes/NodeControls';
 
 const MAX_STEPS = 12;
 
@@ -84,10 +85,15 @@ function StepperView({ node, editor, getPos }: NodeViewProps) {
       {!editable && shown >= count && count > 1 && (
         <div className="lesson-stepper__done"><Check width={15} height={15} /> All steps complete</div>
       )}
-      {editable && count < MAX_STEPS && (
-        <button type="button" className="lesson-stepper__add" contentEditable={false} onMouseDown={(e) => { e.preventDefault(); addStep(); }}>
-          <Plus width={13} height={13} /> Add step
-        </button>
+      {editable && (
+        <div className="lesson-block-footer" contentEditable={false}>
+          {count < MAX_STEPS && (
+            <button type="button" className="lesson-stepper__add" onMouseDown={(e) => { e.preventDefault(); addStep(); }}>
+              <Plus width={13} height={13} /> Add step
+            </button>
+          )}
+          <NodeDeleteButton editor={editor} getPos={getPos} nodeSize={node.nodeSize} label="guided steps" />
+        </div>
       )}
     </NodeViewWrapper>
   );
