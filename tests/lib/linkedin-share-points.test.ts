@@ -28,8 +28,11 @@ describe('clampLinkedInSharePoints', () => {
   });
 });
 
-// The award (lib/attempt-points) and the advertised total (lib/course-progress) both resolve a share
-// slide's bonus through this, so they cannot disagree about what "unset" and "zero" mean.
+// Three consumers resolve a course share slide's bonus through this: the award (lib/attempt-points),
+// the advertised course total (lib/course-progress), and the slide's reward banner
+// (components/CourseTaker). Going through one helper is what stops them disagreeing about what
+// "unset", "zero", an over-large value and a fraction each mean -- the banner used to read the raw
+// field and so advertised amounts the award would never pay.
 describe('linkedInSharePointsFor', () => {
   it('uses the default when the amount is unset', () => {
     expect(linkedInSharePointsFor({})).toBe(DEFAULT_LINKEDIN_SHARE_POINTS);
