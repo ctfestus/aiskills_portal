@@ -5,8 +5,10 @@ import Link from 'next/link';
 import {
   CheckCircle2, Circle, ChevronRight, ChevronLeft, ChevronDown,
   X, Loader2, Trophy, BookOpen, Lock, Download, Award, Star, Clock,
-  Link as LinkIcon, Upload as UploadIcon, Paperclip, Send, Reply, AlertTriangle, Eye,
+  Link as LinkIcon, Upload as UploadIcon, Paperclip, Send, Reply, AlertTriangle, Eye, Check,
 } from 'lucide-react';
+import { XpBadgeStack } from '@/components/XpBadge';
+import { clampLinkedInSharePoints } from '@/lib/course-schema';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText, sanitizeEmailContent } from '@/lib/sanitize';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
@@ -55,6 +57,11 @@ interface Requirement {
   sharePrompt?: string;   // linkedin_share: suggested post text the student can copy
   // linkedin_share: only an explicit `true` gates the lesson. Absent/false = optional, never blocks.
   shareRequired?: boolean;
+  // linkedin_share: bonus XP, clamped server-side to 0..MAX_LINKEDIN_SHARE_POINTS. ABSENT MEANS 0,
+  // not the default amount -- requirements authored before VE shares paid XP must stay at zero
+  // rather than silently start offering a bonus nobody chose. The editor writes the default
+  // explicitly for newly created share requirements.
+  sharePoints?: number;
   options?: string[];
   optionFeedback?: string[];
   correctAnswer?: string;
@@ -1913,6 +1920,10 @@ export default function VirtualExperienceTaker({
 
                       // File Upload question
                       if (req.type === 'linkedin_share') {
+                        // Clamped with the server's own helper rather than rendered raw: an imported,
+                        // synced or hand-edited VE can carry any number, and advertising 999,999 XP for a
+                        // claim that will award 200 is a promise the server does not keep.
+                        const bonus   = clampLinkedInSharePoints(req.sharePoints);
                         const claimed = progress[req.id]?.linkUrl || '';
                         const draft   = shareDrafts[req.id] ?? claimed;
                         const saving  = shareSaving === req.id;
@@ -1940,8 +1951,43 @@ export default function VirtualExperienceTaker({
                               {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accentColor }} />}
                             </div>
 
-                            {/* No XP on the VE side, so the payoff is framed as the work being seen. */}
-                            {!claimed && (
+                            {/* Three states, and the claimed one deliberately names NO amount.
+                                What a claim actually paid is the snapshot on linkedin_shares.points,
+                                frozen when it was made; `bonus` is the CURRENT offer. Once an
+                                instructor edits the bonus the two diverge, so rendering `bonus` here
+                                would tell a student who earned 50 that they earned 100 -- and, when
+                                the offer is set to 0, erase the banner of somebody who really did
+                                earn XP. The player has no access to the snapshot, so it states the
+                                fact it can stand behind and leaves the number to the XP total. */}
+                            {claimed ? (
+                              <div className="flex items-center gap-3 rounded-xl px-3.5 py-3"
+                                style={{ background: 'rgba(16,185,129,0.10)' }}>
+                                <XpBadgeStack size={60} className="flex-shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="text-[15px] font-bold leading-tight flex items-center gap-1.5"
+                                    style={{ color: '#10b981' }}>
+                                    <Check className="w-4 h-4 flex-shrink-0" strokeWidth={3} />
+                                    LinkedIn share verified
+                                  </p>
+                                  <p className="text-[12px] leading-snug mt-0.5" style={{ color: isDark ? '#aaa' : '#555' }}>
+                                    Your work is out in front of your network. That is how opportunities find you.
+                                  </p>
+                                </div>
+                              </div>
+                            ) : bonus > 0 ? (
+                              <div className="flex items-center gap-3 rounded-xl px-3.5 py-3"
+                                style={{ background: `${accentColor}12` }}>
+                                <XpBadgeStack size={60} className="flex-shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="text-[15px] font-bold leading-tight" style={{ color: accentColor }}>
+                                    {`${bonus.toLocaleString()} XP up for grabs`}
+                                  </p>
+                                  <p className="text-[12px] leading-snug mt-0.5" style={{ color: isDark ? '#aaa' : '#555' }}>
+                                    Post about what you built, then paste the link below to claim it.
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
                               <div className="flex items-center gap-2 rounded-lg px-3 py-2.5"
                                 style={{ background: `${accentColor}10` }}>
                                 <Eye className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accentColor }} />

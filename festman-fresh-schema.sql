@@ -1295,6 +1295,16 @@ BEGIN
         WHERE  ca.student_id = v_id
         GROUP  BY ca.course_id
       ) sub
+    ), 0)
+    -- VE LinkedIn shares (migration 160). The content_type filter is load-bearing: a COURSE share's
+    -- bonus is already inside course_attempts.points, so summing the whole table would pay it twice.
+    -- SUM is safe rather than MAX because the slot/post_key uniqueness constraints make a share
+    -- claimable exactly once, so retaking a VE cannot farm it.
+    + COALESCE((
+      SELECT SUM(ls.points)
+      FROM   public.linkedin_shares ls
+      WHERE  ls.student_id = v_id
+        AND  ls.content_type = 'virtual_experience'
     ), 0),
     now()
   ON CONFLICT (student_id) DO UPDATE
@@ -3943,6 +3953,16 @@ CREATE TABLE IF NOT EXISTS public.linkedin_shares (
 
 CREATE INDEX IF NOT EXISTS linkedin_shares_content_idx
   ON public.linkedin_shares (content_id, student_id);
+
+-- The claim registry feeds XP too (migration 160), so it needs its own trigger -- otherwise a share
+-- would not reach student_xp until some unrelated course write fired the other one. All three
+-- operations: UPDATE covers a student correcting their link, DELETE covers a claim being removed or
+-- cascading with the student.
+DROP TRIGGER IF EXISTS trg_recalc_student_xp_shares ON public.linkedin_shares;
+CREATE TRIGGER trg_recalc_student_xp_shares
+  AFTER INSERT OR UPDATE OR DELETE ON public.linkedin_shares
+  FOR EACH ROW EXECUTE FUNCTION public.recalc_student_xp();
+
 
 ALTER TABLE public.linkedin_shares ENABLE ROW LEVEL SECURITY;
 

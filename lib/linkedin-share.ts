@@ -59,20 +59,46 @@ export async function claimLinkedInShare(
   // student can do nothing with it.
   if (ref.authorVanity !== studentVanity) return { ok: false, code: 'author_mismatch' };
 
-  const points = clampLinkedInSharePoints(opts.points);
-
-  // Reject a post held by a different slot before upserting, so the caller gets `already_claimed`
-  // rather than a constraint error, and so the student's existing valid claim is left intact.
-  const { data: clash, error: clashError } = await supabase
-    .from('linkedin_shares')
-    .select('student_id, content_id, item_id')
-    .eq('post_key', ref.key)
-    .maybeSingle();
+  // Two lookups before writing, both needed to decide what the upsert may change.
+  const [
+    // Reject a post held by a different slot before upserting, so the caller gets `already_claimed`
+    // rather than a constraint error, and so the student's existing valid claim is left intact.
+    { data: clash, error: clashError },
+    // The slot this claim targets, if the student already holds one. `points` is a SNAPSHOT of what
+    // was on offer when the claim was made, and it must survive a correction: linkedin_shares.points
+    // feeds student_xp for VE shares (migration 160), so letting the upsert rewrite it would mean an
+    // instructor editing the bonus retroactively revalues XP the student already banked -- upward on
+    // a raise, and silently DOWNWARD on a cut, the moment they fix a typo in their URL.
+    { data: existingSlot, error: slotError },
+  ] = await Promise.all([
+    supabase
+      .from('linkedin_shares')
+      .select('student_id, content_id, item_id')
+      .eq('post_key', ref.key)
+      .maybeSingle(),
+    supabase
+      .from('linkedin_shares')
+      .select('points')
+      .eq('student_id', opts.studentId)
+      .eq('content_id', opts.contentId)
+      .eq('item_id', opts.itemId)
+      .maybeSingle(),
+  ]);
 
   if (clashError) {
     console.error('[linkedin-share] post_key lookup failed', clashError);
     return { ok: false, code: 'error' };
   }
+  if (slotError) {
+    console.error('[linkedin-share] slot lookup failed', slotError);
+    return { ok: false, code: 'error' };
+  }
+
+  // Reused verbatim rather than re-clamped: clamping is applied on the way in, so a stored value is
+  // already in range, and re-clamping would let a future reduction of MAX_LINKEDIN_SHARE_POINTS cut
+  // XP somebody had already earned -- the exact thing this snapshot exists to prevent.
+  const points = existingSlot ? existingSlot.points : clampLinkedInSharePoints(opts.points);
+
   if (clash
     && !(clash.student_id === opts.studentId
       && clash.content_id === opts.contentId
