@@ -1951,30 +1951,43 @@ export default function VirtualExperienceTaker({
                               {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accentColor }} />}
                             </div>
 
-                            {/* The same reward banner the course share slide uses, so the offer reads
-                                identically wherever a student meets it. Only when a bonus is actually
-                                configured -- a requirement left at 0 must not promise XP the claim will
-                                not pay, and falls back to the plain framing. */}
-                            {bonus > 0 ? (
+                            {/* Three states, and the claimed one deliberately names NO amount.
+                                What a claim actually paid is the snapshot on linkedin_shares.points,
+                                frozen when it was made; `bonus` is the CURRENT offer. Once an
+                                instructor edits the bonus the two diverge, so rendering `bonus` here
+                                would tell a student who earned 50 that they earned 100 -- and, when
+                                the offer is set to 0, erase the banner of somebody who really did
+                                earn XP. The player has no access to the snapshot, so it states the
+                                fact it can stand behind and leaves the number to the XP total. */}
+                            {claimed ? (
                               <div className="flex items-center gap-3 rounded-xl px-3.5 py-3"
-                                style={{ background: claimed ? 'rgba(16,185,129,0.10)' : `${accentColor}12` }}>
+                                style={{ background: 'rgba(16,185,129,0.10)' }}>
                                 <XpBadgeStack size={60} className="flex-shrink-0" />
                                 <div className="min-w-0">
                                   <p className="text-[15px] font-bold leading-tight flex items-center gap-1.5"
-                                    style={{ color: claimed ? '#10b981' : accentColor }}>
-                                    {claimed && <Check className="w-4 h-4 flex-shrink-0" strokeWidth={3} />}
-                                    {claimed
-                                      ? `${bonus.toLocaleString()} XP earned`
-                                      : `${bonus.toLocaleString()} XP up for grabs`}
+                                    style={{ color: '#10b981' }}>
+                                    <Check className="w-4 h-4 flex-shrink-0" strokeWidth={3} />
+                                    LinkedIn share verified
                                   </p>
                                   <p className="text-[12px] leading-snug mt-0.5" style={{ color: isDark ? '#aaa' : '#555' }}>
-                                    {claimed
-                                      ? 'Your work is out in front of your network. That is how opportunities find you.'
-                                      : 'Post about what you built, then paste the link below to claim it.'}
+                                    Your work is out in front of your network. That is how opportunities find you.
                                   </p>
                                 </div>
                               </div>
-                            ) : !claimed && (
+                            ) : bonus > 0 ? (
+                              <div className="flex items-center gap-3 rounded-xl px-3.5 py-3"
+                                style={{ background: `${accentColor}12` }}>
+                                <XpBadgeStack size={60} className="flex-shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="text-[15px] font-bold leading-tight" style={{ color: accentColor }}>
+                                    {`${bonus.toLocaleString()} XP up for grabs`}
+                                  </p>
+                                  <p className="text-[12px] leading-snug mt-0.5" style={{ color: isDark ? '#aaa' : '#555' }}>
+                                    Post about what you built, then paste the link below to claim it.
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
                               <div className="flex items-center gap-2 rounded-lg px-3 py-2.5"
                                 style={{ background: `${accentColor}10` }}>
                                 <Eye className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accentColor }} />
