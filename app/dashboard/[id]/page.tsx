@@ -2635,6 +2635,7 @@ export default function FormDetailPage() {
 
   const type = getFormType(form.config);
   const meta = TYPE_META[type];
+  const tabAccent = form.config?.customAccent || green;
 
   const lightBadge: Record<string, string> = {
     course: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -2684,32 +2685,34 @@ export default function FormDetailPage() {
 
       </header>
 
-      {/* -- Tab nav on the left, content carousel standing alone on the right -- */}
+      {/* -- Top tab navigation with a full-width content workspace -- */}
       <div className="px-3 sm:px-6 pt-5 pb-10">
         {(() => {
           const visibleTabs = TABS.filter(tab => (!isStaff || tab.id === 'settings') && (!tab.courseOnly || type === 'course') && !(tab.id === 'settings' && type === 'virtual_experience'));
           const tabLabel = (tab: typeof TABS[number]) => tab.id === 'responses' && (type === 'course' || type === 'virtual_experience') ? 'Report' : tab.label;
           return (
-            <div className="max-w-6xl mx-auto flex flex-col sm:flex-row gap-4 sm:gap-6">
-              {/* Left: tab nav */}
-              <nav className="flex sm:flex-col gap-1 flex-shrink-0 sm:w-48 overflow-x-auto sm:overflow-visible" style={{ scrollbarWidth: 'none' }}>
+            <div className="max-w-6xl mx-auto flex flex-col gap-4">
+              {/* Top: tabs stay reachable and scroll horizontally on narrow screens. */}
+              <div className="sticky top-12 sm:top-14 z-10 -mx-1 px-1 py-1.5" style={{ background: bg }}>
+              <nav className="flex items-center gap-1 overflow-x-auto rounded-xl p-1" aria-label="Content dashboard sections" style={{ scrollbarWidth: 'none', background: isLight ? 'rgba(255,255,255,0.68)' : 'rgba(255,255,255,0.035)', backdropFilter: 'blur(14px)' }}>
                 {visibleTabs.map(tab => {
                   const isActive = activeTab === tab.id;
-                  const hoverBg  = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.06)';
-                  const activeBg = isLight ? '#ffffff' : 'rgba(255,255,255,0.09)';
+                  const hoverBg  = isLight ? 'rgba(0,0,0,0.045)' : 'rgba(255,255,255,0.055)';
+                  const activeBg = `color-mix(in oklab, ${tabAccent} ${isLight ? '9%' : '13%'}, transparent)`;
                   return (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
                       onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = hoverBg; }}
                       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
-                      className="flex items-center gap-2.5 px-3.5 py-2 text-sm transition-colors whitespace-nowrap text-left rounded-lg"
-                      style={{ color: isActive ? textPrim : hdrTextMut, fontWeight: isActive ? 600 : 500, background: isActive ? activeBg : 'transparent', boxShadow: isActive && isLight ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}
+                      aria-current={isActive ? 'page' : undefined}
+                      className="flex min-h-10 items-center gap-2 px-3.5 py-2 text-sm transition-colors whitespace-nowrap text-left rounded-lg"
+                      style={{ color: isActive ? (isLight ? `color-mix(in oklab, ${tabAccent} 76%, #000)` : `color-mix(in oklab, ${tabAccent} 68%, #fff)`) : hdrTextMut, fontWeight: isActive ? 700 : 550, background: isActive ? activeBg : 'transparent', boxShadow: isActive ? `inset 0 -2px 0 ${tabAccent}` : 'none' }}
                     >
                       <tab.Icon className="w-4 h-4 flex-shrink-0" />
                       <span>{tabLabel(tab)}</span>
                       {tab.id === 'responses' && totalCount > 0 && (
-                        <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold" style={{ background: isLight ? 'rgba(0,0,0,0.06)' : '#3f3f46', color: hdrTextMut }}>
+                        <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold" style={{ background: isActive ? `color-mix(in oklab, ${tabAccent} 18%, transparent)` : (isLight ? 'rgba(0,0,0,0.06)' : '#3f3f46'), color: isActive ? 'inherit' : hdrTextMut }}>
                           {totalCount}
                         </span>
                       )}
@@ -2717,9 +2720,10 @@ export default function FormDetailPage() {
                   );
                 })}
               </nav>
+              </div>
 
-              {/* Right: content carousel, standing alone */}
-              <div className="flex-1 min-w-0 rounded-2xl overflow-hidden" style={{ background: isLight ? '#ffffff' : '#1E1F26', border: isLight ? `1px solid ${navBord}` : '1px solid transparent', boxShadow: 'none' }}>
+              {/* Full-width content workspace. */}
+              <div className="w-full min-w-0 rounded-2xl overflow-hidden" style={{ background: isLight ? '#ffffff' : '#1E1F26', border: isLight ? `1px solid ${navBord}` : '1px solid transparent', boxShadow: 'none' }}>
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={activeTab}
