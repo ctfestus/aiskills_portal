@@ -3840,7 +3840,7 @@ export function CourseTaker({
                             className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 sm:py-3 rounded-xl text-[14px] font-semibold transition-all active:scale-[0.98]"
                             style={{ background: accent, color: 'white' }}
                           >
-                            {isLast ? 'Finish Course' : 'Continue'}
+                            {isLast ? 'Finish Course' : 'Mark complete & continue'}
                             <ChevronRight className="w-4 h-4" />
                           </button>
                         </div>
