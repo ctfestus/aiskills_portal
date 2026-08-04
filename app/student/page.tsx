@@ -7,7 +7,7 @@ import {
   Settings, Sun, Moon, Menu, X,
   AlertTriangle,
   Loader2, ChevronRight, ChevronLeft,
-  FileText,
+  FileText, Film, Layers, Briefcase,
   Zap, RefreshCw,
   Check,
 } from 'lucide-react';
@@ -46,6 +46,7 @@ import {
 // Sk, CarouselSkeleton, EmptyState, StatusBadge, ProgressBar live in @/components/student/shared
 
 const ACTIVITY_POLL_MIN_GAP_MS = 30_000;
+const MY_LEARNING_SECTIONS: SectionId[] = ['learning_paths', 'courses', 'virtual_experiences'];
 
 export default function StudentDashboard() {
   const [mounted, setMounted] = useState(false);
@@ -87,9 +88,13 @@ export default function StudentDashboard() {
         setActiveSection(hash);
         sessionStorage.setItem('student-section', hash);
       } else {
-        // No hash -- restore last visited section from sessionStorage, default to overview
+        // No hash -- restore the last top-level destination. My Learning always opens
+        // on Learning Paths so students see their guided journey before the catalog.
         const saved = sessionStorage.getItem('student-section') as SectionId | null;
-        const target = (saved && NAV_ITEMS.some(n => n.id === saved)) ? saved : 'overview';
+        const validSaved = saved && NAV_ITEMS.some(n => n.id === saved) ? saved : null;
+        const target: SectionId = validSaved && MY_LEARNING_SECTIONS.includes(validSaved)
+          ? 'learning_paths'
+          : validSaved ?? 'overview';
         setActiveSection(target);
         window.location.hash = target;
       }
@@ -103,7 +108,9 @@ export default function StudentDashboard() {
   // the raw URL/hash. Client-side hash routing means the server metadata title
   // never updates per section, so we set it here.
   useEffect(() => {
-    const label = NAV_ITEMS.find(n => n.id === activeSection)?.label ?? 'Dashboard';
+    const label = MY_LEARNING_SECTIONS.includes(activeSection)
+      ? 'My Learning'
+      : NAV_ITEMS.find(n => n.id === activeSection)?.label ?? 'Dashboard';
     document.title = appName ? `${label} - ${appName}` : label;
   }, [activeSection, appName]);
 
@@ -299,6 +306,7 @@ export default function StudentDashboard() {
   const effectiveEmail = viewingAs?.email ?? user?.email;
   const userName = profile?.name || profile?.full_name || user?.email?.split('@')[0] || 'Student';
   const activeItem = NAV_ITEMS.find(n => n.id === activeSection)!;
+  const isMyLearning = MY_LEARNING_SECTIONS.includes(activeSection);
 
   if (!mounted) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: '#F4F5F7' }}>
@@ -389,10 +397,12 @@ export default function StudentDashboard() {
                         </p>
                       )}
                       {groupItems.map(item => {
-                        const isActive = activeSection === item.id;
+                        const isActive = item.id === 'courses'
+                          ? isMyLearning
+                          : activeSection === item.id;
                         return (
                           <button key={item.id}
-                            onClick={() => { goSection(item.id); setSidebarOpen(false); }}
+                            onClick={() => { goSection(item.id === 'courses' ? 'learning_paths' : item.id); setSidebarOpen(false); }}
                             title={navCollapsed ? item.label : undefined}
                             className="w-full flex items-center gap-3 rounded-xl text-sm font-normal transition-all text-left"
                             style={{
@@ -445,7 +455,7 @@ export default function StudentDashboard() {
             {/* Section header -- hidden on overview (has its own greeting) and assignments (manages its own title) */}
             {activeSection !== 'overview' && activeSection !== 'assignments' && (
               <div className="flex items-center justify-between mb-6">
-                <h1 className="text-[22px] font-bold tracking-tight" style={{ color: C.text }}>{activeItem.label}</h1>
+                <h1 className="text-[22px] font-bold tracking-tight" style={{ color: C.text }}>{isMyLearning ? 'My Learning' : activeItem.label}</h1>
               </div>
             )}
 
@@ -536,6 +546,38 @@ export default function StudentDashboard() {
                   )}
                   {enrollmentStatus !== 'expired' && ' to submit a payment confirmation.'}
                 </p>
+              </div>
+            )}
+
+            {isMyLearning && user && (
+              <div
+                role="tablist"
+                aria-label="My Learning sections"
+                className="flex gap-1 overflow-x-auto rounded-xl p-1 mb-6"
+                style={{ background: C.card }}>
+                {([
+                  { id: 'learning_paths', label: 'Learning Paths', Icon: Layers },
+                  { id: 'courses', label: 'Courses', Icon: Film },
+                  { id: 'virtual_experiences', label: 'Virtual Experiences', Icon: Briefcase },
+                ] as const).map(({ id, label, Icon }) => {
+                  const selected = activeSection === id;
+                  return (
+                    <button
+                      key={id}
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() => goSection(id)}
+                      className="flex min-w-max flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all"
+                      style={{
+                        background: selected ? C.page : 'transparent',
+                        color: selected ? navAccent : C.muted,
+                        boxShadow: selected ? '0 1px 3px rgba(0,0,0,0.10)' : 'none',
+                      }}>
+                      <Icon className="w-4 h-4" />
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
             )}
 

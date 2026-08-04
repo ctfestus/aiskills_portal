@@ -11,7 +11,7 @@ import {
 
 export const NAV_ITEMS = [
   { id: 'overview',          label: 'Dashboard',           Icon: LayoutDashboard },
-  { id: 'courses',           label: 'My Courses',          Icon: Film            },
+  { id: 'courses',           label: 'My Learning',         Icon: Film            },
   { id: 'learning_paths',    label: 'Learning Paths',      Icon: Layers          },
   { id: 'virtual_experiences', label: 'Virtual Experiences', Icon: Briefcase     },
   { id: 'certifications',    label: 'Certifications',       Icon: ShieldCheck     },
@@ -32,7 +32,7 @@ export const NAV_ITEMS = [
 export type SectionId = typeof NAV_ITEMS[number]['id'];
 
 export const NAV_GROUPS: { label: string; items: SectionId[] }[] = [
-  { label: 'Learn',       items: ['overview', 'courses', 'learning_paths', 'virtual_experiences', 'certifications', 'data_center'] },
+  { label: 'Learn',       items: ['overview', 'courses', 'certifications', 'data_center'] },
   { label: 'Activities',  items: ['events', 'assignments', 'calendar', 'schedule', 'recordings'] },
   { label: 'Community',   items: ['community', 'announcements'] },
   { label: 'Achievements', items: ['leaderboard', 'certificates', 'badges', 'ai_toolkit'] },
