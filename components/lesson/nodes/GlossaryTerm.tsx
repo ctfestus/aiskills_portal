@@ -14,7 +14,12 @@ import { Mark, mergeAttributes } from '@tiptap/core';
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     glossaryTerm: {
-      setGlossaryTerm: (attrs: { definition: string }) => ReturnType;
+      setGlossaryTerm: (attrs: {
+        definition: string;
+        pronunciation?: string;
+        example?: string;
+        learnMoreUrl?: string;
+      }) => ReturnType;
       unsetGlossaryTerm: () => ReturnType;
     };
   }
@@ -30,6 +35,21 @@ export const GlossaryTerm = Mark.create({
         parseHTML: (el) => el.getAttribute('data-definition') || '',
         renderHTML: (attrs) => (attrs.definition ? { 'data-definition': attrs.definition } : {}),
       },
+      pronunciation: {
+        default: '',
+        parseHTML: (el) => el.getAttribute('data-pronunciation') || '',
+        renderHTML: (attrs) => (attrs.pronunciation ? { 'data-pronunciation': attrs.pronunciation } : {}),
+      },
+      example: {
+        default: '',
+        parseHTML: (el) => el.getAttribute('data-example') || '',
+        renderHTML: (attrs) => (attrs.example ? { 'data-example': attrs.example } : {}),
+      },
+      learnMoreUrl: {
+        default: '',
+        parseHTML: (el) => el.getAttribute('data-learn-more-url') || '',
+        renderHTML: (attrs) => (attrs.learnMoreUrl ? { 'data-learn-more-url': attrs.learnMoreUrl } : {}),
+      },
     };
   },
 
@@ -38,7 +58,12 @@ export const GlossaryTerm = Mark.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['span', mergeAttributes(HTMLAttributes, { class: 'lesson-term', tabindex: '0' }), 0];
+    return ['span', mergeAttributes(HTMLAttributes, {
+      class: 'lesson-term',
+      tabindex: '0',
+      role: 'button',
+      'aria-label': 'Open definition',
+    }), 0];
   },
 
   addCommands() {

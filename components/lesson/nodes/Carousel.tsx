@@ -1,7 +1,7 @@
 'use client';
 
-// Carousel: a stepped lesson container -- learners page through slides with side
-// arrows and numbered pagination (1 . 2 . 3 . check), like a guided walkthrough.
+// Carousel: a stepped lesson container -- learners page through slides with an
+// integrated previous/next footer, progress rail, and direct slide indicators.
 //
 // Same visibility mechanism as Tabs: active index is local React state surfaced as
 // data-active on the wrapper; each slide tags itself with data-slide-index; CSS pairs
@@ -14,8 +14,9 @@
 
 import { useState } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
+import { Fragment } from '@tiptap/pm/model';
 import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react';
-import { ChevronLeft, ChevronRight, Check, Plus, X, Image as ImageIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Trash2, Image as ImageIcon } from 'lucide-react';
 import { ImageLibrary } from '@/components/ImageLibrary';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
 import { ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
@@ -37,6 +38,7 @@ function CarouselView({ node, editor, getPos, updateAttributes }: NodeViewProps)
   const editable = editor.isEditable;
   const count = node.childCount;
   const [active, setActive] = useState(0);
+  const [hasNavigated, setHasNavigated] = useState(false);
   const current = Math.min(active, count - 1);
 
   // Carousel-wide card appearance, applied to all slides via CSS variables.
@@ -51,7 +53,11 @@ function CarouselView({ node, editor, getPos, updateAttributes }: NodeViewProps)
     ...(borderColor ? { '--card-border-color': borderColor } : {}),
   } as React.CSSProperties;
 
-  const go = (i: number) => setActive(Math.max(0, Math.min(i, count - 1)));
+  const go = (i: number) => {
+    const next = Math.max(0, Math.min(i, count - 1));
+    if (next !== current) setHasNavigated(true);
+    setActive(next);
+  };
 
   const childPos = (index: number): number | null => {
     const base = typeof getPos === 'function' ? getPos() : undefined;
@@ -79,83 +85,99 @@ function CarouselView({ node, editor, getPos, updateAttributes }: NodeViewProps)
     setActive((a) => Math.max(0, Math.min(a, count - 2)));
   };
 
-  return (
-    <NodeViewWrapper className="lesson-carousel" data-active={current} style={cardVars}>
-      {editable && (
-        <div className="lesson-block-corner">
-          <StyleMenu>
-            <MenuRow label="Roundness"><Segmented<RadiusKey> value={radius} onChange={(v) => updateAttributes({ radius: v })} options={RADIUS_OPTIONS} /></MenuRow>
-            <MenuRow label="Card border"><Segmented<BorderStyle> value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} /></MenuRow>
-            {borderStyle !== 'none' && (
-              <MenuRow label="Color"><ColorField value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} /></MenuRow>
-            )}
-          </StyleMenu>
-          <NodeDeleteButton editor={editor} getPos={getPos} nodeSize={node.nodeSize} label="carousel" />
-        </div>
-      )}
+  const moveSlide = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= count || to >= count) return;
+    const base = typeof getPos === 'function' ? getPos() : undefined;
+    if (base == null) return;
+    const slides = Array.from({ length: count }, (_, index) => node.child(index));
+    const [moved] = slides.splice(from, 1);
+    slides.splice(to, 0, moved);
+    const transaction = editor.state.tr.replaceWith(base + 1, base + node.nodeSize - 1, Fragment.fromArray(slides));
+    editor.view.dispatch(transaction);
+    editor.commands.focus();
+    setActive(to);
+  };
 
+  return (
+    <NodeViewWrapper className="lesson-carousel" data-active={current} data-hint={!editable && !hasNavigated && count > 1 ? 'true' : 'false'} style={cardVars}>
       <div className="lesson-carousel__viewport">
         <button
           type="button"
           className="lesson-carousel__arrow"
           aria-label="Previous slide"
           disabled={current === 0}
-          onMouseDown={(e) => e.preventDefault()}
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => go(current - 1)}
         >
-          <ChevronLeft width={20} height={20} />
+          <ChevronLeft width={18} height={18} aria-hidden="true" />
         </button>
-        <NodeViewContent className="lesson-carousel__slides" />
+        <div className="lesson-carousel__stage">
+          {!editable && !hasNavigated && count > 1 && (
+            <div className="lesson-carousel__hint" role="status">
+              <span className="lesson-carousel__hint-dot" aria-hidden="true" />
+              <span>Use the arrows to explore</span>
+            </div>
+          )}
+          <NodeViewContent className="lesson-carousel__slides" />
+        </div>
         <button
           type="button"
           className="lesson-carousel__arrow"
           aria-label="Next slide"
           disabled={current >= count - 1}
-          onMouseDown={(e) => e.preventDefault()}
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => go(current + 1)}
         >
-          <ChevronRight width={20} height={20} />
+          <ChevronRight width={18} height={18} aria-hidden="true" />
         </button>
       </div>
 
-      <div className="lesson-carousel__nav" contentEditable={false}>
-        {Array.from({ length: count }).map((_, i) => (
-          <span key={i} className="lesson-carousel__dot-wrap">
+      <div className="lesson-carousel__footer" contentEditable={false}>
+        <div className="lesson-carousel__nav" aria-label="Carousel slides">
+          {Array.from({ length: count }).map((_, i) => (
             <button
+              key={i}
               type="button"
               className="lesson-carousel__dot"
               data-active={i === current ? 'true' : 'false'}
+              aria-label={`Go to slide ${i + 1}`}
+              aria-current={i === current ? 'step' : undefined}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => go(i)}
-            >
-              {i + 1}
-            </button>
-            {editable && count > 1 && (
-              <button
-                type="button"
-                className="lesson-carousel__remove"
-                aria-label="Remove slide"
-                onMouseDown={(e) => { e.preventDefault(); removeSlide(i); }}
-              >
-                <X width={9} height={9} />
-              </button>
-            )}
-          </span>
-        ))}
-        <span className="lesson-carousel__check" data-on={current >= count - 1 ? 'true' : 'false'}>
-          <Check width={16} height={16} />
-        </span>
-        {editable && count < MAX_SLIDES && (
+            />
+          ))}
+        </div>
+      </div>
+
+      {editable && (
+        <div className="lesson-carousel__editor-controls" contentEditable={false}>
+          <span>Slide {current + 1}</span>
+          <div>
+            <button type="button" disabled={current === 0} aria-label="Move current slide left" title="Move slide left" onMouseDown={(event) => event.preventDefault()} onClick={() => moveSlide(current, current - 1)}><ChevronLeft width={13} height={13} /></button>
+            <button type="button" disabled={current >= count - 1} aria-label="Move current slide right" title="Move slide right" onMouseDown={(event) => event.preventDefault()} onClick={() => moveSlide(current, current + 1)}><ChevronRight width={13} height={13} /></button>
+            {count > 1 && <button type="button" className="lesson-carousel__editor-delete" aria-label="Delete current slide" title="Delete current slide" onMouseDown={(event) => event.preventDefault()} onClick={() => removeSlide(current)}><Trash2 width={13} height={13} /><span>Delete</span></button>}
+            {count < MAX_SLIDES && (
           <button
             type="button"
-            className="lesson-carousel__add"
+            className="lesson-carousel__editor-add"
             aria-label="Add slide"
-            onMouseDown={(e) => { e.preventDefault(); addSlide(); }}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={addSlide}
           >
-            <Plus width={13} height={13} />
+            <Plus width={13} height={13} /><span>Add slide</span>
           </button>
-        )}
-      </div>
+            )}
+            <StyleMenu>
+              <MenuRow label="Roundness"><Segmented<RadiusKey> value={radius} onChange={(v) => updateAttributes({ radius: v })} options={RADIUS_OPTIONS} /></MenuRow>
+              <MenuRow label="Card border"><Segmented<BorderStyle> value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} /></MenuRow>
+              {borderStyle !== 'none' && (
+                <MenuRow label="Color"><ColorField value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} /></MenuRow>
+              )}
+            </StyleMenu>
+            <NodeDeleteButton editor={editor} getPos={getPos} nodeSize={node.nodeSize} label="carousel" />
+          </div>
+        </div>
+      )}
     </NodeViewWrapper>
   );
 }
@@ -188,7 +210,7 @@ function CarouselSlideView({ node, getPos, editor, updateAttributes }: NodeViewP
             {editable && (
               <div className="lesson-carousel__cover-actions">
                 <button type="button" className="lesson-carousel__cover-btn" onClick={() => setShowLibrary(true)}>Change</button>
-                <button type="button" className="lesson-carousel__cover-btn" onMouseDown={(e) => { e.preventDefault(); updateAttributes({ cover: '' }); }}>Remove</button>
+                <button type="button" className="lesson-carousel__cover-btn" onMouseDown={(event) => event.preventDefault()} onClick={() => updateAttributes({ cover: '' })}>Remove</button>
               </div>
             )}
           </div>

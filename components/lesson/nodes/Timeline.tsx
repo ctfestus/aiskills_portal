@@ -8,8 +8,8 @@
 // Add/remove entries in the editor. Theming via `.lesson-timeline*` CSS.
 
 import { Node, mergeAttributes } from '@tiptap/core';
-import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react';
-import { Plus, X } from 'lucide-react';
+import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, useEditorState, type NodeViewProps } from '@tiptap/react';
+import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
 import { NodeDeleteButton } from '@/components/lesson/nodes/NodeControls';
 
@@ -19,12 +19,49 @@ function TimelineEntryView({ node, getPos, editor, updateAttributes }: NodeViewP
   const editable = editor.isEditable;
   const date = (node.attrs.date as string) || '';
   const title = (node.attrs.title as string) || '';
+  const { index, siblingCount } = useEditorState({
+    editor,
+    selector: ({ editor: currentEditor }) => {
+      if (typeof getPos !== 'function') return { index: 0, siblingCount: 0 };
+      try {
+        const pos = getPos();
+        if (pos == null) return { index: 0, siblingCount: 0 };
+        const resolved = currentEditor.state.doc.resolve(pos);
+        return { index: resolved.index(), siblingCount: resolved.parent.childCount };
+      } catch {
+        return { index: 0, siblingCount: 0 };
+      }
+    },
+  });
 
   const removeSelf = () => {
     if (typeof getPos !== 'function') return;
     const pos = getPos();
     if (pos == null) return;
     editor.chain().focus().deleteRange({ from: pos, to: pos + node.nodeSize }).run();
+  };
+
+  const duplicateSelf = () => {
+    if (typeof getPos !== 'function' || siblingCount >= MAX_ENTRIES) return;
+    const pos = getPos();
+    if (pos == null) return;
+    editor.chain().focus().insertContentAt(pos + node.nodeSize, node.toJSON()).run();
+  };
+
+  const moveSelf = (direction: -1 | 1) => {
+    if (typeof getPos !== 'function') return;
+    const pos = getPos();
+    if (pos == null) return;
+    const resolved = editor.state.doc.resolve(pos);
+    const currentIndex = resolved.index();
+    const targetIndex = currentIndex + direction;
+    if (targetIndex < 0 || targetIndex >= resolved.parent.childCount) return;
+    const sibling = resolved.parent.child(targetIndex);
+    const insertAt = direction < 0 ? pos - sibling.nodeSize : pos + sibling.nodeSize;
+    editor.chain().focus().command(({ tr }) => {
+      tr.delete(pos, pos + node.nodeSize).insert(insertAt, node);
+      return true;
+    }).run();
   };
 
   // The last entry hides its connector line, handled purely in CSS via the wrapper's
@@ -48,9 +85,12 @@ function TimelineEntryView({ node, getPos, editor, updateAttributes }: NodeViewP
             <span className="lesson-timeline__title">{title}</span>
           ) : null}
           {editable && (
-            <button type="button" className="lesson-timeline__remove" aria-label="Remove event" onMouseDown={(e) => { e.preventDefault(); removeSelf(); }}>
-              <X width={12} height={12} />
-            </button>
+            <div className="lesson-timeline__controls" aria-label={`Event ${index + 1} controls`}>
+              <button type="button" className="lesson-timeline__control" disabled={index === 0} aria-label={`Move event ${index + 1} up`} title="Move event up" onMouseDown={(event) => event.preventDefault()} onClick={() => moveSelf(-1)}><ArrowUp width={13} height={13} /></button>
+              <button type="button" className="lesson-timeline__control" disabled={index >= siblingCount - 1} aria-label={`Move event ${index + 1} down`} title="Move event down" onMouseDown={(event) => event.preventDefault()} onClick={() => moveSelf(1)}><ArrowDown width={13} height={13} /></button>
+              <button type="button" className="lesson-timeline__control" disabled={siblingCount >= MAX_ENTRIES} aria-label={`Duplicate event ${index + 1}`} title="Duplicate event" onMouseDown={(event) => event.preventDefault()} onClick={duplicateSelf}><Copy width={13} height={13} /></button>
+              <button type="button" className="lesson-timeline__control lesson-timeline__remove" disabled={siblingCount <= 1} aria-label={`Delete event ${index + 1}`} title="Delete event" onMouseDown={(event) => event.preventDefault()} onClick={removeSelf}><Trash2 width={13} height={13} /></button>
+            </div>
           )}
         </div>
         <NodeViewContent className="lesson-timeline__body" />
@@ -77,7 +117,7 @@ function TimelineView({ node, editor, getPos }: NodeViewProps) {
       {editable && (
         <div className="lesson-block-footer" contentEditable={false}>
           {count < MAX_ENTRIES && (
-            <button type="button" className="lesson-timeline__add" onMouseDown={(e) => { e.preventDefault(); addEntry(); }}>
+            <button type="button" className="lesson-timeline__add" onMouseDown={(e) => e.preventDefault()} onClick={addEntry}>
               <Plus width={13} height={13} /> Add event
             </button>
           )}

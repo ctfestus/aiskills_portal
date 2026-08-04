@@ -10,12 +10,14 @@
 // code) are appended to `lessonExtensions` in later phases so both surfaces gain
 // them at the same time.
 
-import { generateJSON, type Extensions } from '@tiptap/core';
+import { generateJSON, mergeAttributes, type Extensions } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
-import { Table } from '@tiptap/extension-table';
+import { Table, TableView, createColGroup } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TableCell } from '@tiptap/extension-table-cell';
+import type { DOMOutputSpec, Node as ProseMirrorNode } from '@tiptap/pm/model';
+import type { EditorView } from '@tiptap/pm/view';
 import type { LessonDoc } from '@/lib/lesson-doc';
 import { LessonImage } from '@/components/lesson/nodes/LessonImage';
 import { LessonAudio } from '@/components/lesson/nodes/LessonAudio';
@@ -38,7 +40,7 @@ import { PromptBlock } from '@/components/lesson/nodes/PromptBlock';
 // attrs never reliably reach the DOM, especially in the read-only player. Cell
 // renderHTML is reliable in both. cellBorder = which sides show; cellBorderColor = a
 // free color via the --cbc CSS var. The table toolbar sets these on every cell.
-const cellBorderAttrs = {
+const cellAppearanceAttrs = {
   cellBorder: {
     default: null as string | null,
     parseHTML: (el: HTMLElement) => el.getAttribute('data-cb'),
@@ -51,12 +53,79 @@ const cellBorderAttrs = {
       ? { 'data-cbc': attrs.cellBorderColor, style: `--cbc:${attrs.cellBorderColor}` }
       : {}),
   },
+  cellAlign: {
+    default: null as string | null,
+    parseHTML: (el: HTMLElement) => el.getAttribute('data-cell-align'),
+    renderHTML: (attrs: Record<string, unknown>) => (attrs.cellAlign
+      ? { 'data-cell-align': attrs.cellAlign, style: `text-align:${attrs.cellAlign}` }
+      : {}),
+  },
+  cellBackground: {
+    default: null as string | null,
+    parseHTML: (el: HTMLElement) => el.getAttribute('data-cell-bg'),
+    renderHTML: (attrs: Record<string, unknown>) => (attrs.cellBackground
+      ? { 'data-cell-bg': attrs.cellBackground, style: `--cell-bg:${attrs.cellBackground}` }
+      : {}),
+  },
 };
 const LessonTableCell = TableCell.extend({
-  addAttributes() { return { ...this.parent?.(), ...cellBorderAttrs }; },
+  addAttributes() { return { ...this.parent?.(), ...cellAppearanceAttrs }; },
 });
 const LessonTableHeader = TableHeader.extend({
-  addAttributes() { return { ...this.parent?.(), ...cellBorderAttrs }; },
+  addAttributes() { return { ...this.parent?.(), ...cellAppearanceAttrs }; },
+});
+
+class LessonTableView extends TableView {
+  caption: HTMLTableCaptionElement;
+  scrollHint: HTMLDivElement;
+
+  constructor(node: ProseMirrorNode, cellMinWidth: number, view?: EditorView) {
+    super(node, cellMinWidth);
+    this.dom.classList.add('lesson-table-wrap');
+    this.caption = document.createElement('caption');
+    this.caption.className = 'lesson-table-caption';
+    this.caption.contentEditable = 'false';
+    this.table.insertBefore(this.caption, this.colgroup);
+    this.scrollHint = document.createElement('div');
+    this.scrollHint.className = 'lesson-table-scroll-hint';
+    this.scrollHint.contentEditable = 'false';
+    this.scrollHint.dataset.editor = view?.editable ? 'true' : 'false';
+    this.scrollHint.innerHTML = '<span></span>Swipe to view more';
+    this.dom.appendChild(this.scrollHint);
+    this.syncCaption(node);
+  }
+
+  syncCaption(node: ProseMirrorNode) {
+    const text = (node.attrs.caption as string) || '';
+    this.caption.textContent = text;
+    this.caption.hidden = !text;
+    this.dom.dataset.tableRadius = (node.attrs.radius as string) || 'square';
+  }
+
+  update(node: ProseMirrorNode) {
+    const updated = super.update(node);
+    if (updated) this.syncCaption(node);
+    return updated;
+  }
+}
+
+const LessonTable = Table.extend({
+  addAttributes() {
+    return { ...this.parent?.(), caption: { default: '' }, radius: { default: 'square' } };
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    const { colgroup, tableWidth, tableMinWidth } = createColGroup(node, this.options.cellMinWidth);
+    const userStyles = HTMLAttributes.style as string | undefined;
+    const caption = (node.attrs.caption as string) || '';
+    const table: DOMOutputSpec = [
+      'table',
+      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, { style: userStyles || (tableWidth ? `width: ${tableWidth}` : `min-width: ${tableMinWidth}`) }),
+      ...(caption ? [['caption', { class: 'lesson-table-caption' }, caption] as DOMOutputSpec] : []),
+      colgroup,
+      ['tbody', 0],
+    ];
+    return ['div', { class: 'tableWrapper lesson-table-wrap', 'data-table-radius': (node.attrs.radius as string) || 'square' }, table];
+  },
 });
 
 export const lessonExtensions: Extensions = [
@@ -70,7 +139,7 @@ export const lessonExtensions: Extensions = [
   LessonImage.configure({ inline: false, allowBase64: false }),
   // Audio player block (uploaded Cloudinary file or pasted direct URL).
   LessonAudio,
-  Table.configure({ resizable: true }),
+  LessonTable.configure({ resizable: true, View: LessonTableView }),
   TableRow,
   LessonTableHeader,
   LessonTableCell,

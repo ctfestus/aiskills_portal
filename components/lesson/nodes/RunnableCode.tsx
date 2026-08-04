@@ -13,10 +13,11 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
-import { Play, Copy, Check, Loader2, Database, X } from 'lucide-react';
+import { Play, Copy, Check, Loader2, Database, X, ChevronDown } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
 import { NodeDeleteButton } from '@/components/lesson/nodes/NodeControls';
 import { CodeMirrorEditor } from '@/components/lesson/CodeMirrorEditor';
+import { LayeredBadgeIcon } from '@/components/lesson/LayeredBadgeIcon';
 import { useLessonRuntime } from '@/components/lesson/LessonRuntimeContext';
 import { useTheme } from '@/components/ThemeProvider';
 import { initSQLRuntime, executeQuery, previewSqlTables, type SQLResult, type SQLRuntime } from '@/lib/sql-engine';
@@ -27,6 +28,28 @@ interface DatasetInfo { name: string; columns: string[]; rows: string[][]; rowCo
 const LANGUAGES = ['sql', 'javascript', 'python', 'bash', 'json', 'plaintext'];
 const MAX_VISIBLE_ROWS = 50;
 
+function PlaygroundBadgeIcon({ language }: { language: string }) {
+  if (language === 'sql') {
+    return (
+      <LayeredBadgeIcon>
+        <ellipse cx="11.3" cy="8.9" rx="4.7" ry="1.75" stroke="#fff" strokeWidth="1.55" />
+        <path d="M6.6 8.9v5.8c0 1 2.1 1.8 4.7 1.8s4.7-.8 4.7-1.8V8.9M6.6 11.8c0 1 2.1 1.8 4.7 1.8s4.7-.8 4.7-1.8" stroke="#fff" strokeWidth="1.55" strokeLinecap="round" />
+      </LayeredBadgeIcon>
+    );
+  }
+  return (
+    <LayeredBadgeIcon>
+      <path d="m8.4 9.5-2.5 2.6 2.5 2.6M14.2 9.5l2.5 2.6-2.5 2.6M12.3 8.7l-2 7" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </LayeredBadgeIcon>
+  );
+}
+
+function playgroundTitle(language: string) {
+  if (language === 'sql') return 'SQL playground';
+  if (language === 'python') return 'Python playground';
+  return `${language === 'plaintext' ? 'Code' : language.charAt(0).toUpperCase() + language.slice(1)} snippet`;
+}
+
 function RunnableCodeView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
   const language = (node.attrs.language as string) || 'sql';
   const code = (node.attrs.code as string) || '';
@@ -36,6 +59,7 @@ function RunnableCodeView({ node, updateAttributes, editor, getPos }: NodeViewPr
   const isSql = language === 'sql';
   const isPython = language === 'python';
   const lessonRuntime = useLessonRuntime();
+  const [setupOpen, setSetupOpen] = useState(() => setupSql.trim().length > 0 || setupPython.trim().length > 0);
 
   if (editor.isEditable) {
     // Runnable when Python, or SQL that has data: its own setup, or (when shared) the
@@ -45,25 +69,22 @@ function RunnableCodeView({ node, updateAttributes, editor, getPos }: NodeViewPr
     return (
       <NodeViewWrapper className="lesson-code" contentEditable={false}>
         <div className="lesson-code__bar">
-          <select
-            className="lesson-code__lang"
-            value={language}
-            onChange={(e) => updateAttributes({ language: e.target.value })}
-          >
-            {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
-          </select>
+          <div className="lesson-code__identity">
+            <span className="lesson-code__identity-icon"><PlaygroundBadgeIcon language={language} /></span>
+            <span className="lesson-code__identity-copy">
+              <strong>{playgroundTitle(language)}</strong>
+              <small data-on={runnable ? 'true' : 'false'}>{runnable ? 'Ready to run' : 'Copyable snippet'}</small>
+            </span>
+          </div>
           <span className="lesson-code__bar-right lesson-block-actions">
-            {(isSql || isPython) && (
-              <>
-              <span className="lesson-code__hint" data-on={runnable ? 'true' : 'false'}>
-                {runnable ? 'Runnable' : 'Copyable snippet'}
-              </span>
-              <span className="lesson-code__scope" title="Where this block's data comes from">
-                <button type="button" data-active={dataScope === 'shared' ? 'true' : 'false'} onMouseDown={(e) => { e.preventDefault(); updateAttributes({ dataScope: 'shared' }); }}>Shared data</button>
-                <button type="button" data-active={dataScope === 'own' ? 'true' : 'false'} onMouseDown={(e) => { e.preventDefault(); updateAttributes({ dataScope: 'own' }); }}>This block only</button>
-              </span>
-              </>
-            )}
+            <select
+              className="lesson-code__lang"
+              value={language}
+              aria-label="Code language"
+              onChange={(e) => updateAttributes({ language: e.target.value })}
+            >
+              {LANGUAGES.map((l) => <option key={l} value={l}>{l === 'plaintext' ? 'Plain text' : l.toUpperCase()}</option>)}
+            </select>
             <NodeDeleteButton editor={editor} getPos={getPos} nodeSize={node.nodeSize} label="code block" />
           </span>
         </div>
@@ -74,8 +95,26 @@ function RunnableCodeView({ node, updateAttributes, editor, getPos }: NodeViewPr
           placeholder={isSql ? 'SELECT * FROM ...' : isPython ? 'print("Hello, world!")' : 'Code...'}
           onCommit={(v) => updateAttributes({ code: v })}
         />
-        {isSql && (
-          <div className="lesson-code__setup">
+        {(isSql || isPython) && (
+          <div className="lesson-code__setup-shell" data-open={setupOpen ? 'true' : 'false'}>
+            <div className="lesson-code__setup-head">
+              <button
+                type="button"
+                className="lesson-code__setup-toggle"
+                aria-expanded={setupOpen}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setSetupOpen((current) => !current)}
+              >
+                <Database width={14} height={14} aria-hidden="true" />
+                <span><strong>Data & runtime setup</strong><small>{setupOpen ? 'Hide advanced setup' : 'Configure sample data and scope'}</small></span>
+                <ChevronDown width={14} height={14} aria-hidden="true" />
+              </button>
+              <span className="lesson-code__scope" title="Where this block's data comes from">
+                <button type="button" data-active={dataScope === 'shared' ? 'true' : 'false'} onMouseDown={(e) => { e.preventDefault(); updateAttributes({ dataScope: 'shared' }); }}>Shared</button>
+                <button type="button" data-active={dataScope === 'own' ? 'true' : 'false'} onMouseDown={(e) => { e.preventDefault(); updateAttributes({ dataScope: 'own' }); }}>Isolated</button>
+              </span>
+            </div>
+            {setupOpen && isSql && <div className="lesson-code__setup">
             <label className="lesson-code__setup-label">
               {dataScope === 'shared'
                 ? 'Setup SQL (optional) - shared with the whole lesson; every shared block can query these tables'
@@ -88,10 +127,8 @@ function RunnableCodeView({ node, updateAttributes, editor, getPos }: NodeViewPr
               placeholder="CREATE TABLE ...; INSERT INTO ... VALUES ...;"
               onCommit={(v) => updateAttributes({ setupSql: v })}
             />
-          </div>
-        )}
-        {isPython && (
-          <div className="lesson-code__setup">
+            </div>}
+            {setupOpen && isPython && <div className="lesson-code__setup">
             <label className="lesson-code__setup-label">
               {dataScope === 'shared'
                 ? 'Setup Python (optional) - shared with the whole lesson; runs once before the shared blocks'
@@ -104,6 +141,7 @@ function RunnableCodeView({ node, updateAttributes, editor, getPos }: NodeViewPr
               placeholder="# import libraries or define helper functions here"
               onCommit={(v) => updateAttributes({ setupPython: v })}
             />
+            </div>}
           </div>
         )}
       </NodeViewWrapper>
@@ -224,10 +262,16 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
   return (
     <NodeViewWrapper className="lesson-code" contentEditable={false}>
       <div className="lesson-code__bar">
-        <span className="lesson-code__lang-label">{language}</span>
+        <div className="lesson-code__identity">
+          <span className="lesson-code__identity-icon"><PlaygroundBadgeIcon language={language} /></span>
+          <span className="lesson-code__identity-copy">
+            <strong>{playgroundTitle(language)}</strong>
+            <small data-on={canRun ? 'true' : 'false'}>{canRun ? 'Ready to run' : 'Copyable snippet'}</small>
+          </span>
+        </div>
         <div className="lesson-code__actions">
           {canRun && (
-            <button type="button" className="lesson-code__btn" onClick={run} disabled={running}>
+            <button type="button" className="lesson-code__btn" data-primary="true" onClick={run} disabled={running}>
               {running ? <Loader2 className="lesson-code__spin" width={13} height={13} /> : <Play width={13} height={13} />}
               {running ? 'Running' : 'Run'}
             </button>
@@ -237,7 +281,7 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
               <Database width={13} height={13} /> Data
             </button>
           )}
-          <button type="button" className="lesson-code__btn" onClick={copy}>
+          <button type="button" className="lesson-code__btn" data-success={copied ? 'true' : 'false'} onClick={copy}>
             {copied ? <Check width={13} height={13} /> : <Copy width={13} height={13} />}
             {copied ? 'Copied' : 'Copy'}
           </button>

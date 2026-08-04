@@ -1522,16 +1522,16 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     <div className="flex flex-col" style={{ background: 'transparent', color: FE.text, colorScheme: FE === FE_DARK ? 'dark' : 'light' }}>
       {/* -- Content Area (no left pane -- section nav is the horizontal stepper below) -- */}
       <div className="flex-1 flex flex-col">
-        {/* Save bar */}
-        <div className="flex items-center justify-between px-8 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${FE.divider}`, background: FE.card }}>
-          <span className="text-xs" style={{ color: FE.faint }}>
+        {/* Persistent save control: stays reachable while editing long courses. */}
+        <div className="fixed left-4 right-4 bottom-4 sm:left-auto sm:right-6 sm:bottom-6 z-[90] flex items-center justify-between sm:justify-end gap-3 p-2 rounded-xl" style={{ border: `1px solid ${FE.cardBorder}`, background: FE.card, boxShadow: FE === FE_DARK ? '0 14px 38px rgba(0,0,0,0.48)' : '0 14px 38px rgba(15,23,42,0.16)' }}>
+          <span className="text-[11px] pl-2 whitespace-nowrap" style={{ color: FE.faint }}>
             {saved ? '✓ All changes saved' : 'Unsaved changes'}
           </span>
           <button
             type="button"
             onClick={handleSave}
             disabled={isSaving}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-opacity disabled:opacity-60 hover:opacity-90"
+            className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-opacity disabled:opacity-60 hover:opacity-90"
             style={{ background: accentColor, color: 'white' }}
           >
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}

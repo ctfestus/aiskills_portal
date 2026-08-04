@@ -7,7 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { RotateCcw, MoreVertical } from 'lucide-react';
+import { RotateCcw, MoreHorizontal, MoreVertical } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 
 const DEFAULT_SWATCH = '#10b981';
@@ -94,7 +94,7 @@ export function MenuRow({ label, children }: { label: string; children: React.Re
  * The panel is portaled to <body> (so a block's overflow:hidden can't clip it) and
  * carries `lesson-content` so the shared control styles still apply. Editor-only.
  */
-export function StyleMenu({ children }: { children: React.ReactNode }) {
+export function StyleMenu({ children, width = 240, triggerLabel, accentColor }: { children: React.ReactNode; width?: number; triggerLabel?: string; accentColor?: string }) {
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const [open, setOpen] = useState(false);
@@ -106,7 +106,8 @@ export function StyleMenu({ children }: { children: React.ReactNode }) {
     e.preventDefault();
     if (open) { setOpen(false); return; }
     const r = triggerRef.current?.getBoundingClientRect();
-    if (r) setPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.right - 240, window.innerWidth - 248)) });
+    const panelWidth = Math.min(width, window.innerWidth - 16);
+    if (r) setPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.right - panelWidth, window.innerWidth - panelWidth - 8)) });
     setOpen(true);
   };
 
@@ -137,18 +138,18 @@ export function StyleMenu({ children }: { children: React.ReactNode }) {
         ref={triggerRef}
         type="button"
         className="lesson-style-menu__trigger"
-        aria-label="Formatting options"
+        aria-label={triggerLabel || 'Formatting options'}
         data-open={open ? 'true' : 'false'}
         data-theme={dark ? 'dark' : 'light'}
         onMouseDown={toggle}
       >
-        <MoreVertical width={15} height={15} />
+        {triggerLabel ? <><MoreHorizontal width={15} height={15} /><span>{triggerLabel}</span></> : <MoreVertical width={15} height={15} />}
       </button>
       {open && pos && createPortal(
         <div
           ref={panelRef}
           className={`lesson-content lesson-style-menu__panel ${dark ? 'dark' : ''}`}
-          style={{ position: 'fixed', top: pos.top, left: pos.left }}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width, maxWidth: 'calc(100vw - 16px)', ...(accentColor ? { '--lesson-accent-base': accentColor } : {}) } as React.CSSProperties}
           onMouseDown={(e) => e.stopPropagation()}
         >
           {children}
