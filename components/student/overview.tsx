@@ -389,11 +389,12 @@ export function OverviewSection({ user, userEmail, C, onNavigate }: {
     }
   };
 
-  const completedCount = courses.filter(f => {
-    const proj = isProjForm(f);
-    const a    = proj ? gpAttempts[f.id] : courseAttempts[f.id];
-    return isEffectivelyDone(f, a, proj);
-  }).length;
+  // Count successful course completions from attempts directly. Restricting this
+  // metric to the cohort course catalog omitted courses reached through a learning
+  // path, because path items do not need to be assigned to the cohort separately.
+  const completedCount = Object.values(courseAttempts).filter(
+    a => a?.passed === true && Boolean(a.completed_at),
+  ).length;
 
   // In-progress items sorted by last active -- most recent first
   const inProgressItems = [...courses]
