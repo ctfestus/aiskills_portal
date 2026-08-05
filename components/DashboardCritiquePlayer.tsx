@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useState, useRef, useCallback } from 'react';
-import { Loader2, UploadIcon, Eye, EyeOff, RotateCcw, CheckCircle2, Zap, Download } from 'lucide-react';
+import { Loader2, UploadIcon, Eye, EyeOff, RotateCcw, CheckCircle2, Zap, Download, Lightbulb } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { downloadReviewPdf } from '@/lib/downloadReviewPdf';
+import { downloadStructuredReviewPdf } from '@/lib/downloadReviewPdf';
 import AiReviewDisclaimer from '@/components/AiReviewDisclaimer';
+import AiStructuredReviewReport from '@/components/AiStructuredReviewReport';
+import AiReviewWorkspaceHeader from '@/components/AiReviewWorkspaceHeader';
 
 interface Bounds { x: number; y: number; w: number; h: number; }
 interface CritiqueElement {
@@ -91,7 +93,6 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
   const inputRef   = useRef<HTMLInputElement>(null);
   const imgRef     = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const resultsRef = useRef<HTMLDivElement>(null);
 
   const processFile = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) { setError('Please upload an image file (PNG or JPG).'); return; }
@@ -150,9 +151,32 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
   };
 
   async function downloadPdf() {
-    if (!resultsRef.current) return;
     try {
-      await downloadReviewPdf(resultsRef.current, `dashboard-critique-${Date.now()}.pdf`);
+      if (!result) return;
+      const audit = result.audit;
+      const elements = result.elements ?? [];
+      await downloadStructuredReviewPdf({
+        overallScore: audit?.overallScore ?? 100,
+        executiveSummary: audit?.executiveSummary ?? `${elements.length} dashboard elements were analysed.`,
+        reportLabel: 'AI DASHBOARD INTELLIGENCE',
+        reportTitle: 'Your dashboard review',
+        reportKicker: 'DASHBOARD REVIEW',
+        sourceLabel: 'Dashboard screenshot',
+        findingsTitle: 'Element-level findings',
+        locationLabel: 'ELEMENT',
+        severityLabels: { warning: 'Needs attention', suggestion: 'Opportunity' },
+        metricLabels: { errors: 'Critical', warnings: 'Risks' },
+        issues: elements.map(element => ({
+          lines: `${element.elementType} / ${element.label}`,
+          severity: element.weaknesses.length > 0 ? 'warning' : 'suggestion',
+          title: element.label,
+          detail: element.weaknesses.length > 0 ? element.weaknesses.join(' ') : element.strengths.join(' '),
+          fix: element.recommendation,
+        })),
+        categories: audit?.categories ?? [],
+        topRecommendations: audit?.topRecommendations ?? elements.map(element => element.recommendation).filter(Boolean),
+        rubricGrades: audit?.rubricGrades,
+      }, `dashboard-critique-${Date.now()}.pdf`, accentColor);
     } catch (err: any) {
       setError(err?.message ?? 'PDF export failed. Please try again.');
     }
@@ -184,13 +208,18 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
   // the interactive overlay so students and instructors still see the saved feedback on reload.
   if (result && !imageDataUrl) {
     return (
-      <div ref={resultsRef} className="space-y-3">
+      <div className="space-y-3">
         <AiReviewDisclaimer isDark={isDark} />
         {showAttemptCount && maxReviews !== undefined && reviewsUsed > 0 && (
           <p style={{ fontSize: 11, fontWeight: 600, color: muted }}>Attempt {reviewsUsed} of {maxReviews}</p>
         )}
+        <div className="flex justify-end">
+          <button onClick={downloadPdf} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold" style={{ background: `${accentColor}15`, color: accentColor }}>
+            <Download className="h-3 w-3" /> PDF
+          </button>
+        </div>
         {result.audit ? (
-          <AuditReport audit={result.audit} accentColor={accentColor} isDark={isDark} />
+          <AuditReport audit={result.audit} elements={result.elements ?? []} accentColor={accentColor} isDark={isDark} />
         ) : (
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl" style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}30` }}>
             <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
@@ -217,18 +246,22 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
       );
     }
     return (
+      <div className="space-y-3">
+      <AiReviewWorkspaceHeader icon={<Eye className="w-5 h-5" />} title="Review your dashboard" description="Upload a dashboard screenshot to receive visual, element-level coaching and rubric feedback." accentColor={accentColor} isDark={isDark} reviewsUsed={reviewsUsed} maxReviews={maxReviews} />
+      <AiReviewDisclaimer isDark={isDark} />
       <div
         onDrop={handleDrop}
         onDragOver={e => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onClick={() => inputRef.current?.click()}
-        className="cursor-pointer rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-3 py-14 px-6 transition-all"
+        className="cursor-pointer rounded-2xl flex flex-col items-center justify-center gap-3 py-14 px-6 transition-all hover:-translate-y-px"
         style={{
-          borderColor: dragging ? accentColor : border,
+          border: `1.5px dashed ${dragging ? accentColor : border}`,
           background: dragging ? `${accentColor}08` : isDark ? 'rgba(255,255,255,0.02)' : '#fafafa',
+          boxShadow: dragging ? `0 0 0 4px ${accentColor}12` : 'none',
         }}
       >
-        <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: `${accentColor}15` }}>
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${accentColor}15` }}>
           <UploadIcon className="w-6 h-6" style={{ color: accentColor }} />
         </div>
         <div className="text-center">
@@ -236,11 +269,9 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
           <p className="text-xs mt-1" style={{ color: muted }}>or click to browse · PNG or JPG</p>
         </div>
         {error && <p className="text-xs font-medium text-red-400">{error}</p>}
-        <div className="max-w-xl text-center">
-          <AiReviewDisclaimer isDark={isDark} />
-        </div>
         <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/jpg" className="hidden"
           onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); }} />
+      </div>
       </div>
     );
   }
@@ -248,6 +279,8 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
   // Analyzing state
   if (analyzing) {
     return (
+      <div className="space-y-3">
+      <AiReviewWorkspaceHeader icon={<Eye className="w-5 h-5" />} title="Reviewing your dashboard" description="The reviewer is mapping visual elements and generating coaching feedback." accentColor={accentColor} isDark={isDark} reviewsUsed={reviewsUsed} maxReviews={maxReviews} analyzing />
       <div className="rounded-2xl flex flex-col items-center justify-center gap-4 py-16" style={{ background: card, border: `1px solid ${border}` }}>
         <div className="relative">
           <div className="w-16 h-16 rounded-2xl overflow-hidden">
@@ -260,12 +293,13 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
           <p className="text-xs mt-1" style={{ color: muted }}>Detecting elements and generating coaching feedback</p>
         </div>
       </div>
+      </div>
     );
   }
 
   // Interactive result state
   return (
-    <div ref={resultsRef} className="space-y-3">
+    <div className="space-y-3">
       <AiReviewDisclaimer isDark={isDark} />
       {showAttemptCount && maxReviews !== undefined && reviewsUsed > 0 && (
         <p style={{ fontSize: 11, fontWeight: 600, color: muted }}>Attempt {reviewsUsed} of {maxReviews}</p>
@@ -424,8 +458,8 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
               {/* Recommendation */}
               {hovered.recommendation && (
                 <div className="rounded-xl p-3" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
-                  <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: '#2563eb' }}>
-                    💡 Actionable Insight
+                  <p className="text-[10px] font-bold uppercase tracking-widest mb-1 inline-flex items-center gap-1.5" style={{ color: '#2563eb' }}>
+                    <Lightbulb className="w-3 h-3" /> Actionable Insight
                   </p>
                   <p className="text-[12px] text-gray-700 leading-snug">{hovered.recommendation}</p>
                 </div>
@@ -466,7 +500,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
       {error && <p className="text-xs text-red-400 font-medium">{error}</p>}
 
       {/* Holistic Audit Report */}
-      {result?.audit && <AuditReport audit={result.audit} accentColor={accentColor} isDark={isDark} />}
+      {result?.audit && <AuditReport audit={result.audit} elements={result.elements ?? []} accentColor={accentColor} isDark={isDark} />}
     </div>
   );
 }
@@ -506,8 +540,8 @@ function scoreBarColor(score: number) {
   return '#ef4444';
 }
 
-export function AuditReport({ audit, accentColor, isDark }: { audit: Audit; accentColor: string; isDark: boolean }) {
-  const bg      = isDark ? '#1e1e1e' : '#f2f2f4';
+export function AuditReport({ audit, elements, accentColor, isDark }: { audit: Audit; elements: CritiqueElement[]; accentColor: string; isDark: boolean }) {
+  const legacyReportEnabled = false as boolean;
   const card    = isDark ? '#272727' : '#ffffff';
   const inner   = isDark ? '#303030' : '#f7f7f9';
   const text    = isDark ? '#f0f0f0' : '#0a0a0a';
@@ -516,29 +550,34 @@ export function AuditReport({ audit, accentColor, isDark }: { audit: Audit; acce
   const shadow  = isDark ? 'none'    : '0 2px 16px rgba(0,0,0,0.06)';
 
   return (
-    <div className="space-y-3" style={{ background: bg, borderRadius: 24, padding: 16 }}>
+    <div className="space-y-3">
 
-      {/* Overall Score Header */}
-      <div style={{ background: isDark ? '#272727' : '#1e2d6b', borderRadius: 20, padding: '28px 28px 24px' }}>
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] mb-5" style={{ color: '#ADEE66' }}>
-          Expert Dashboard Review
-        </p>
-        <div className="flex items-end gap-2 mb-5">
-          <span style={{ fontSize: 72, fontWeight: 900, lineHeight: 1, color: '#ffffff', letterSpacing: '-0.03em' }}>
-            {audit.overallScore.toFixed(1)}
-          </span>
-          <span className="mb-2 text-[15px] font-semibold" style={{ color: 'rgba(255,255,255,0.4)' }}>/100</span>
-        </div>
-        <div className="h-1 rounded-full overflow-hidden mb-5" style={{ background: 'rgba(255,255,255,0.12)' }}>
-          <div className="h-full rounded-full" style={{
-            width: `${audit.overallScore}%`,
-            background: '#ADEE66',
-          }} />
-        </div>
-        <p className="text-[14px] leading-[1.7]" style={{ color: 'rgba(255,255,255,0.65)' }}>{audit.executiveSummary}</p>
-      </div>
+      <AiStructuredReviewReport
+        reportLabel="AI dashboard intelligence"
+        title="Your dashboard review"
+        metadata="Dashboard screenshot"
+        score={audit.overallScore}
+        summary={audit.executiveSummary}
+        findings={elements.map(element => ({
+          location: `${element.elementType} / ${element.label}`,
+          severity: element.weaknesses.length > 0 ? 'warning' : 'suggestion',
+          title: element.label,
+          detail: element.weaknesses.length > 0 ? element.weaknesses.join(' ') : element.strengths.join(' '),
+          fix: element.recommendation,
+        }))}
+        findingsTitle="Element-level findings"
+        locationLabel="Element"
+        severityLabels={{ warning: 'Needs attention', suggestion: 'Opportunity' }}
+        metricLabels={{ risks: 'Needs attention' }}
+        categories={audit.categories}
+        recommendations={audit.topRecommendations}
+        rubricGrades={audit.rubricGrades}
+        accentColor={accentColor}
+        isDark={isDark}
+      />
 
-      {/* Rubric */}
+      {legacyReportEnabled && <>
+      {/* Legacy result sections retained temporarily for backward-safe data rendering. */}
       {audit.rubricGrades && audit.rubricGrades.length > 0 && (() => {
         const passed     = audit.rubricGrades.filter(g => g.passed).length;
         const total      = audit.rubricGrades.length;
@@ -636,8 +675,8 @@ export function AuditReport({ audit, accentColor, isDark }: { audit: Audit; acce
 
       {/* Top Priority Actions */}
       {audit.topRecommendations.length > 0 && (
-        <div style={{ background: isDark ? '#272727' : '#1e2d6b', borderRadius: 20, padding: '22px 28px 28px' }}>
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] mb-6" style={{ color: '#ADEE66' }}>
+        <div style={{ background: card, borderRadius: 20, padding: '22px 28px 28px', boxShadow: shadow }}>
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] mb-6" style={{ color: accentColor }}>
             Top Priority Actions
           </p>
           <ol className="space-y-5">
@@ -645,16 +684,17 @@ export function AuditReport({ audit, accentColor, isDark }: { audit: Audit; acce
               <li key={i} className="flex items-start gap-4">
                 <span style={{
                   flexShrink: 0, width: 26, height: 26, borderRadius: 8,
-                  background: '#ADEE66', color: '#0f172a',
+                  background: accentColor, color: '#ffffff',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 11, fontWeight: 800, marginTop: 1,
                 }}>{i + 1}</span>
-                <p className="text-[13.5px] leading-[1.65]" style={{ color: 'rgba(255,255,255,0.8)' }}>{r}</p>
+                <p className="text-[13.5px] leading-[1.65]" style={{ color: text }}>{r}</p>
               </li>
             ))}
           </ol>
         </div>
       )}
+      </>}
     </div>
   );
 }

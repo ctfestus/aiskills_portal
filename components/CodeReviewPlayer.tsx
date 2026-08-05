@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Loader2, CheckCircle2, Zap, RotateCcw, Code2, Download, Upload, FileCode, Lock } from 'lucide-react';
+import { Loader2, CheckCircle2, Zap, RotateCcw, Code2, Download, Upload, FileCode, Lock, ChevronDown, ShieldCheck, TriangleAlert, Lightbulb, ArrowUpRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { downloadReviewPdf } from '@/lib/downloadReviewPdf';
+import { downloadCodeReviewPdf } from '@/lib/downloadReviewPdf';
 import AiReviewDisclaimer from '@/components/AiReviewDisclaimer';
+import AiReviewWorkspaceHeader from '@/components/AiReviewWorkspaceHeader';
 
 const LANGUAGES = ['Python', 'SQL', 'JavaScript', 'TypeScript', 'R', 'Java', 'C#', 'Other'];
 const SQL_DIALECTS = ['PostgreSQL', 'MySQL', 'SQLite', 'SQL Server'];
@@ -93,7 +94,8 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
   const [error, setError]       = useState('');
   const [inputMode, setInputMode] = useState<'paste' | 'upload'>('paste');
   const [uploadedFileName, setUploadedFileName] = useState('');
-  const resultsRef = useRef<HTMLDivElement>(null);
+  const [issueFilter, setIssueFilter] = useState<'all' | LineIssue['severity']>('all');
+  const [expandedIssues, setExpandedIssues] = useState<Set<number>>(() => new Set([0]));
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const bg     = isDark ? '#0f0f0f' : '#f8fafc';
@@ -103,6 +105,8 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
   const muted  = isDark ? '#888' : '#666';
   const input  = isDark ? '#111' : '#f9fafb';
   const inner  = isDark ? '#222' : '#f3f4f6';
+  const reportSurface = isDark ? '#12151b' : '#f8fafc';
+  const reportInner = isDark ? '#22272f' : '#f7f8fa';
 
   async function handleSubmit() {
     if (!code.trim()) { setError(inputMode === 'upload' ? 'Please upload a file before submitting.' : 'Please paste your code before submitting.'); return; }
@@ -139,7 +143,14 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
     }
   }
 
-  function reset() { setCode(''); setResult(null); setError(''); setUploadedFileName(''); }
+  function reset() {
+    setCode('');
+    setResult(null);
+    setError('');
+    setUploadedFileName('');
+    setIssueFilter('all');
+    setExpandedIssues(new Set([0]));
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -157,9 +168,9 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
   }
 
   async function downloadPdf() {
-    if (!resultsRef.current) return;
     try {
-      await downloadReviewPdf(resultsRef.current, `code-review-${Date.now()}.pdf`);
+      if (!result) return;
+      await downloadCodeReviewPdf(result, `code-review-${Date.now()}.pdf`, accentColor);
     } catch (err: any) {
       setError(err?.message ?? 'PDF export failed. Please try again.');
     }
@@ -192,6 +203,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
     }
     return (
       <div className="space-y-3">
+        <AiReviewWorkspaceHeader icon={<FileCode className="w-5 h-5" />} title="Review your code" description="Paste code or upload a source file to receive structured, rubric-aware feedback." accentColor={accentColor} isDark={isDark} reviewsUsed={reviewsUsed} maxReviews={maxReviews} analyzing={analyzing} />
         <AiReviewDisclaimer isDark={isDark} />
         {/* Language selector -- locked when instructor specified a language */}
         {lockedLanguage ? (
@@ -236,7 +248,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
         )}
 
         {/* Code input -- paste or upload */}
-        <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ border: `1px solid ${border}`, borderRadius: 16, overflow: 'hidden', background: input }}>
           <div className="flex items-center justify-between px-4 py-2.5 border-b" style={{ background: inner, borderColor: border }}>
             <div className="flex items-center gap-2">
               <Code2 className="w-3.5 h-3.5" style={{ color: muted }} />
@@ -312,8 +324,8 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
         {error && <p className="text-xs text-red-400 font-medium">{error}</p>}
 
         <button onClick={handleSubmit} disabled={analyzing}
-          className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-60"
-          style={{ background: accentColor, color: '#fff', borderRadius: 8 }}>
+          className="flex w-full sm:w-auto items-center justify-center gap-2 px-6 py-3 text-sm font-semibold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
+          style={{ background: accentColor, color: '#fff', borderRadius: 12 }}>
           {analyzing
             ? <><Loader2 className="w-4 h-4 animate-spin" /> Reviewing…</>
             : <><Zap className="w-4 h-4" /> Submit for AI Review</>}
@@ -326,219 +338,185 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
   const errors      = result.issues.filter(i => i.severity === 'error');
   const warnings    = result.issues.filter(i => i.severity === 'warning');
   const suggestions = result.issues.filter(i => i.severity === 'suggestion');
+  const filteredIssues = issueFilter === 'all' ? result.issues : result.issues.filter(issue => issue.severity === issueFilter);
+  const rubricPassed = result.rubricGrades?.filter(grade => grade.passed).length ?? 0;
+  const rubricTotal = result.rubricGrades?.length ?? 0;
+  const strengths = result.categories.reduce((count, category) => count + category.strengths.length, 0);
+  const opportunities = result.categories.reduce((count, category) => count + category.gaps.length, 0);
+  const verdict = result.overallScore >= 80 ? 'Production ready' : result.overallScore >= 60 ? 'Solid foundation' : 'Needs another pass';
+  const verdictColor = scoreColor(result.overallScore);
+
+  function toggleIssue(index: number) {
+    setExpandedIssues(current => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
 
   return (
-    <div ref={resultsRef} className="space-y-4" style={{ fontFamily: 'var(--font-sans)' }}>
+    <div className="space-y-4" style={{ fontFamily: 'var(--font-sans)' }}>
       <AiReviewDisclaimer isDark={isDark} />
-      {showAttemptCount && maxReviews !== undefined && reviewsUsed > 0 && (
-        <p style={{ fontSize: 11, fontWeight: 600, color: muted }}>Attempt {reviewsUsed} of {maxReviews}</p>
-      )}
-
-      {/* Header */}
-      <div style={{ background: isDark ? '#111827' : '#0f172a', borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ padding: '24px 28px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="flex items-start justify-between gap-4">
+      <section className="overflow-hidden rounded-[24px]" style={{ background: reportSurface }}>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-6" style={{ borderBottom: `1px solid ${border}` }}>
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-3 w-3 shrink-0 items-center justify-center" aria-hidden="true">
+              <span className="absolute h-3 w-3 animate-ping rounded-full opacity-25 motion-reduce:animate-none" style={{ background: accentColor }} />
+              <span className="relative h-2 w-2 rounded-full" style={{ background: accentColor }} />
+            </span>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] mb-3" style={{ color: '#ADEE66' }}>
-                AI Code Review{result.language ? ` · ${result.language}${result.language === 'SQL' && result.dialect ? ` · ${result.dialect}` : ''}` : ''}
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em]" style={{ color: accentColor }}>AI code intelligence</p>
+              <p className="mt-0.5 text-[11px] font-medium" style={{ color: muted }}>
+                {result.language ?? language}{result.language === 'SQL' && result.dialect ? ` · ${result.dialect}` : ''}
+                {showAttemptCount && maxReviews !== undefined && reviewsUsed > 0 ? ` · Attempt ${reviewsUsed} of ${maxReviews}` : ''}
               </p>
-              <div className="flex items-baseline gap-2 mb-3">
-                <span style={{ fontSize: 56, fontWeight: 900, lineHeight: 1, color: '#fff', letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums' }}>
-                  {result.overallScore.toFixed(1)}
-                </span>
-                <span style={{ fontSize: 18, fontWeight: 400, color: 'rgba(255,255,255,0.25)' }}>/100</span>
-              </div>
-              <div style={{ width: 200, height: 2, background: 'rgba(255,255,255,0.08)', borderRadius: 0, overflow: 'hidden', marginBottom: 16 }}>
-                <div style={{ height: '100%', width: `${result.overallScore}%`, background: '#ADEE66' }} />
-              </div>
-              <p style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(255,255,255,0.55)', maxWidth: 480 }}>{result.executiveSummary}</p>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button onClick={downloadPdf}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
-                style={{ background: 'rgba(173,238,102,0.12)', color: '#ADEE66', borderRadius: 6, border: '1px solid rgba(173,238,102,0.2)' }}>
-                <Download className="w-3 h-3" /> PDF
-              </button>
-              {showReset && (
-                <button onClick={reset}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
-                  style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
-                  <RotateCcw className="w-3 h-3" /> Reset
-                </button>
-              )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={downloadPdf} className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-transform active:scale-95" style={{ background: card, color: text }}><Download className="h-3.5 w-3.5" /> Export</button>
+            {showReset && <button onClick={reset} className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-transform active:scale-95" style={{ background: `${accentColor}18`, color: accentColor }}><RotateCcw className="h-3.5 w-3.5" /> Try again</button>}
+          </div>
+        </div>
+
+        <div className="grid gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-end">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em]" style={{ background: `${verdictColor}16`, color: verdictColor }}>{verdict}</span>
+              <span className="text-[11px] font-semibold" style={{ color: muted }}>{result.issues.length} findings detected</span>
+            </div>
+            <h2 className="mt-4 text-xl font-bold tracking-[-0.02em] sm:text-2xl" style={{ color: text }}>Your code review</h2>
+            <p className="mt-2 max-w-2xl text-[13px] leading-relaxed" style={{ color: muted }}>{result.executiveSummary}</p>
+          </div>
+          <div className="rounded-2xl p-4" style={{ background: card }}>
+            <div className="flex items-end justify-between gap-3">
+              <div><span className="text-4xl font-extrabold leading-none tabular-nums" style={{ color: text }}>{result.overallScore.toFixed(1)}</span><span className="ml-1 text-xs font-semibold" style={{ color: muted }}>/100</span></div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: verdictColor }}>Overall</span>
+            </div>
+            <div className="mt-4 h-2.5 overflow-hidden rounded-full" style={{ background: isDark ? 'rgba(255,255,255,0.08)' : '#e4e9ef' }}>
+              <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${result.overallScore}%`, background: accentColor, boxShadow: `0 0 16px ${accentColor}55` }} />
             </div>
           </div>
         </div>
 
-        {/* Issue counts row */}
-        <div className="flex" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="grid grid-cols-2 gap-px sm:grid-cols-4" style={{ background: border }}>
           {[
-            { list: errors,      color: '#ef4444', label: 'Errors' },
-            { list: warnings,    color: '#f59e0b', label: 'Warnings' },
-            { list: suggestions, color: '#3b82f6', label: 'Suggestions' },
-          ].map(({ list, color, label }, idx) => (
-            <div key={label} className="flex-1 flex items-center gap-2.5 px-7 py-4"
-              style={{ borderRight: idx < 2 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
-              <span style={{ fontSize: 22, fontWeight: 900, color: list.length > 0 ? color : 'rgba(255,255,255,0.15)', fontVariantNumeric: 'tabular-nums' }}>
-                {list.length}
-              </span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: list.length > 0 ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                {label}
-              </span>
+            { label: 'Strengths', value: strengths, icon: ShieldCheck, color: '#22c55e' },
+            { label: 'Risks', value: errors.length + warnings.length, icon: TriangleAlert, color: '#f59e0b' },
+            { label: 'Opportunities', value: opportunities, icon: Lightbulb, color: '#3b82f6' },
+            { label: 'Rubric passed', value: rubricTotal ? `${rubricPassed}/${rubricTotal}` : '—', icon: CheckCircle2, color: accentColor },
+          ].map(metric => (
+            <div key={metric.label} className="flex items-center gap-3 px-4 py-4 sm:px-5" style={{ background: card }}>
+              <metric.icon className="h-4 w-4 shrink-0" style={{ color: metric.color }} />
+              <div className="min-w-0"><span className="block text-lg font-bold leading-none tabular-nums" style={{ color: text }}>{metric.value}</span><span className="mt-1 block truncate text-[9px] font-semibold uppercase tracking-[0.1em]" style={{ color: muted }}>{metric.label}</span></div>
             </div>
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* Issues */}
-      {result.issues.length > 0 && (
-        <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden' }}>
-          <div style={{ padding: '12px 20px', borderBottom: `1px solid ${border}` }}>
-            <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: muted }}>Issues</p>
+      <section className="rounded-[22px] p-4 sm:p-5" style={{ background: card, border: `1px solid ${border}` }}>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div><p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: accentColor }}>Diagnostic feed</p><h3 className="mt-1 text-base font-semibold" style={{ color: text }}>Findings in your code</h3></div>
+          <div className="flex flex-wrap gap-1.5">
+            {([
+              ['all', 'All', result.issues.length],
+              ['error', 'Errors', errors.length],
+              ['warning', 'Warnings', warnings.length],
+              ['suggestion', 'Ideas', suggestions.length],
+            ] as const).map(([value, label, count]) => (
+              <button key={value} onClick={() => setIssueFilter(value)} className="rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-colors" style={{ background: issueFilter === value ? accentColor : reportInner, color: issueFilter === value ? '#fff' : muted }}>{label} {count}</button>
+            ))}
           </div>
-          {result.issues.map((issue, i) => {
+        </div>
+        <div className="mt-4 space-y-2">
+          {filteredIssues.length === 0 ? (
+            <div className="grid min-h-28 place-items-center rounded-2xl text-center" style={{ background: reportInner }}><div><CheckCircle2 className="mx-auto h-5 w-5 text-emerald-500" /><p className="mt-2 text-xs font-semibold" style={{ color: muted }}>No findings in this category</p></div></div>
+          ) : filteredIssues.map(issue => {
+            const originalIndex = result.issues.indexOf(issue);
             const color = severityColor(issue.severity);
+            const expanded = expandedIssues.has(originalIndex);
             return (
-              <div key={i} style={{
-                display: 'flex', gap: 0,
-                borderBottom: i < result.issues.length - 1 ? `1px solid ${border}` : 'none',
-              }}>
-                {/* Sharp accent bar */}
-                <div style={{ width: 3, flexShrink: 0, background: color }} />
-                <div style={{ flex: 1, padding: '16px 20px' }}>
-                  <div className="flex items-center gap-3 mb-2 flex-wrap">
-                    <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em',
-                      padding: '3px 8px', background: `${color}15`, color, borderRadius: 3 }}>
-                      {severityLabel(issue.severity)}
-                    </span>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: text }}>{issue.title}</p>
-                    {issue.lines && (
-                      <span style={{ fontSize: 11, padding: '2px 8px',
-                        background: inner, color: muted, borderRadius: 4, marginLeft: 'auto' }}>
-                        Line {issue.lines}
-                      </span>
-                    )}
+              <article key={originalIndex} className="overflow-hidden rounded-2xl" style={{ background: reportInner }}>
+                <button onClick={() => toggleIssue(originalIndex)} className="flex w-full items-center gap-3 p-3.5 text-left sm:p-4" aria-expanded={expanded}>
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color, boxShadow: `0 0 0 4px ${color}14` }} />
+                  <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-[9px] font-bold uppercase tracking-[0.11em]" style={{ color }}>{severityLabel(issue.severity)}</span>{issue.lines && <span className="text-[10px] font-medium" style={{ color: muted, fontFamily: 'var(--font-mono)' }}>Line {issue.lines}</span>}</div><p className="mt-1 truncate text-[13px] font-semibold" style={{ color: text }}>{issue.title}</p></div>
+                  <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} style={{ color: muted }} />
+                </button>
+                {expanded && (
+                  <div className="px-4 pb-4 sm:pl-[43px]">
+                    <p className="text-[12.5px] leading-relaxed" style={{ color: muted }}>{issue.detail}</p>
+                    {issue.fix && <div className="mt-3 rounded-xl p-3.5" style={{ background: card }}><p className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: accentColor }}><ArrowUpRight className="h-3 w-3" /> Recommended fix</p><p className="mt-1.5 text-[12.5px] leading-relaxed" style={{ color: text }}>{issue.fix}</p></div>}
                   </div>
-                  <p style={{ fontSize: 12.5, lineHeight: 1.6, color: muted, marginBottom: issue.fix ? 12 : 0 }}>{issue.detail}</p>
-                  {issue.fix && (
-                    <div style={{ background: isDark ? 'rgba(37,99,235,0.08)' : '#eff6ff',
-                      borderLeft: '2px solid #3b82f6', padding: '10px 14px' }}>
-                      <p style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#3b82f6', marginBottom: 5 }}>Fix</p>
-                      <p style={{ fontSize: 12.5, color: isDark ? '#93c5fd' : '#1e40af', lineHeight: 1.6 }}>{issue.fix}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
+                )}
+              </article>
             );
           })}
         </div>
-      )}
+      </section>
 
-      {/* Rubric */}
-      {result.rubricGrades && result.rubricGrades.length > 0 && (() => {
-        const passed = result.rubricGrades!.filter(g => g.passed).length;
-        const total  = result.rubricGrades!.length;
-        const pct    = Math.round((passed / total) * 100);
-        const trackColor = pct === 100 ? '#22c55e' : pct >= 60 ? '#f59e0b' : '#ef4444';
-        return (
-          <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden' }}>
-            <div className="flex items-center justify-between" style={{ padding: '12px 20px', borderBottom: `1px solid ${border}` }}>
-              <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: muted }}>Assignment Rubric</p>
-              <div className="flex items-center gap-3">
-                <div style={{ width: 80, height: 2, background: border, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${pct}%`, background: trackColor }} />
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+        {result.rubricGrades && result.rubricGrades.length > 0 && (
+          <section className="rounded-[22px] p-4 sm:p-5" style={{ background: card, border: `1px solid ${border}` }}>
+            <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: accentColor }}>Rubric signal</p><h3 className="mt-1 text-base font-semibold" style={{ color: text }}>Requirements check</h3></div><span className="text-sm font-bold tabular-nums" style={{ color: text }}>{rubricPassed}<span style={{ color: muted }}>/{rubricTotal}</span></span></div>
+            <div className="mt-4 space-y-2">
+              {result.rubricGrades.map((grade, index) => (
+                <div key={index} className="flex items-start gap-2.5 rounded-xl p-3" style={{ background: reportInner }}>
+                  <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full text-[9px] font-black" style={{ background: grade.passed ? '#22c55e' : isDark ? '#343943' : '#dfe4ea', color: grade.passed ? '#fff' : muted }}>{grade.passed ? '✓' : '–'}</span>
+                  <div className="min-w-0"><p className="text-[11.5px] font-semibold" style={{ color: text }}>{grade.criterion}</p><p className="mt-1 text-[10.5px] leading-relaxed" style={{ color: muted }}>{grade.comment}</p></div>
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: text, fontVariantNumeric: 'tabular-nums' }}>
-                  {passed}<span style={{ fontWeight: 400, color: muted }}>/{total}</span>
-                </span>
-              </div>
+              ))}
             </div>
-            {result.rubricGrades!.map((grade, i) => (
-              <div key={i} className="flex items-start gap-4"
-                style={{ padding: '14px 20px', borderBottom: i < result.rubricGrades!.length - 1 ? `1px solid ${border}` : 'none' }}>
-                <div style={{ width: 2, alignSelf: 'stretch', flexShrink: 0, background: grade.passed ? '#22c55e' : border, marginTop: 2, marginBottom: 2 }} />
-                <div className="flex-1 min-w-0">
-                  <p style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 4 }}>{grade.criterion}</p>
-                  <p style={{ fontSize: 12, color: muted, lineHeight: 1.6 }}>{grade.comment}</p>
-                </div>
-                <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', flexShrink: 0, marginTop: 2,
-                  color: grade.passed ? '#22c55e' : muted }}>
-                  {grade.passed ? 'PASS' : 'FAIL'}
-                </span>
+          </section>
+        )}
+
+        <section className="rounded-[22px] p-4 sm:p-5" style={{ background: card, border: `1px solid ${border}` }}>
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: accentColor }}>Performance matrix</p>
+          <h3 className="mt-1 text-base font-semibold" style={{ color: text }}>Quality by dimension</h3>
+          <div className="mt-4 space-y-4">
+            {result.categories.map(category => (
+              <div key={category.name}>
+                <div className="flex items-center justify-between gap-3"><p className="truncate text-[12px] font-semibold" style={{ color: text }}>{category.name}</p><span className="text-[12px] font-bold tabular-nums" style={{ color: scoreColor(category.score) }}>{category.score}</span></div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: reportInner }}><div className="h-full rounded-full" style={{ width: `${category.score}%`, background: scoreColor(category.score) }} /></div>
+                <p className="mt-2 text-[11px] leading-relaxed" style={{ color: muted }}>{category.summary}</p>
               </div>
             ))}
           </div>
-        );
-      })()}
-
-      {/* Category scores */}
-      <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ padding: '12px 20px', borderBottom: `1px solid ${border}` }}>
-          <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: muted }}>Score Breakdown</p>
-        </div>
-        {result.categories.map((cat, i) => (
-          <div key={cat.name} className="flex items-center gap-5"
-            style={{ padding: '16px 20px', borderBottom: i < result.categories.length - 1 ? `1px solid ${border}` : 'none' }}>
-            <div style={{ width: 36, flexShrink: 0, textAlign: 'center' }}>
-              <span style={{ fontSize: 22, fontWeight: 900, color: scoreColor(cat.score), lineHeight: 1, display: 'block', fontVariantNumeric: 'tabular-nums' }}>{cat.score}</span>
-              <span style={{ fontSize: 9, color: muted }}>/100</span>
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="flex items-center justify-between mb-1.5">
-                <p style={{ fontSize: 13, fontWeight: 700, color: text }}>{cat.name}</p>
-                <span style={{ fontSize: 10, fontWeight: 700, color: scoreColor(cat.score), textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  {cat.score >= 80 ? 'Excellent' : cat.score >= 60 ? 'Good' : cat.score >= 40 ? 'Needs Work' : 'Critical'}
-                </span>
-              </div>
-              <div style={{ height: 2, background: border, overflow: 'hidden', marginBottom: 8 }}>
-                <div style={{ height: '100%', width: `${cat.score}%`, background: scoreColor(cat.score) }} />
-              </div>
-              <p style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>{cat.summary}</p>
-            </div>
-          </div>
-        ))}
+        </section>
       </div>
 
-      {/* Top recommendations */}
       {result.topRecommendations.length > 0 && (
-        <div style={{ background: isDark ? '#111827' : '#0f172a', borderRadius: 12, overflow: 'hidden' }}>
-          <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: '#ADEE66' }}>Priority Actions</p>
+        <section className="rounded-[22px] p-4 sm:p-5" style={{ background: reportSurface }}>
+          <div className="flex items-center justify-between gap-4">
+            <div><p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: accentColor }}>Next best actions</p><h3 className="mt-1 text-base font-semibold" style={{ color: text }}>Your improvement path</h3></div>
+            <Zap className="h-5 w-5" style={{ color: accentColor }} />
           </div>
-          {result.topRecommendations.map((r, i) => (
-            <div key={i} className="flex items-start gap-4"
-              style={{ padding: '16px 20px', borderBottom: i < result.topRecommendations.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
-              <span style={{ flexShrink: 0, width: 20, height: 20, background: '#ADEE66', color: '#0f172a',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, borderRadius: 4 }}>
-                {i + 1}
-              </span>
-              <p style={{ fontSize: 13, lineHeight: 1.65, color: 'rgba(255,255,255,0.65)' }}>{r}</p>
-            </div>
-          ))}
-        </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {result.topRecommendations.map((recommendation, index) => (
+              <div key={index} className="rounded-2xl p-4" style={{ background: card }}>
+                <span className="grid h-7 w-7 place-items-center rounded-lg text-[11px] font-black" style={{ background: accentColor, color: '#fff' }}>{index + 1}</span>
+                <p className="mt-3 text-[12.5px] leading-relaxed" style={{ color: text }}>{recommendation}</p>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Completion / gate */}
       {minScore && result.overallScore < minScore ? (
-        <div className="flex items-start gap-3 px-4 py-3" style={{ background: 'rgba(239,68,68,0.08)', borderLeft: '2px solid #ef4444' }}>
-          <div style={{ flexShrink: 0, marginTop: 1 }}>
-            <div style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ width: 6, height: 6, background: '#ef4444', borderRadius: '50%' }} />
-            </div>
-          </div>
+        <div className="flex items-start gap-3 rounded-2xl px-4 py-3.5" style={{ background: 'rgba(239,68,68,0.08)' }}>
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" style={{ color: '#ef4444' }} />
           <div>
             <p style={{ fontSize: 12, fontWeight: 700, color: '#ef4444', marginBottom: 2 }}>
-              Score too low · {result.overallScore.toFixed(1)}/100 · Minimum required: {minScore}/100
+              Minimum score not reached · {result.overallScore.toFixed(1)}/100 · Required: {minScore}/100
             </p>
-            <p style={{ fontSize: 12, color: '#ef4444', opacity: 0.8 }}>You can continue or try again with improved code -- no point awarded until the minimum is reached.</p>
+            <p style={{ fontSize: 12, color: '#ef4444', opacity: 0.8 }}>Use the improvement path above, revise your code, and submit another review.</p>
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-2 px-4 py-3"
-          style={{ background: `${accentColor}10`, borderLeft: `2px solid ${accentColor}` }}>
+        <div className="flex items-center gap-2 rounded-2xl px-4 py-3.5" style={{ background: `${accentColor}10` }}>
           <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
           <p style={{ fontSize: 12, fontWeight: 600, color: accentColor }}>
-            Review complete · {result.issues.length} issue{result.issues.length !== 1 ? 's' : ''} identified
+            Review complete · {result.issues.length} finding{result.issues.length !== 1 ? 's' : ''} identified
           </p>
         </div>
       )}

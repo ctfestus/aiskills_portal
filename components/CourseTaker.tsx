@@ -14,6 +14,7 @@ import {
   ChevronLeft, BookOpen, X, ExternalLink, ArrowRight, MoreHorizontal, Zap,
   ArrowLeftToLine, ArrowRightFromLine, Download, ArrowDownToLine, Lock,
   Check, Play, FileText, FlaskConical, ListChecks, Copy,
+  ArrowUp, ArrowDown, PenLine, Link2, Image as ImageIcon, Lightbulb,
 } from 'lucide-react';
 import { LinkedInIcon } from '@/components/LinkedInIcon';
 import { XpBadgeStack } from '@/components/XpBadge';
@@ -47,7 +48,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import SyntaxHighlighter from 'react-syntax-highlighter';
-import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import { atomOneDark, atomOneLight } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import { ScoreGauge } from '@/components/ScoreGauge';
 import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
 import CodeReviewPlayer from '@/components/CodeReviewPlayer';
@@ -189,8 +190,9 @@ class ShareRequiredError extends Error {
 }
 
 // -- Sortable item for arrange questions --
-function SortableItem({ id, label, idx, accent, isDark, isChecking }: {
-  id: string; label: string; idx: number; accent: string; isDark: boolean; isChecking: boolean;
+function SortableItem({ id, label, idx, count, accent, isDark, isChecking, onMove }: {
+  id: string; label: string; idx: number; count: number; accent: string; isDark: boolean; isChecking: boolean;
+  onMove: (direction: -1 | 1) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style: React.CSSProperties = {
@@ -204,24 +206,38 @@ function SortableItem({ id, label, idx, accent, isDark, isChecking }: {
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all duration-150 ${
-        isDark ? 'border-zinc-700 bg-zinc-800/60 text-[#ACB8C5]' : 'border-zinc-200 bg-zinc-50 text-[#111111]'
+      className={`group flex items-center gap-3 px-3 py-3 rounded-xl border transition-all duration-150 ${
+        isDark ? 'border-white/[0.07] bg-white/[0.035] text-[#ACB8C5]' : 'border-black/[0.06] bg-zinc-50 text-[#111111]'
       } ${isChecking ? 'pointer-events-none' : ''}`}
     >
       <span
-        className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-[11px] font-bold text-white"
-        style={{ background: accent }}
+        className="w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-[11px] font-bold"
+        style={{ background: `${accent}18`, color: accent }}
       >
         {idx + 1}
       </span>
       <span className="flex-1 text-sm font-medium">{label}</span>
       {!isChecking && (
-        <span
-          className="flex-shrink-0 cursor-grab active:cursor-grabbing text-zinc-500 hover:text-zinc-300 transition-colors"
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="w-4 h-4" />
+        <span className="flex items-center gap-1 flex-shrink-0">
+          <button type="button" onClick={() => onMove(-1)} disabled={idx === 0} aria-label={`Move ${label} up`}
+            className="w-7 h-7 inline-flex items-center justify-center rounded-lg transition-colors disabled:opacity-20"
+            style={{ color: isDark ? '#8b98a5' : '#71717a', background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.035)' }}>
+            <ArrowUp className="w-3.5 h-3.5" />
+          </button>
+          <button type="button" onClick={() => onMove(1)} disabled={idx === count - 1} aria-label={`Move ${label} down`}
+            className="w-7 h-7 inline-flex items-center justify-center rounded-lg transition-colors disabled:opacity-20"
+            style={{ color: isDark ? '#8b98a5' : '#71717a', background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.035)' }}>
+            <ArrowDown className="w-3.5 h-3.5" />
+          </button>
+          <span
+            className="w-7 h-7 inline-flex items-center justify-center rounded-lg cursor-grab active:cursor-grabbing text-zinc-500 transition-colors"
+            style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.035)' }}
+            aria-label={`Drag ${label} to reorder`}
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="w-4 h-4" />
+          </span>
         </span>
       )}
     </div>
@@ -346,6 +362,7 @@ export function CourseTaker({
   const [shareSaving, setShareSaving] = useState<string | null>(null);
   const [shareErrors, setShareErrors] = useState<Record<string, string>>({});
   const [sharePromptCopied, setSharePromptCopied] = useState<string | null>(null);
+  const [codeCopied, setCodeCopied] = useState<string | null>(null);
   // Set when the server has no LinkedIn profile to check a post's author against: the slide asks for
   // it inline rather than dead-ending the student.
   const [needsProfile, setNeedsProfile] = useState<string | null>(null);
@@ -633,6 +650,13 @@ export function CourseTaker({
         return arrayMove(items, oldIdx, newIdx);
       });
     }
+  };
+
+  const moveArrangeItem = (index: number, direction: -1 | 1) => {
+    if (isChecking) return;
+    const target = index + direction;
+    if (target < 0 || target >= arrangeOrder.length) return;
+    setArrangeOrder(items => arrayMove(items, index, target));
   };
 
   // -- Timer --
@@ -2571,7 +2595,7 @@ export function CourseTaker({
     }
     if (questionType === 'image') {
       const idx = currentQuestion.options.indexOf(currentQuestion.correctAnswer);
-      return idx >= 0 ? `Option ${String.fromCharCode(65 + idx)}` : currentQuestion.correctAnswer;
+      return idx >= 0 ? `Option ${idx + 1}` : currentQuestion.correctAnswer;
     }
     return currentQuestion.correctAnswer;
   };
@@ -3658,10 +3682,13 @@ export function CourseTaker({
                     return (
                       <div className="rounded-xl overflow-hidden" style={{ background: isDark ? '#1E1F26' : '#ffffff' }}>
                         <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-4 sm:pb-5" style={{ borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#F2F5FA'}` }}>
-                          <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: accent }}>Downloads</p>
-                          <h1 className="text-xl font-bold leading-snug" style={{ color: isDark ? '#ACB8C5' : '#111' }}>
-                            {(currentQuestion as any).downloadsTitle || 'Downloads'}
-                          </h1>
+                          <div className="flex items-center gap-3">
+                            <span className="inline-flex w-10 h-10 flex-shrink-0 items-center justify-center rounded-xl" style={{ color: accent, background: `${accent}18` }}><Download className="w-5 h-5" /></span>
+                            <div><p className="text-[9px] font-bold uppercase tracking-widest mb-0.5" style={{ color: accent }}>Resources</p>
+                            <h1 className="text-xl font-bold leading-snug" style={{ color: isDark ? '#ACB8C5' : '#111' }}>
+                              {(currentQuestion as any).downloadsTitle || 'Downloads'}
+                            </h1></div>
+                          </div>
                         </div>
                         {(currentQuestion as any).downloadsDescription && (
                           <div className="px-4 sm:px-8 pt-4 pb-2">
@@ -3672,73 +3699,50 @@ export function CourseTaker({
                             />
                           </div>
                         )}
-                        {dlItems.length > 0 && (
-                          <div className="px-4 sm:px-8 pt-4 pb-2 space-y-4">
-                            {dlItems.map((item) => {
-                              const isPdfEmbed = item.type === 'file' && !!item.fileUrl && !!item.pdfPages;
-                              const href = item.type === 'file'
-                                ? (isPdfEmbed ? pdfDownloadUrl(item.fileUrl!) : item.fileUrl)
-                                : item.linkUrl;
-                              return (
-                                <div key={item.id}>
-                                  <div className="flex flex-col items-center text-center px-6 pt-6 pb-7 gap-4">
-                                    {!isPdfEmbed && (
-                                      <img
-                                        src="https://wbbcxctblfoyoboskazr.supabase.co/storage/v1/object/public/form-assets/assignment-resources/file_downloadable.svg"
-                                        alt=""
-                                        className="w-48 h-auto select-none pointer-events-none"
-                                        draggable={false}
-                                      />
-                                    )}
-                                    <div className="space-y-1">
-                                      <h3 className="text-lg font-bold leading-snug" style={{ color: txt }}>
-                                        {item.title || 'Download file'}
-                                      </h3>
-                                      {item.description ? (
-                                        <div
-                                          className={`text-sm leading-relaxed prose max-w-none ${isDark ? '[&_*]:!text-[#A8B5C2] [&_strong]:!text-[#ACB8C5] [&_b]:!text-[#ACB8C5]' : '[&_*]:!text-[#555555]'}`}
-                                          style={{ color: txtMuted }}
-                                          dangerouslySetInnerHTML={{ __html: sanitizeRichText(item.description) }}
-                                        />
-                                      ) : (
-                                        <p className="text-sm" style={{ color: txtMuted }}>
-                                          {item.type === 'file' ? 'Download the file using the link below:' : 'Open the link below:'}
-                                        </p>
-                                      )}
+                        <div className="px-4 sm:px-8 pt-4 pb-2 space-y-3">
+                          {dlItems.length === 0 ? (
+                            <div className="flex items-center gap-3 rounded-2xl px-4 py-4" style={{ background: isDark ? 'rgba(255,255,255,0.035)' : '#f7f7f8', color: txtMuted }}>
+                              <span className="inline-flex w-10 h-10 items-center justify-center rounded-xl" style={{ color: accent, background: `${accent}18` }}><Download className="w-5 h-5" /></span>
+                              <div><p className="text-sm font-semibold" style={{ color: txt }}>Resources coming soon</p><p className="text-xs mt-0.5">Your instructor has not added a file or link yet.</p></div>
+                            </div>
+                          ) : dlItems.map((item) => {
+                            const isPdfEmbed = item.type === 'file' && !!item.fileUrl && !!item.pdfPages;
+                            const href = item.type === 'file' ? (isPdfEmbed ? pdfDownloadUrl(item.fileUrl!) : item.fileUrl) : item.linkUrl;
+                            const extension = item.type === 'link'
+                              ? 'LINK'
+                              : (item.fileName?.split('.').pop()?.toUpperCase() || (isPdfEmbed ? 'PDF' : 'FILE'));
+                            return (
+                              <article key={item.id} className="overflow-hidden rounded-2xl" style={{ background: isDark ? 'rgba(255,255,255,0.035)' : '#f7f7f8', border: `1px solid ${isDark ? 'rgba(255,255,255,0.065)' : 'rgba(0,0,0,0.05)'}` }}>
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4">
+                                  <span className="inline-flex w-11 h-11 flex-shrink-0 items-center justify-center rounded-xl" style={{ color: accent, background: `${accent}18` }}>
+                                    {item.type === 'file' ? <FileText className="w-5 h-5" /> : <Link2 className="w-5 h-5" />}
+                                  </span>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <h3 className="truncate text-[15px] font-bold" style={{ color: txt }}>{item.title || (item.type === 'file' ? 'Download file' : 'Open resource')}</h3>
+                                      <span className="rounded-md px-1.5 py-0.5 text-[8px] font-extrabold tracking-wider" style={{ color: accent, background: `${accent}14` }}>{extension}</span>
                                     </div>
-                                    {isPdfEmbed && item.fileUrl && (
-                                      <div className="w-[calc(100%+3rem)] -mx-6 pt-1">
-                                        <PdfCarousel url={item.fileUrl} pages={item.pdfPages || 1} fileName={item.fileName} accent={accent} isDark={isDark} />
-                                      </div>
-                                    )}
-                                    {item.type === 'file' && !isPdfEmbed && (
-                                      <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl" style={{ background: isDark ? '#1E1F26' : '#ffffff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}` }}>
-                                        <svg className="w-5 h-5 flex-shrink-0" style={{ color: txtMuted }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-                                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" strokeLinecap="round" strokeLinejoin="round" />
-                                          <polyline points="14 2 14 8 20 8" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
-                                        <div className="text-left">
-                                          <p className="text-[10px] font-medium leading-none mb-0.5" style={{ color: txtFaint }}>File Type</p>
-                                          <p className="text-sm font-bold leading-none" style={{ color: txt }}>Document</p>
-                                        </div>
-                                      </div>
-                                    )}
-                                    {href && (
-                                      <a href={href} target="_blank" rel="noopener noreferrer"
-                                        download={item.type === 'file' ? (item.fileName || true) : undefined}
-                                        className="flex items-center justify-center gap-2 px-10 py-3.5 rounded-xl text-sm font-bold transition-all hover:opacity-85 active:scale-[0.97]"
-                                        style={{ background: accent, color: '#fff' }}>
-                                        {item.type === 'file'
-                                          ? <><ArrowDownToLine className="w-4 h-4" strokeWidth={2.5} /> Download</>
-                                          : <><ExternalLink className="w-4 h-4" /> Open Link</>}
-                                      </a>
-                                    )}
+                                    {item.description ? (
+                                      <div className={`mt-1 text-xs leading-relaxed prose prose-sm max-w-none ${isDark ? '[&_*]:!text-[#A8B5C2]' : '[&_*]:!text-[#666]'}`} dangerouslySetInnerHTML={{ __html: sanitizeRichText(item.description) }} />
+                                    ) : <p className="mt-1 text-xs" style={{ color: txtMuted }}>{item.type === 'file' ? 'Ready to download' : 'External learning resource'}</p>}
                                   </div>
+                                  {href ? (
+                                    <a href={href} target="_blank" rel="noopener noreferrer" download={item.type === 'file' ? (item.fileName || true) : undefined}
+                                      className="inline-flex min-h-10 flex-shrink-0 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold transition-all hover:opacity-85 active:scale-[0.97]"
+                                      style={{ background: accent, color: '#fff' }}>
+                                      {item.type === 'file' ? <><ArrowDownToLine className="w-4 h-4" /> Download</> : <><ExternalLink className="w-4 h-4" /> Open</>}
+                                    </a>
+                                  ) : <span className="text-[10px] font-semibold" style={{ color: txtFaint }}>Not available</span>}
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                                {isPdfEmbed && item.fileUrl && (
+                                  <div className="px-3 pb-3 sm:px-4 sm:pb-4">
+                                    <PdfCarousel url={item.fileUrl} pages={item.pdfPages || 1} fileName={item.fileName} accent={accent} isDark={isDark} />
+                                  </div>
+                                )}
+                              </article>
+                            );
+                          })}
+                        </div>
                         <div className="px-4 sm:px-8 pb-5 sm:pb-7 pt-4">
                           <button onClick={handleNext}
                             className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 sm:py-3 rounded-xl text-[14px] font-semibold transition-all active:scale-[0.98]"
@@ -3853,52 +3857,85 @@ export function CourseTaker({
                     }}
                   >
                   <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-5 sm:pb-8">
-                  <div className="flex items-center gap-2 mb-5">
-                    {/* Hint button -- hidden for review types */}
-                    {currentQuestion.hint && !hintsUsed.has(currentQuestion.id) && !isChecking && !REVIEW_TYPES.includes(questionType) && (
+                  {/* Hint button -- hidden for review types */}
+                  {currentQuestion.hint && !hintsUsed.has(currentQuestion.id) && !isChecking && !REVIEW_TYPES.includes(questionType) && (
+                    <div className="flex items-center mb-5">
                       <button
                         onClick={() => {
                           setHintVisible(true);
                           setHintsUsed(prev => new Set(prev).add(currentQuestion.id));
                         }}
-                        className={`text-[10px] font-semibold px-2 py-1 rounded-full border transition-colors ${isDark ? 'border-amber-500/40 text-amber-400 hover:bg-amber-500/10' : 'border-amber-400/50 text-amber-600 hover:bg-amber-50'}`}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-colors"
+                        style={{ color: isDark ? '#fbbf24' : '#a16207', background: isDark ? 'rgba(245,158,11,0.09)' : '#fffbeb' }}
                       >
-                        💡 Hint
+                        <Lightbulb className="w-3.5 h-3.5" /> Hint
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   {/* Hint display */}
                   {hintVisible && currentQuestion.hint && (
                     <motion.div
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className={`mb-4 px-4 py-3 rounded-xl border text-sm ${isDark ? 'bg-amber-500/10 border-amber-500/20 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-700'}`}
+                      className="mb-5 flex items-start gap-3 rounded-xl px-4 py-3 text-sm"
+                      style={{ color: isDark ? '#fcd34d' : '#92400e', background: isDark ? 'rgba(245,158,11,0.09)' : '#fffbeb' }}
                     >
-                      💡 {currentQuestion.hint}
-                      <span className={`ml-2 text-[10px] opacity-60`}>(score ×0.9 if correct)</span>
+                      <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <span className="flex-1 leading-relaxed">{currentQuestion.hint}</span>
+                      <span className="text-[10px] opacity-60 whitespace-nowrap">Score ×0.9</span>
                     </motion.div>
                   )}
 
                   <h2 className={`text-lg sm:text-2xl font-semibold leading-snug mb-5 sm:mb-8 ${textColor}`}>
-                    {currentQuestion.question}
+                    {questionType === 'fill_blank' && currentQuestion.question.includes('___')
+                      ? currentQuestion.question.split('___').map((part: string, partIdx: number, parts: string[]) => (
+                        <span key={`${partIdx}-${part}`}>
+                          {part}
+                          {partIdx < parts.length - 1 && <span className="mx-1 inline-block min-w-20 border-b-2 align-baseline" style={{ borderColor: accent, color: accent }} aria-label="blank">&nbsp;</span>}
+                        </span>
+                      ))
+                      : currentQuestion.question}
                   </h2>
 
 
                   {/* -- Fill in the blank -- */}
                   {questionType === 'fill_blank' && (
-                    <div>
-                      <AnimatedField theme={config.theme || 'forest'} mode={config.mode || 'dark'}>
-                        <input
-                          type="text"
-                          value={fillBlankAnswer}
-                          onChange={e => { if (!isChecking) setFillBlankAnswer(e.target.value); }}
-                          onKeyDown={e => { if (e.key === 'Enter' && !isChecking && fillBlankAnswer.trim()) handleCheck(); }}
-                          placeholder="Type your answer here..."
-                          disabled={isChecking}
-                          className={`w-full bg-transparent border-none outline-none px-4 py-3 text-sm ${isDark ? 'text-[#ACB8C5] placeholder:text-zinc-600' : 'text-[#111111] placeholder:text-zinc-400'} disabled:opacity-60`}
-                        />
-                      </AnimatedField>
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 px-0.5">
+                          <span className="inline-flex w-7 h-7 items-center justify-center rounded-lg" style={{ color: accent, background: `${accent}18` }}>
+                            <PenLine className="w-3.5 h-3.5" />
+                          </span>
+                          <span className="text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: txtMuted }}>Your answer</span>
+                          {isChecking && (
+                            <span className="ml-auto">
+                              {isCorrect ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-rose-500" />}
+                            </span>
+                          )}
+                        </div>
+                        <div
+                          className="rounded-xl overflow-hidden px-4 py-3.5 transition-all focus-within:ring-2"
+                          style={{
+                            background: isDark ? 'rgba(255,255,255,0.07)' : '#f4f5f7',
+                            border: `1.5px solid ${isChecking ? (isCorrect ? '#10b98188' : '#f43f5e88') : (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.10)')}`,
+                            '--tw-ring-color': `${accent}42`,
+                          } as React.CSSProperties}
+                        >
+                          <input
+                            type="text"
+                            value={fillBlankAnswer}
+                            onChange={e => { if (!isChecking) setFillBlankAnswer(e.target.value); }}
+                            onKeyDown={e => { if (e.key === 'Enter' && !isChecking && fillBlankAnswer.trim()) handleCheck(); }}
+                            placeholder="Type your answer here…"
+                            disabled={isChecking}
+                            aria-label="Fill in the blank answer"
+                            autoComplete="off"
+                            className={`w-full bg-transparent border-none outline-none focus-visible:!outline-none focus-visible:!shadow-none px-0 py-0.5 text-base font-semibold caret-current ${isDark ? 'text-[#F1F5F9] placeholder:text-[#7F8996]' : 'text-[#111111] placeholder:text-[#747A84]'} disabled:opacity-70`}
+                            style={{ caretColor: accent, borderRadius: 0 }}
+                          />
+                        </div>
+                      </div>
                       {isChecking && (
                         <motion.div
                           initial={{ opacity: 0, y: 4 }}
@@ -3919,7 +3956,10 @@ export function CourseTaker({
                   {/* -- Arrange in order -- */}
                   {questionType === 'arrange' && (
                     <div>
-                      <p className={`text-xs mb-3 ${mutedColor}`}>Drag to reorder. Put items in the correct sequence.</p>
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <p className={`text-xs ${mutedColor}`}>Put the items in the correct sequence.</p>
+                        <span className="text-[10px] font-semibold whitespace-nowrap" style={{ color: txtFaint }}>Use arrows or drag</span>
+                      </div>
                       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                         <SortableContext items={arrangeOrder} strategy={verticalListSortingStrategy}>
                           <div className="space-y-2">
@@ -3929,9 +3969,11 @@ export function CourseTaker({
                                 id={item}
                                 label={item}
                                 idx={idx}
+                                count={arrangeOrder.length}
                                 accent={accent}
                                 isDark={isDark}
                                 isChecking={isChecking}
+                                onMove={(direction) => moveArrangeItem(idx, direction)}
                               />
                             ))}
                           </div>
@@ -3958,39 +4000,35 @@ export function CourseTaker({
 
                   {/* -- Image options -- */}
                   {questionType === 'image' && (
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       {currentQuestion.options.map((option: string, idx: number) => {
                         const imgSrc = (currentQuestion.optionImages || [])[idx] || '';
                         const isSelected = selectedOption === option;
                         const showCorrect = isChecking && option === currentQuestion.correctAnswer;
                         const showWrong = isChecking && isSelected && !isCorrect;
-                        const borderColor = showCorrect ? '#10b981' : showWrong ? '#f43f5e' : isSelected ? accent : (isDark ? '#3f3f46' : '#e4e4e7');
-                        const borderWidth = (showCorrect || showWrong || isSelected) ? 3 : 2;
+                        const stateColor = showCorrect ? '#10b981' : showWrong ? '#f43f5e' : isSelected ? accent : undefined;
                         return (
                           <button
                             key={idx}
                             disabled={isChecking}
                             onClick={() => { setSelectedOption(option); if (showAnswers === 'per_question' && !isChecking && !answers[currentQuestion.id]) handleCheck(option); }}
-                            className="relative rounded-2xl overflow-hidden transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed group"
-                            style={{ border: `${borderWidth}px solid ${borderColor}` }}
+                            aria-pressed={isSelected}
+                            className="relative rounded-2xl overflow-hidden text-left transition-all duration-200 active:scale-[0.985] disabled:cursor-not-allowed group focus-visible:outline-none focus-visible:ring-2"
+                            style={{
+                              background: isDark ? 'rgba(255,255,255,0.035)' : '#f7f7f8',
+                              border: `${stateColor ? 3 : 1.5}px solid ${stateColor || (isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)')}`,
+                              boxShadow: stateColor ? `0 0 0 3px ${stateColor}16` : 'none',
+                              '--tw-ring-color': `${accent}38`,
+                            } as React.CSSProperties}
                           >
-                            {imgSrc ? (
-                              <img src={imgSrc} alt={`Option ${idx + 1}`} className="w-full h-72 object-cover group-hover:scale-105 transition-transform duration-300" />
-                            ) : (
-                              <div className={`w-full h-72 flex items-center justify-center text-sm ${isDark ? 'bg-zinc-800 text-[#6b7a89]' : 'bg-zinc-100 text-[#888888]'}`}>No image</div>
-                            )}
-                            <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
-                            <div className="absolute bottom-0 inset-x-0 px-3 py-2.5 flex items-center justify-between">
-                              <span
-                                className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 shadow"
-                                style={{ background: showCorrect ? '#10b981' : showWrong ? '#f43f5e' : isSelected ? accent : 'rgba(0,0,0,0.5)' }}
-                              >
-                                {String.fromCharCode(65 + idx)}
-                              </span>
-                              <span className="flex-shrink-0">
-                                {showCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-                                {showWrong && <XCircle className="w-4 h-4 text-rose-400" />}
-                              </span>
+                            <div className="aspect-[16/10] overflow-hidden" style={{ background: isDark ? '#17181e' : '#eef0f3' }}>
+                              {imgSrc ? (
+                                <img src={imgSrc} alt={`Option ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-[1.025] transition-transform duration-300" />
+                              ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-sm" style={{ color: txtFaint }}>
+                                  <ImageIcon className="w-6 h-6" /> No image
+                                </div>
+                              )}
                             </div>
                           </button>
                         );
@@ -4121,21 +4159,38 @@ export function CourseTaker({
 
                   {/* -- Code snippet -- */}
                   {questionType === 'code' && currentQuestion.codeSnippet && (
-                    <div className="mb-8 rounded-2xl overflow-hidden border border-zinc-700/60 shadow-lg">
-                      <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-700/60" style={{ background: '#111827' }}>
-                        <span className="text-[11px] font-mono font-semibold text-[#6b7a89] uppercase tracking-wider">
-                          {currentQuestion.codeLanguage || 'javascript'}
-                        </span>
-                        <div className="flex gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
-                          <span className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
-                          <span className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
+                    <div className="mb-7 rounded-2xl overflow-hidden" style={{
+                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'}`,
+                      background: isDark ? '#0d1117' : '#fbfcfe',
+                      boxShadow: isDark ? 'none' : '0 8px 24px rgba(15,23,42,0.055)',
+                    }}>
+                      <div className="flex items-center justify-between gap-3 px-4 py-2.5" style={{ background: isDark ? '#151a22' : '#f3f5f8', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.07)'}` }}>
+                        <div className="flex items-center gap-3">
+                          <span className="flex items-center gap-1.5" aria-hidden="true">
+                            <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
+                            <span className="relative w-2.5 h-2.5 rounded-full bg-[#28c840]">
+                              <span className="absolute inset-0 rounded-full bg-[#28c840] animate-ping motion-reduce:animate-none opacity-35" />
+                            </span>
+                          </span>
+                          <span className="text-[10px] font-mono font-bold uppercase tracking-[0.14em]" style={{ color: isDark ? '#8b98a7' : '#64748b' }}>
+                            {currentQuestion.codeLanguage || 'javascript'}
+                          </span>
                         </div>
+                        <button type="button" onClick={() => {
+                          navigator.clipboard?.writeText(currentQuestion.codeSnippet || '').then(() => {
+                            setCodeCopied(currentQuestion.id);
+                            setTimeout(() => setCodeCopied(null), 1600);
+                          }).catch(() => {});
+                        }} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-opacity hover:opacity-75" style={{ color: codeCopied === currentQuestion.id ? (isDark ? '#34d399' : '#059669') : (isDark ? '#9ca3af' : '#475569'), background: isDark ? 'rgba(255,255,255,0.05)' : '#ffffff' }}>
+                          {codeCopied === currentQuestion.id ? <><Check className="w-3.5 h-3.5" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy code</>}
+                        </button>
                       </div>
                       <SyntaxHighlighter
                         language={currentQuestion.codeLanguage || 'javascript'}
-                        style={atomOneDark}
-                        customStyle={{ margin: 0, borderRadius: 0, fontSize: '14px', lineHeight: '1.7', padding: '20px 24px', background: '#0d1117' }}
+                        style={isDark ? atomOneDark : atomOneLight}
+                        customStyle={{ margin: 0, borderRadius: 0, fontSize: '14px', lineHeight: '1.7', padding: '20px 24px', background: isDark ? '#0d1117' : '#fbfcfe' }}
+                        lineNumberStyle={{ color: isDark ? '#4b5563' : '#a1aab8', minWidth: '2.5em' }}
                         showLineNumbers
                       >
                         {currentQuestion.codeSnippet}
@@ -4145,52 +4200,36 @@ export function CourseTaker({
 
                   {/* -- Multiple choice (also renders for code type) -- */}
                   {(questionType === 'multiple_choice' || questionType === 'code') && (
-                    <div className="space-y-2.5">
+                    <div className="space-y-2">
                       {currentQuestion.options.map((option: string, idx: number) => {
                         const isSelected = selectedOption === option;
                         const showCorrect = isChecking && option === currentQuestion.correctAnswer;
                         const showWrong = isChecking && isSelected && !isCorrect;
-                        let borderStyle = '';
-                        let bgStyle = '';
-                        let buttonInlineStyle: React.CSSProperties = {};
-                        const numColor: React.CSSProperties = showCorrect
-                          ? { color: '#10b981' }
+                        const stateColor = showCorrect ? '#10b981' : showWrong ? '#f43f5e' : isSelected ? accent : undefined;
+                        const optionBg = showCorrect
+                          ? (isDark ? 'rgba(16,185,129,0.12)' : '#ecfdf5')
                           : showWrong
-                            ? { color: '#f43f5e' }
+                            ? (isDark ? 'rgba(244,63,94,0.12)' : '#fff1f2')
                             : isSelected
-                              ? { color: accent }
-                              : { color: txtFaint };
-                        const borderWidth = (showCorrect || showWrong || isSelected) ? 'border-2' : 'border-[1.5px]';
-                        const optionTextColor = (isSelected || showCorrect || showWrong)
-                          ? textColor
-                          : mutedColor;
-                        if (showCorrect) {
-                          borderStyle = 'border-emerald-500';
-                          bgStyle = 'bg-emerald-500/10';
-                        } else if (showWrong) {
-                          borderStyle = 'border-rose-500';
-                          bgStyle = '';
-                          buttonInlineStyle = { backgroundColor: isDark ? '#662525' : '#fff1f1' };
-                        } else if (isSelected) {
-                          borderStyle = 'border-transparent';
-                          buttonInlineStyle = { borderColor: accent, backgroundColor: `${accent}18` };
-                        } else {
-                          borderStyle = isDark ? 'border-zinc-700/60 hover:border-zinc-600' : 'border-zinc-200 hover:border-zinc-300';
-                          bgStyle = isDark ? 'hover:bg-zinc-800/40' : 'hover:bg-zinc-50';
-                        }
+                              ? `${accent}14`
+                              : (isDark ? 'rgba(255,255,255,0.035)' : '#f7f7f8');
                         return (
                           <button
                             key={idx}
                             disabled={isChecking}
                             onClick={() => { setSelectedOption(option); if (showAnswers === 'per_question' && !isChecking && !answers[currentQuestion.id]) handleCheck(option); }}
-                            style={buttonInlineStyle}
-                            className={`w-full text-left px-5 py-4 rounded-2xl ${borderWidth} transition-all duration-150 flex items-center gap-3 ${borderStyle} ${bgStyle} ${optionTextColor}`}
+                            aria-pressed={isSelected}
+                            style={{ background: optionBg, border: `1.5px solid ${stateColor ? `${stateColor}88` : (isDark ? 'rgba(255,255,255,0.055)' : 'rgba(0,0,0,0.045)')}`, color: (isSelected || showCorrect || showWrong) ? txt : txtMuted, '--tw-ring-color': `${accent}38` } as React.CSSProperties}
+                            className="group w-full text-left px-3.5 py-3.5 rounded-2xl transition-all duration-150 flex items-center gap-3 hover:-translate-y-px disabled:cursor-not-allowed disabled:hover:translate-y-0 focus-visible:outline-none focus-visible:ring-2"
                           >
-                            <span className="flex-1 text-base font-medium leading-snug">{option}</span>
-                            <span className="flex-shrink-0 flex items-center gap-2">
+                            <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center" style={{ color: stateColor || txtFaint }}>
                               {showCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                               {showWrong && <XCircle className="w-4 h-4 text-rose-500" />}
-                              <span className="text-sm font-semibold tabular-nums" style={numColor}>{idx + 1}</span>
+                              {!showCorrect && !showWrong && <span className="w-3.5 h-3.5 rounded-full border-2" style={{ borderColor: isSelected ? accent : (isDark ? '#52525b' : '#d4d4d8'), background: isSelected ? accent : 'transparent', boxShadow: isSelected ? `inset 0 0 0 3px ${isDark ? '#24252b' : '#fff'}` : 'none' }} />}
+                            </span>
+                            <span className="flex-1 text-[15px] font-medium leading-snug">{option}</span>
+                            <span className="min-w-4 flex-shrink-0 text-right text-[12px] font-bold tabular-nums" style={{ color: stateColor || txtFaint }}>
+                              {idx + 1}
                             </span>
                           </button>
                         );
@@ -4224,25 +4263,20 @@ export function CourseTaker({
                     }
 
                     const hasLesson = (currentQuestion?.lesson?.doc || currentQuestion?.lesson?.body || currentQuestion?.lesson?.videoUrl || currentQuestion?.lesson?.imageUrl || currentQuestion?.lesson?.pdfUrl || currentQuestion?.lesson?.audioUrl) && (config as any).lessonTiming !== 'before';
-                    const footerBg = isChecking
-                      ? (isCorrect ? (isDark ? '#1f5c42' : '#f0fdf4') : (isDark ? '#662525' : '#fff1f1'))
-                      : (isDark ? '#1E1F26' : '#ffffff');
                     return (
-                      <div className="px-4 sm:px-8 py-3 sm:py-4" style={{ background: footerBg }}>
+                      <div className="px-4 sm:px-8 py-3 sm:py-4" style={{ background: isDark ? '#1E1F26' : '#ffffff', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.055)' : 'rgba(0,0,0,0.045)'}` }}>
                         {isChecking && currentQuestion?.explanation && (
-                          <div className={`mb-3 text-sm leading-relaxed ${isDark ? 'text-white' : mutedColor}`}>
-                            <span className="font-semibold text-[11px] uppercase tracking-wider opacity-50 mr-2">Explanation</span>
-                            {currentQuestion.explanation}
+                          <div className="mb-3 rounded-xl px-3.5 py-3 text-sm leading-relaxed" style={{ color: txtMuted, background: isDark ? 'rgba(255,255,255,0.035)' : '#f7f7f8' }}>
+                            <span className="block mb-1 font-bold text-[10px] uppercase tracking-[0.12em]" style={{ color: txtFaint }}>Explanation</span>
+                            <span>{currentQuestion.explanation}</span>
                           </div>
                         )}
-                        <div className="flex items-center justify-between gap-2 sm:gap-4">
+                        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
                           {isChecking ? (
                             <div
-                              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm flex-shrink-0 border-2 ${isCorrect ? 'border-emerald-500' : 'border-rose-500'}`}
+                              className="flex items-center gap-2 px-3 py-2 rounded-xl font-semibold text-sm flex-shrink-0"
                               style={{
-                                background: isCorrect
-                                  ? '#ffffff'
-                                  : (isDark ? '#1e1e1e' : '#fff1f1'),
+                                background: isCorrect ? (isDark ? 'rgba(16,185,129,0.10)' : '#ecfdf5') : (isDark ? 'rgba(244,63,94,0.10)' : '#fff1f2'),
                                 color: isCorrect
                                   ? (isDark ? '#34d399' : '#059669')
                                   : (isDark ? '#fca5a5' : '#dc2626'),
@@ -4251,7 +4285,7 @@ export function CourseTaker({
                               {isCorrect ? 'Correct!' : 'Incorrect!'}
                             </div>
                           ) : null}
-                          <div className="flex items-center gap-2 sm:gap-3">
+                          <div className="flex items-center justify-end gap-2 sm:gap-3 sm:ml-auto">
                             {showAnswers === 'per_question' ? (
                               isChecking ? (
                                 <>
