@@ -5,11 +5,12 @@ import { safeEmbedUrl, isHtmlEmbedUrl } from '@/lib/safe-embed-url';
 import { useTheme } from '@/components/ThemeProvider';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Loader2, Save, Check, Plus, Trash2, Image as ImageIcon, Sun, Moon,
+  Loader2, Save, Check, Plus, Trash2, Image as ImageIcon, Images, Sun, Moon,
   X, MapPin, ArrowUpRight, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Sparkles,
   Building2, GripVertical, BookOpen, Pencil, Monitor, Smartphone, RotateCcw, ExternalLink, Video, Search,
   HelpCircle, CalendarDays, ClipboardList, Share2, CheckCircle2, Zap, Settings, Upload, Download, Link2, FileText,
   Lock, LockOpen, Users, Music, FileCode,
+  ArrowUp, ArrowDown, PenLine,
 } from 'lucide-react';
 import { LinkedInIcon } from '@/components/LinkedInIcon';
 import type { ThemeColor, ThemeMode } from '@/lib/theme-types';
@@ -511,6 +512,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
   const [saved, setSaved] = useState(false);
   const [showCoverLibrary, setShowCoverLibrary] = useState(false);
   const [lessonImageQId, setLessonImageQId] = useState<string | null>(null);
+  const [optionImageLibrary, setOptionImageLibrary] = useState<{ qId: string; optionIdx: number } | null>(null);
   const [customSlug, setCustomSlug] = useState('');
   const [activeSection, setActiveSection] = useState<string>('info');
   const [secDir, setSecDir] = useState(1); // carousel slide direction: 1 = forward, -1 = back
@@ -1167,7 +1169,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
       multiple_choice:     { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A' },
       fill_blank:          { options: [], correctAnswer: '' },
       arrange:             { options: ['Step 1', 'Step 2', 'Step 3', 'Step 4'], correctAnswer: 'Step 1|||Step 2|||Step 3|||Step 4' },
-      image:               { options: ['0', '1', '2', '3'], correctAnswer: '0', optionImages: ['', '', '', ''] },
+      image:               { options: ['0', '1'], correctAnswer: '0', optionImages: ['', ''] },
       image_choice:        { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A', imageUrl: '' },
       code:                { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A', codeSnippet: '', codeLanguage: 'javascript' },
       code_review:         { options: [], correctAnswer: '', rubric: ['Code runs without errors', 'Follows naming conventions', 'Logic is correct'], reviewLanguage: 'javascript', minScore: 70 },
@@ -1228,7 +1230,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
       multiple_choice:     { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A' },
       fill_blank:          { options: [], correctAnswer: '' },
       arrange:             { options: ['Step 1', 'Step 2', 'Step 3', 'Step 4'], correctAnswer: 'Step 1|||Step 2|||Step 3|||Step 4' },
-      image:               { options: ['0', '1', '2', '3'], correctAnswer: '0', optionImages: ['', '', '', ''] },
+      image:               { options: ['0', '1'], correctAnswer: '0', optionImages: ['', ''] },
       image_choice:        { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A', imageUrl: '' },
       code:                { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A', codeSnippet: '', codeLanguage: 'javascript' },
       code_review:         { options: [], correctAnswer: '', rubric: ['Code runs without errors', 'Follows naming conventions', 'Logic is correct'], reviewLanguage: 'javascript', minScore: 70 },
@@ -1276,30 +1278,13 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     }
   };
 
-  const handleQuestionImageUpload = async (qId: string, e: React.ChangeEvent<HTMLInputElement>, optionIdx?: number) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { showToast('Image too large. Maximum size is 5MB.'); return; }
-    e.target.value = '';
-    if (optionIdx === undefined) return;
-
-    const applyUrl = (src: string) => {
-      const q = formConfig?.questions?.find(q => q.id === qId);
-      if (!q) return;
-      const newImages = [...(q.optionImages || q.options.map(() => ''))];
-      deleteUploadedFile(newImages[optionIdx]);   // remove the image being replaced
-      newImages[optionIdx] = src;
-      handleUpdateQuestion(qId, { optionImages: newImages });
-    };
-
-    try {
-      const publicUrl = await uploadToCloudinary(file, 'course-options');
-      applyUrl(publicUrl);
-    } catch {
-      const reader = new FileReader();
-      reader.onload = ev => applyUrl(ev.target?.result as string);
-      reader.readAsDataURL(file);
-    }
+  const handleQuestionOptionImageSelect = (qId: string, optionIdx: number, src: string) => {
+    const q = formConfig?.questions?.find(question => question.id === qId);
+    if (!q) return;
+    const newImages = [...(q.optionImages || q.options.map(() => ''))];
+    if (newImages[optionIdx] && newImages[optionIdx] !== src) deleteUploadedFile(newImages[optionIdx]);
+    newImages[optionIdx] = src;
+    handleUpdateQuestion(qId, { optionImages: newImages });
   };
 
   const handleRemoveQuestion = (id: string) => {
@@ -2662,13 +2647,13 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                         <React.Fragment key={q.id}>
                         <SortableQuestionShell id={q.id}>
                           {({ dragHandle }) => (
-                        <div className="rounded-xl overflow-hidden" style={{ background: FE.card, border: `1px solid #f59e0b40`, borderLeft: '3px solid #f59e0b' }}>
+                        <div className="rounded-xl overflow-hidden" style={{ background: FE.card, border: `1px solid ${FE.cardBorder}` }}>
                           <div className="flex items-center gap-2 px-3.5 py-2.5" style={{ borderBottom: isExpanded ? `1px solid ${FE.divider}` : 'none' }}>
                             {dragHandle}
-                            <button type="button" onClick={() => toggleQuestion(q.id)} className="flex-1 text-left">
-                              <span className="text-[10px] font-bold tracking-widest uppercase flex items-center gap-1.5" style={{ color: '#f59e0b' }}>
-                                <Download className="w-3 h-3" /> {q.downloadsTitle || 'Downloads'}
-                              </span>
+                            <span className="w-8 h-8 inline-flex flex-shrink-0 items-center justify-center rounded-lg" style={{ color: accentColor, background: `${accentColor}15` }}><Download className="w-4 h-4" /></span>
+                            <button type="button" onClick={() => toggleQuestion(q.id)} className="flex-1 min-w-0 text-left">
+                              <span className="text-xs font-semibold truncate block" style={{ color: FE.text }}>{q.downloadsTitle || 'Downloads'}</span>
+                              <span className="text-[9px]" style={{ color: FE.faint }}>{dlItems.length} resource{dlItems.length === 1 ? '' : 's'}</span>
                             </button>
                             <LockToggle
                               locked={!!q.lockUntilPrevious}
@@ -2697,12 +2682,14 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               placeholder="Describe what students will find here..."
                               enableAiAssist
                             />
-                            {dlItems.length > 0 && (
+                            {dlItems.length > 0 ? (
                               <div className="space-y-2 pt-1">
-                                {dlItems.map((item) => (
-                                  <div key={item.id} className="rounded-lg p-3 space-y-2.5" style={{ background: FE.groupBg, border: `1px solid ${FE.inputBorder}` }}>
+                                {dlItems.map((item, itemIdx) => (
+                                  <div key={item.id} className="rounded-xl p-3 space-y-2.5" style={{ background: FE.groupBg, border: `1px solid ${FE.inputBorder}` }}>
                                     <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-1">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <span className="w-7 h-7 inline-flex flex-shrink-0 items-center justify-center rounded-lg text-[10px] font-bold" style={{ color: accentColor, background: `${accentColor}15` }}>{itemIdx + 1}</span>
+                                        <div className="flex items-center gap-1">
                                         {(['file', 'link'] as const).map(t => (
                                           <button key={t} type="button"
                                             onClick={() => updateItems(dlItems.map(it => it.id === item.id ? { ...it, type: t } : it))}
@@ -2712,10 +2699,13 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                             {t === 'file' ? <span className="flex items-center gap-1"><Upload className="w-2.5 h-2.5" />File</span> : <span className="flex items-center gap-1"><Link2 className="w-2.5 h-2.5" />Link</span>}
                                           </button>
                                         ))}
+                                        </div>
                                       </div>
-                                      <button type="button" onClick={() => updateItems(dlItems.filter(it => it.id !== item.id))} className="p-0.5 rounded transition-colors hover:bg-red-500/10">
-                                        <X className="w-3 h-3 text-red-400" />
-                                      </button>
+                                      <div className="flex items-center gap-1">
+                                        <button type="button" disabled={itemIdx === 0} aria-label={`Move resource ${itemIdx + 1} up`} onClick={() => updateItems(arrayMove(dlItems, itemIdx, itemIdx - 1))} className="w-7 h-7 inline-flex items-center justify-center rounded-lg disabled:opacity-20" style={{ color: FE.muted, background: FE.pill }}><ArrowUp className="w-3.5 h-3.5" /></button>
+                                        <button type="button" disabled={itemIdx === dlItems.length - 1} aria-label={`Move resource ${itemIdx + 1} down`} onClick={() => updateItems(arrayMove(dlItems, itemIdx, itemIdx + 1))} className="w-7 h-7 inline-flex items-center justify-center rounded-lg disabled:opacity-20" style={{ color: FE.muted, background: FE.pill }}><ArrowDown className="w-3.5 h-3.5" /></button>
+                                        <button type="button" aria-label={`Remove resource ${itemIdx + 1}`} onClick={() => updateItems(dlItems.filter(it => it.id !== item.id))} className="w-7 h-7 inline-flex items-center justify-center rounded-lg transition-colors hover:bg-red-500/10"><X className="w-3.5 h-3.5 text-red-400" /></button>
+                                      </div>
                                     </div>
                                     <input
                                       value={item.title}
@@ -2732,8 +2722,8 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                     />
                                     {item.type === 'file' ? (
                                       item.fileUrl ? (
-                                        <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg" style={{ background: '#f59e0b15', border: '1px solid #f59e0b30' }}>
-                                          <FileText className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#f59e0b' }} />
+                                        <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg" style={{ background: `${accentColor}10`, border: `1px solid ${accentColor}30` }}>
+                                          <FileText className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accentColor }} />
                                           <span className="text-xs flex-1 truncate" style={{ color: FE.text }}>{item.fileName || 'Uploaded file'}{item.pdfPages ? ` · inline preview (${item.pdfPages}p)` : ''}</span>
                                           <button type="button" onClick={() => { deleteUploadedFile(item.fileUrl); updateItems(dlItems.map(it => it.id === item.id ? { ...it, fileUrl: '', fileName: '', pdfPages: undefined } : it)); }} className="text-red-400 text-[10px] font-medium hover:opacity-70 flex-shrink-0">Remove</button>
                                         </div>
@@ -2763,8 +2753,8 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                               }
                                             } catch (err: any) { showToast(err?.message || 'Upload failed. Please try again.'); }
                                           }} />
-                                          <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-60 cursor-pointer" style={{ border: `1.5px dashed ${FE.inputBorder}`, color: FE.faint }}>
-                                            <Upload className="w-3.5 h-3.5" /> Click to upload file (max 20 MB)
+                                          <div className="w-full min-h-12 flex items-center justify-center gap-2 rounded-xl text-xs transition-colors hover:opacity-70 cursor-pointer" style={{ border: `1px dashed ${accentColor}55`, color: FE.muted, background: `${accentColor}08` }}>
+                                            <span className="w-7 h-7 inline-flex items-center justify-center rounded-lg" style={{ color: accentColor, background: `${accentColor}15` }}><Upload className="w-3.5 h-3.5" /></span> Upload file <span className="text-[9px]" style={{ color: FE.faint }}>Max 20 MB</span>
                                           </div>
                                         </label>
                                       )
@@ -2780,11 +2770,16 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                   </div>
                                 ))}
                               </div>
+                            ) : (
+                              <div className="flex items-center gap-3 rounded-xl px-3 py-3" style={{ background: FE.groupBg, border: `1px dashed ${FE.inputBorder}` }}>
+                                <span className="w-9 h-9 inline-flex items-center justify-center rounded-lg" style={{ color: accentColor, background: `${accentColor}15` }}><Download className="w-4 h-4" /></span>
+                                <div><p className="text-xs font-semibold" style={{ color: FE.text }}>Add the first resource</p><p className="text-[9px]" style={{ color: FE.faint }}>Upload a file or link to an external resource.</p></div>
+                              </div>
                             )}
                             <div className="flex gap-2 pt-1">
                               <button type="button" onClick={() => updateItems([...dlItems, { id: Math.random().toString(36).substring(7), title: '', type: 'file' }])}
                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all hover:opacity-80"
-                                style={{ background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}>
+                                style={{ background: `${accentColor}12`, color: accentColor }}>
                                 <Upload className="w-3 h-3" /> Add File
                               </button>
                               <button type="button" onClick={() => updateItems([...dlItems, { id: Math.random().toString(36).substring(7), title: '', type: 'link' }])}
@@ -2903,70 +2898,93 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                             <label className={labelCls} style={labelStyle}>Question</label>
                             <input type="text" value={q.question} onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })} className={inputCls} style={inputStyle}
                               placeholder={qType === 'fill_blank' ? 'e.g. The capital of France is ___' : 'Enter your question...'} />
-                            {qType === 'fill_blank' && <p className="text-[10px] mt-1" style={{ color: FE.faint }}>Tip: use ___ to mark where the blank is.</p>}
+                            {qType === 'fill_blank' && (
+                              <div className="mt-2 rounded-lg px-3 py-2" style={{ background: FE.groupBg, border: `1px solid ${FE.inputBorder}` }}>
+                                <span className="text-[8px] font-bold uppercase tracking-wider" style={{ color: FE.faint }}>Learner preview</span>
+                                <p className="mt-1 text-xs font-medium leading-relaxed" style={{ color: FE.text }}>
+                                  {q.question.includes('___') ? q.question.split('___').map((part, partIdx, parts) => <React.Fragment key={`${partIdx}-${part}`}>{part}{partIdx < parts.length - 1 && <span className="mx-1 inline-block min-w-12 border-b-2" style={{ borderColor: accentColor }}>&nbsp;</span>}</React.Fragment>) : 'Use ___ in the question to place the blank.'}
+                                </p>
+                              </div>
+                            )}
                           </div>
                           )}
 
                           {qType === 'code' && (
-                            <div className="space-y-2">
-                              <label className={labelCls} style={labelStyle}>Code Snippet</label>
-                              <select
-                                value={q.codeLanguage || 'javascript'}
-                                onChange={e => handleUpdateQuestion(q.id, { codeLanguage: e.target.value })}
-                                className={`${inputCls} py-1.5`}
-                                style={inputStyle}
-                              >
-                                {['javascript', 'python', 'typescript', 'java', 'c', 'cpp', 'go', 'rust', 'sql'].map(lang => (
-                                  <option key={lang} value={lang}>{lang}</option>
-                                ))}
-                              </select>
+                            <div className="rounded-xl overflow-hidden" style={{ background: FE.card, border: `1px solid ${FE.inputBorder}`, boxShadow: FE === FE_LIGHT ? '0 6px 18px rgba(15,23,42,0.045)' : 'none' }}>
+                              <div className="flex items-center justify-between gap-3 px-3 py-2" style={{ background: FE.groupBg, borderBottom: `1px solid ${FE.divider}` }}>
+                                <div className="flex items-center gap-2.5">
+                                  <span className="flex items-center gap-1.5" aria-hidden="true">
+                                    <span className="w-2 h-2 rounded-full bg-[#ff5f57]" />
+                                    <span className="w-2 h-2 rounded-full bg-[#febc2e]" />
+                                    <span className="relative w-2 h-2 rounded-full bg-[#28c840]"><span className="absolute inset-0 rounded-full bg-[#28c840] animate-ping motion-reduce:animate-none opacity-35" /></span>
+                                  </span>
+                                  <span className="text-[9px] font-bold uppercase tracking-[0.14em]" style={{ color: FE.muted }}>Code snippet</span>
+                                </div>
+                                <select value={q.codeLanguage || 'javascript'} onChange={e => handleUpdateQuestion(q.id, { codeLanguage: e.target.value })}
+                                  className="rounded-md border-0 px-2 py-1 text-[10px] font-mono outline-none" style={{ background: FE.input, color: FE.text }}>
+                                  {['javascript', 'python', 'typescript', 'java', 'c', 'cpp', 'go', 'rust', 'sql'].map(lang => <option key={lang} value={lang}>{lang}</option>)}
+                                </select>
+                              </div>
                               <AiTextarea
                                 value={q.codeSnippet || ''}
                                 onValueChange={value => handleUpdateQuestion(q.id, { codeSnippet: value })}
-                                className={`${inputCls} min-h-[120px] resize-y font-mono text-xs`}
-                                style={inputStyle}
+                                className="min-h-[150px] w-full resize-y border-0 bg-transparent px-4 py-3 font-mono text-xs leading-relaxed outline-none placeholder:text-zinc-500"
+                                style={{ color: FE.text }}
                                 placeholder="Paste your code snippet here..."
                               />
                             </div>
                           )}
 
                           {qType === 'image' && (
-                            <div className="space-y-2">
-                              <label className={labelCls} style={labelStyle}>Image Options <span style={{ color: FE.faint }}>(● = correct)</span></label>
+                            <div className="space-y-2.5">
+                              <div className="flex items-center justify-between gap-3">
+                                <label className={labelCls} style={labelStyle}>Image options</label>
+                                <span className="text-[9px] font-semibold" style={{ color: FE.faint }}>Choose the correct image</span>
+                              </div>
                               <div className="grid grid-cols-2 gap-2">
                                 {q.options.map((opt, optIdx) => {
                                   const imgSrc = (q.optionImages || [])[optIdx] || '';
+                                  const isCorrectOption = q.correctAnswer === opt;
                                   return (
-                                    <div key={optIdx} className="relative rounded-lg overflow-hidden transition-colors" style={{ border: `2px solid ${q.correctAnswer === opt ? accentColor : FE.inputBorder}` }}>
+                                    <div key={optIdx} className="relative rounded-xl overflow-hidden transition-colors" style={{ background: FE.groupBg, border: `1.5px solid ${isCorrectOption ? `${accentColor}88` : FE.inputBorder}`, boxShadow: isCorrectOption ? `0 0 0 2px ${accentColor}12` : 'none' }}>
                                       {imgSrc ? (
-                                        <div className="relative group">
-                                          <img src={imgSrc} alt="" className="w-full h-20 object-cover" />
-                                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <div className="relative group aspect-[16/10] overflow-hidden">
+                                          <img src={imgSrc} alt={`Option ${optIdx + 1}`} className="w-full h-full object-cover" />
+                                          <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                                            <button type="button" onClick={() => setOptionImageLibrary({ qId: q.id, optionIdx: optIdx })}
+                                              className="rounded-lg bg-white/90 px-2.5 py-1.5 text-[10px] font-semibold flex items-center gap-1" style={{ color: '#111' }}>
+                                              <Images className="w-3 h-3" /> Change
+                                            </button>
                                             <button
+                                              type="button"
                                               onClick={() => {
                                                 const newImages = [...(q.optionImages || q.options.map(() => ''))];
                                                 newImages[optIdx] = '';
                                                 handleUpdateQuestion(q.id, { optionImages: newImages });
                                               }}
-                                              className="text-red-400 text-[10px] font-medium flex items-center gap-1"
+                                              className="rounded-lg bg-black/40 px-2.5 py-1.5 text-red-300 text-[10px] font-semibold flex items-center gap-1"
                                             >
                                               <Trash2 className="w-3 h-3" /> Remove
                                             </button>
                                           </div>
                                         </div>
                                       ) : (
-                                        <label className="block cursor-pointer">
-                                          <input type="file" accept="image/*" className="hidden" onChange={e => handleQuestionImageUpload(q.id, e, optIdx)} />
-                                          <div className="w-full h-20 flex items-center justify-center gap-1 text-[10px] transition-colors hover:opacity-60" style={{ color: FE.faint }}>
-                                            <ImageIcon className="w-3 h-3" /> Upload
+                                        <button type="button" className="block w-full cursor-pointer" onClick={() => setOptionImageLibrary({ qId: q.id, optionIdx: optIdx })}>
+                                          <div className="aspect-[16/10] w-full flex flex-col items-center justify-center gap-1.5 text-[10px] font-semibold transition-colors hover:opacity-70" style={{ color: FE.faint }}>
+                                            <span className="w-8 h-8 rounded-lg inline-flex items-center justify-center" style={{ color: accentColor, background: `${accentColor}14` }}><Images className="w-4 h-4" /></span>
+                                            Choose image
+                                            <span className="text-[8px] font-medium" style={{ color: FE.faint }}>Library · Pexels · Upload</span>
                                           </div>
-                                        </label>
+                                        </button>
                                       )}
-                                      <div className="flex items-center gap-1.5 px-2 py-1.5" style={{ borderTop: `1px solid ${FE.divider}` }}>
-                                        <input type="radio" name={`correct-${q.id}`} checked={q.correctAnswer === opt}
-                                          onChange={() => handleUpdateQuestion(q.id, { correctAnswer: opt })}
-                                          className="w-3 h-3 flex-shrink-0" style={{ accentColor: accentColor }} />
-                                        <span className="text-[10px]" style={{ color: FE.faint }}>Option {optIdx + 1}</span>
+                                      <div className="flex items-center gap-2 px-2 py-2" style={{ borderTop: `1px solid ${FE.divider}` }}>
+                                        <button type="button" onClick={() => handleUpdateQuestion(q.id, { correctAnswer: opt })}
+                                          aria-label={`Mark image option ${optIdx + 1} as correct`} aria-pressed={isCorrectOption}
+                                          className="w-7 h-7 flex-shrink-0 inline-flex items-center justify-center rounded-lg text-[10px] font-bold"
+                                          style={{ color: isCorrectOption ? '#fff' : FE.faint, background: isCorrectOption ? accentColor : FE.pill }}>
+                                          {isCorrectOption ? <Check className="w-3.5 h-3.5" /> : optIdx + 1}
+                                        </button>
+                                        <span className="text-[10px] font-semibold" style={{ color: isCorrectOption ? FE.text : FE.faint }}>Option {optIdx + 1}</span>
                                         {q.options.length > 2 && (
                                           <button type="button" onClick={() => {
                                             deleteUploadedFile((q.optionImages || [])[optIdx]);
@@ -2984,25 +3002,40 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                   );
                                 })}
                               </div>
+                              {optionImageLibrary?.qId === q.id && (
+                                <ImageLibrary
+                                  uploadFolder="course-options"
+                                  initialFolder="course-options"
+                                  onSelect={url => handleQuestionOptionImageSelect(optionImageLibrary.qId, optionImageLibrary.optionIdx, url)}
+                                  onClose={() => setOptionImageLibrary(null)}
+                                />
+                              )}
                               <button type="button" onClick={() => {
                                 const newIdx = String(q.options.length);
                                 const newOpts = [...q.options, newIdx];
                                 const newImages = [...(q.optionImages || q.options.map(() => '')), ''];
                                 handleUpdateQuestion(q.id, { options: newOpts, optionImages: newImages });
-                              }} className="text-xs transition-colors flex items-center gap-1 mt-1 hover:opacity-60" style={{ color: FE.muted }}>
+                              }} className="text-xs transition-colors inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 hover:opacity-70" style={{ color: FE.muted, background: FE.pill }}>
                                 <Plus className="w-3 h-3" /> Add option
                               </button>
                             </div>
                           )}
 
                           {(qType === 'multiple_choice' || qType === 'code') && (
-                            <div className="space-y-1.5">
-                              <label className={labelCls} style={labelStyle}>Options <span style={{ color: FE.faint }}>(● = correct)</span></label>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <label className={labelCls} style={labelStyle}>Answer options</label>
+                                <span className="text-[9px] font-semibold" style={{ color: FE.faint }}>Select the correct answer</span>
+                              </div>
                               {q.options.map((opt, optIdx) => (
-                                <div key={optIdx} className="flex items-center gap-2">
-                                  <input type="radio" name={`correct-${q.id}`} checked={q.correctAnswer === opt}
-                                    onChange={() => handleUpdateQuestion(q.id, { correctAnswer: opt })}
-                                    className="w-3.5 h-3.5 flex-shrink-0" style={{ accentColor: accentColor }} />
+                                <div key={optIdx} className="flex items-center gap-2 rounded-xl px-2.5 py-2 transition-colors"
+                                  style={{ background: q.correctAnswer === opt ? `${accentColor}10` : FE.groupBg, border: `1px solid ${q.correctAnswer === opt ? `${accentColor}55` : FE.inputBorder}` }}>
+                                  <button type="button" onClick={() => handleUpdateQuestion(q.id, { correctAnswer: opt })}
+                                    aria-label={`Mark option ${optIdx + 1} as correct`} aria-pressed={q.correctAnswer === opt}
+                                    className="w-7 h-7 flex-shrink-0 inline-flex items-center justify-center rounded-lg text-[10px] font-bold transition-all"
+                                    style={{ color: q.correctAnswer === opt ? '#fff' : FE.faint, background: q.correctAnswer === opt ? accentColor : FE.pill }}>
+                                    {q.correctAnswer === opt ? <Check className="w-3.5 h-3.5" /> : optIdx + 1}
+                                  </button>
                                   <input type="text" value={opt}
                                     onChange={e => {
                                       const newOpts = [...q.options]; newOpts[optIdx] = e.target.value;
@@ -3010,7 +3043,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                       if (q.correctAnswer === opt) u.correctAnswer = e.target.value;
                                       handleUpdateQuestion(q.id, u);
                                     }}
-                                    className={`${inputCls} py-1.5 flex-1`} style={inputStyle} />
+                                    className={`${inputCls} py-1.5 flex-1`} style={{ ...inputStyle, background: 'transparent', border: 'none', paddingLeft: 2 }} />
                                   {q.options.length > 2 && (
                                     <button type="button" onClick={() => {
                                       const newOpts = q.options.filter((_, i) => i !== optIdx);
@@ -3026,34 +3059,56 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               <button type="button" onClick={() => {
                                 const newOpts = [...q.options, `Option ${q.options.length + 1}`];
                                 handleUpdateQuestion(q.id, { options: newOpts });
-                              }} className="text-xs transition-colors flex items-center gap-1 mt-1 hover:opacity-60" style={{ color: FE.muted }}>
-                                <Plus className="w-3 h-3" /> Add option
+                              }} className="text-xs transition-colors inline-flex items-center gap-1.5 mt-1 rounded-lg px-2.5 py-1.5 hover:opacity-70" style={{ color: FE.muted, background: FE.pill }}>
+                                <Plus className="w-3 h-3" /> Add answer option
                               </button>
                             </div>
                           )}
 
                           {qType === 'fill_blank' && (
-                            <div>
-                              <label className={labelCls} style={labelStyle}>Correct answer</label>
+                            <div className="rounded-xl p-3 space-y-2.5" style={{ background: FE.groupBg, border: `1px solid ${FE.inputBorder}` }}>
+                              <div className="flex items-center gap-2">
+                                <span className="w-8 h-8 inline-flex items-center justify-center rounded-lg" style={{ color: accentColor, background: `${accentColor}16` }}><PenLine className="w-4 h-4" /></span>
+                                <div><p className="text-xs font-semibold" style={{ color: FE.text }}>Accepted answers</p><p className="text-[9px]" style={{ color: FE.faint }}>Learners can enter any answer separated by |</p></div>
+                              </div>
                               <input type="text" value={q.correctAnswer}
                                 onChange={e => handleUpdateQuestion(q.id, { correctAnswer: e.target.value })}
                                 className={inputCls} style={inputStyle} placeholder="e.g. Paris" />
-                              <p className="text-[10px] mt-1" style={{ color: FE.faint }}>Separate multiple accepted answers with | (e.g. Paris|paris|PARIS)</p>
+                              {q.correctAnswer.trim() && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {q.correctAnswer.split('|').map(answer => answer.trim()).filter(Boolean).map((answer, answerIdx) => (
+                                    <span key={`${answer}-${answerIdx}`} className="rounded-md px-2 py-1 text-[9px] font-semibold" style={{ color: accentColor, background: `${accentColor}12` }}>{answer}</span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           )}
 
                           {qType === 'arrange' && (
-                            <div className="space-y-1.5">
-                              <label className={labelCls} style={labelStyle}>Items <span style={{ color: FE.faint }}>(top = first in correct order)</span></label>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <label className={labelCls} style={labelStyle}>Correct sequence</label>
+                                <span className="text-[9px] font-semibold" style={{ color: FE.faint }}>Top item appears first</span>
+                              </div>
                               {q.options.map((item, itemIdx) => (
-                                <div key={itemIdx} className="flex items-center gap-2">
-                                  <span className="text-[10px] font-mono w-4 flex-shrink-0 text-right" style={{ color: FE.faint }}>{itemIdx + 1}</span>
+                                <div key={itemIdx} className="flex items-center gap-2 rounded-xl px-2.5 py-2" style={{ background: FE.groupBg, border: `1px solid ${FE.inputBorder}` }}>
+                                  <span className="w-7 h-7 inline-flex flex-shrink-0 items-center justify-center rounded-lg text-[10px] font-bold" style={{ color: accentColor, background: `${accentColor}15` }}>{itemIdx + 1}</span>
                                   <input type="text" value={item}
                                     onChange={e => {
                                       const newOpts = [...q.options]; newOpts[itemIdx] = e.target.value;
                                       handleUpdateQuestion(q.id, { options: newOpts, correctAnswer: newOpts.join('|||') });
                                     }}
-                                    className={`${inputCls} py-1.5 flex-1`} style={inputStyle} />
+                                    className={`${inputCls} py-1.5 flex-1`} style={{ ...inputStyle, background: 'transparent', border: 'none', paddingLeft: 2 }} />
+                                  <span className="flex items-center gap-1">
+                                    <button type="button" disabled={itemIdx === 0} aria-label={`Move ${item || `item ${itemIdx + 1}`} up`} onClick={() => {
+                                      const newOpts = [...q.options]; [newOpts[itemIdx - 1], newOpts[itemIdx]] = [newOpts[itemIdx], newOpts[itemIdx - 1]];
+                                      handleUpdateQuestion(q.id, { options: newOpts, correctAnswer: newOpts.join('|||') });
+                                    }} className="w-7 h-7 inline-flex items-center justify-center rounded-lg disabled:opacity-20" style={{ color: FE.muted, background: FE.pill }}><ArrowUp className="w-3.5 h-3.5" /></button>
+                                    <button type="button" disabled={itemIdx === q.options.length - 1} aria-label={`Move ${item || `item ${itemIdx + 1}`} down`} onClick={() => {
+                                      const newOpts = [...q.options]; [newOpts[itemIdx], newOpts[itemIdx + 1]] = [newOpts[itemIdx + 1], newOpts[itemIdx]];
+                                      handleUpdateQuestion(q.id, { options: newOpts, correctAnswer: newOpts.join('|||') });
+                                    }} className="w-7 h-7 inline-flex items-center justify-center rounded-lg disabled:opacity-20" style={{ color: FE.muted, background: FE.pill }}><ArrowDown className="w-3.5 h-3.5" /></button>
+                                  </span>
                                   {q.options.length > 2 && (
                                     <button type="button" onClick={() => {
                                       const newOpts = q.options.filter((_, i) => i !== itemIdx);
@@ -3067,7 +3122,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               <button type="button" onClick={() => {
                                 const newOpts = [...q.options, `Item ${q.options.length + 1}`];
                                 handleUpdateQuestion(q.id, { options: newOpts, correctAnswer: newOpts.join('|||') });
-                              }} className="text-xs transition-colors flex items-center gap-1 mt-1 hover:opacity-60" style={{ color: FE.muted }}>
+                              }} className="text-xs transition-colors inline-flex items-center gap-1.5 mt-1 rounded-lg px-2.5 py-1.5 hover:opacity-70" style={{ color: FE.muted, background: FE.pill }}>
                                 <Plus className="w-3 h-3" /> Add item
                               </button>
                             </div>

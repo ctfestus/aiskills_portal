@@ -7,6 +7,7 @@ import {
   Database,
   Download,
   Loader2,
+  Lightbulb,
   Maximize2,
   Menu,
   Play,
@@ -826,7 +827,7 @@ export default function SQLExercisePlayer({
                   className="h-8 px-3 rounded-lg text-[12px] font-bold transition-colors"
                   style={{ background: leftTab === 'hint' ? subtle : 'transparent', color: leftTab === 'hint' ? text : muted }}
                 >
-                  💡 Hint{hintPenalty && !hintShown ? <span className="ml-1 text-[10px] font-semibold" style={{ color: isDark ? '#fca5a5' : '#dc2626' }}>-{hintPenalty} pts</span> : null}
+                  <span className="inline-flex items-center gap-1.5"><Lightbulb className="w-3.5 h-3.5" /> Hint</span>{hintPenalty && !hintShown ? <span className="ml-1 text-[10px] font-semibold" style={{ color: isDark ? '#fca5a5' : '#dc2626' }}>-{hintPenalty} pts</span> : null}
                 </button>
               )}
             </div>
@@ -909,7 +910,7 @@ export default function SQLExercisePlayer({
               <ul className="space-y-3">
                 {availableHints.map((h, i) => (
                   <li key={i} className="flex items-start gap-3">
-                    <span className="text-[14px] flex-shrink-0 mt-0.5">💡</span>
+                    <span className="w-7 h-7 flex-shrink-0 inline-flex items-center justify-center rounded-lg" style={{ color: isDark ? '#fcd34d' : '#a16207', background: isDark ? 'rgba(245,158,11,0.10)' : '#fffbeb' }}><Lightbulb className="w-3.5 h-3.5" /></span>
                     <p className="text-[14px] leading-relaxed" style={{ color: isDark ? '#A8B5C2' : '#555555' }}>{h}</p>
                   </li>
                 ))}

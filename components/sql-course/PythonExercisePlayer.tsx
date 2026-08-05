@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Code2,
   Loader2,
+  Lightbulb,
   Play,
   RotateCcw,
   Sparkles,
@@ -712,7 +713,7 @@ export default function PythonExercisePlayer({
                   onClick={() => { setLeftTab('hint'); if (!hintShown) { setHintShown(true); onHintUsed(); } }}
                   className="flex-shrink-0 h-8 px-3 rounded-lg text-[12px] font-bold transition-colors"
                   style={{ background: leftTab === 'hint' ? subtle : 'transparent', color: leftTab === 'hint' ? text : muted }}>
-                  Hint{hintPenalty && !hintShown ? <span className="ml-1 text-[10px] font-semibold" style={{ color: isDark ? '#fca5a5' : '#dc2626' }}>-{hintPenalty} pts</span> : null}
+                  <span className="inline-flex items-center gap-1.5"><Lightbulb className="w-3.5 h-3.5" /> Hint</span>{hintPenalty && !hintShown ? <span className="ml-1 text-[10px] font-semibold" style={{ color: isDark ? '#fca5a5' : '#dc2626' }}>-{hintPenalty} pts</span> : null}
                 </button>
               )}
             </div>
@@ -749,8 +750,9 @@ export default function PythonExercisePlayer({
               <div className="flex-1 min-h-0 overflow-y-auto px-5 py-5">
                 <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: accentColor }}>Hints</p>
                 {(question.pythonHints ?? []).filter(Boolean).map((hint: string, i: number) => (
-                  <div key={i} className="mb-3 p-3 rounded-xl" style={{ background: subtle }}>
-                    <p className="text-[13px] leading-relaxed" style={{ color: text }}
+                  <div key={i} className="mb-3 flex items-start gap-3 p-3 rounded-xl" style={{ background: subtle }}>
+                    <span className="w-7 h-7 flex-shrink-0 inline-flex items-center justify-center rounded-lg" style={{ color: isDark ? '#fcd34d' : '#a16207', background: isDark ? 'rgba(245,158,11,0.10)' : '#fffbeb' }}><Lightbulb className="w-3.5 h-3.5" /></span>
+                    <p className="text-[13px] leading-relaxed flex-1" style={{ color: text }}
                       dangerouslySetInnerHTML={{ __html: renderRichText(hint) }} />
                   </div>
                 ))}

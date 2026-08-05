@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { Loader2, CheckCircle2, Zap, RotateCcw, FileSpreadsheet, Upload, Download } from 'lucide-react';
+import { Loader2, CheckCircle2, Zap, RotateCcw, FileSpreadsheet, Upload, Download, TriangleAlert } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { downloadReviewPdf } from '@/lib/downloadReviewPdf';
+import { downloadStructuredReviewPdf } from '@/lib/downloadReviewPdf';
 import AiReviewDisclaimer from '@/components/AiReviewDisclaimer';
+import AiReviewWorkspaceHeader from '@/components/AiReviewWorkspaceHeader';
+import AiStructuredReviewReport from '@/components/AiStructuredReviewReport';
 
 interface RubricGrade { criterion: string; passed: boolean; comment: string; }
 interface SheetIssue {
@@ -78,7 +80,6 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError]       = useState('');
   const inputRef  = useRef<HTMLInputElement>(null);
-  const resultsRef = useRef<HTMLDivElement>(null);
 
   const bg     = isDark ? '#0f0f0f' : '#f8fafc';
   const card   = isDark ? '#1a1a1a' : '#ffffff';
@@ -137,9 +138,18 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
   function reset() { setFile(null); setResult(null); setError(''); }
 
   async function downloadPdf() {
-    if (!resultsRef.current) return;
     try {
-      await downloadReviewPdf(resultsRef.current, `excel-review-${Date.now()}.pdf`);
+      if (!result) return;
+      await downloadStructuredReviewPdf({
+        ...result,
+        reportLabel: 'AI WORKBOOK INTELLIGENCE',
+        reportTitle: 'Your workbook review',
+        reportKicker: 'EXCEL REVIEW',
+        sourceLabel: 'Excel workbook',
+        findingsTitle: 'Findings in your workbook',
+        locationLabel: 'CELL',
+        issues: result.issues.map(issue => ({ ...issue, lines: issue.cell })),
+      }, `excel-review-${Date.now()}.pdf`, accentColor);
     } catch (err: any) {
       setError(err?.message ?? 'PDF export failed. Please try again.');
     }
@@ -171,6 +181,7 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
     }
     return (
       <div className="space-y-3">
+        <AiReviewWorkspaceHeader icon={<FileSpreadsheet className="w-5 h-5" />} title="Review your workbook" description="Upload the completed Excel workbook for an evidence-based review against the assignment rubric." accentColor={accentColor} isDark={isDark} reviewsUsed={reviewsUsed} maxReviews={maxReviews} analyzing={analyzing} />
         <AiReviewDisclaimer isDark={isDark} />
         {/* Drop zone */}
         <div
@@ -178,16 +189,17 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
           onClick={() => inputRef.current?.click()}
-          className="flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors"
+          className="flex flex-col items-center justify-center gap-3 cursor-pointer transition-all hover:-translate-y-px"
           style={{
-            border: `2px dashed ${dragging ? accentColor : border}`,
-            borderRadius: 12,
-            padding: '36px 24px',
-            background: dragging ? `${accentColor}08` : inner,
+            border: `1.5px dashed ${dragging || file ? accentColor : border}`,
+            borderRadius: 16,
+            padding: '42px 24px',
+            background: dragging || file ? `${accentColor}08` : inner,
+            boxShadow: dragging ? `0 0 0 4px ${accentColor}12` : 'none',
           }}>
           <input ref={inputRef} type="file" accept=".xlsx" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) pickFile(f); }} />
-          <FileSpreadsheet className="w-8 h-8" style={{ color: file ? '#22c55e' : muted }} />
+          <span className="inline-flex w-12 h-12 items-center justify-center rounded-xl" style={{ color: file ? '#22c55e' : accentColor, background: file ? 'rgba(34,197,94,0.10)' : `${accentColor}14` }}><FileSpreadsheet className="w-6 h-6" /></span>
           {file
             ? <p style={{ fontSize: 13, fontWeight: 600, color: text }}>{file.name}</p>
             : <>
@@ -200,8 +212,8 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
         {error && <p className="text-xs text-red-400 font-medium">{error}</p>}
 
         <button onClick={handleSubmit} disabled={analyzing || !file}
-          className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-60"
-          style={{ background: accentColor, color: '#fff', borderRadius: 8 }}>
+          className="flex w-full sm:w-auto items-center justify-center gap-2 px-6 py-3 text-sm font-semibold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-45"
+          style={{ background: accentColor, color: '#fff', borderRadius: 12 }}>
           {analyzing
             ? <><Loader2 className="w-4 h-4 animate-spin" /> Reviewing…</>
             : <><Zap className="w-4 h-4" /> Submit for AI Review</>}
@@ -210,75 +222,40 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
     );
   }
 
-  const errors      = result.issues.filter(i => i.severity === 'error');
-  const warnings    = result.issues.filter(i => i.severity === 'warning');
-  const suggestions = result.issues.filter(i => i.severity === 'suggestion');
+  const legacyReportEnabled = false as boolean;
 
   return (
-    <div ref={resultsRef} className="space-y-4" style={{ fontFamily: 'var(--font-sans)' }}>
+    <div className="space-y-4" style={{ fontFamily: 'var(--font-sans)' }}>
       <AiReviewDisclaimer isDark={isDark} />
       {showAttemptCount && maxReviews !== undefined && reviewsUsed > 0 && (
         <p style={{ fontSize: 11, fontWeight: 600, color: muted }}>Attempt {reviewsUsed} of {maxReviews}</p>
       )}
 
-      {/* Header */}
-      <div style={{ background: isDark ? '#111827' : '#0f172a', borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ padding: '24px 28px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] mb-3" style={{ color: '#ADEE66' }}>
-                AI Excel Review
-              </p>
-              <div className="flex items-baseline gap-2 mb-3">
-                <span style={{ fontSize: 56, fontWeight: 900, lineHeight: 1, color: '#fff', letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums' }}>
-                  {result.overallScore.toFixed(1)}
-                </span>
-                <span style={{ fontSize: 18, fontWeight: 400, color: 'rgba(255,255,255,0.25)' }}>/100</span>
-              </div>
-              <div style={{ width: 200, height: 2, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 16 }}>
-                <div style={{ height: '100%', width: `${result.overallScore}%`, background: '#ADEE66' }} />
-              </div>
-              <p style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(255,255,255,0.55)', maxWidth: 480 }}>{result.executiveSummary}</p>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button onClick={downloadPdf}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
-                style={{ background: 'rgba(173,238,102,0.12)', color: '#ADEE66', borderRadius: 6, border: '1px solid rgba(173,238,102,0.2)' }}>
-                <Download className="w-3 h-3" /> PDF
-              </button>
-              {showReset && (
-                <button onClick={reset}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
-                  style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
-                  <RotateCcw className="w-3 h-3" /> Reset
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+      <AiStructuredReviewReport
+        reportLabel="AI workbook intelligence"
+        title="Your workbook review"
+        metadata={`Excel workbook${showAttemptCount && maxReviews !== undefined && reviewsUsed > 0 ? ` · Attempt ${reviewsUsed} of ${maxReviews}` : ''}`}
+        score={result.overallScore}
+        summary={result.executiveSummary}
+        findings={result.issues.map(issue => ({ location: issue.cell, severity: issue.severity, title: issue.title, detail: issue.detail, fix: issue.fix }))}
+        findingsTitle="Findings in your workbook"
+        locationLabel="Cell"
+        severityLabels={{ error: 'Error', warning: 'Warning', suggestion: 'Idea' }}
+        categories={result.categories}
+        recommendations={result.topRecommendations}
+        rubricGrades={result.rubricGrades}
+        accentColor={accentColor}
+        isDark={isDark}
+        actions={<>
+          <button onClick={downloadPdf} className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold" style={{ background: card, color: text }}><Download className="w-3.5 h-3.5" /> Export</button>
+          {showReset && <button onClick={reset} className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold" style={{ background: `${accentColor}18`, color: accentColor }}><RotateCcw className="w-3.5 h-3.5" /> Try again</button>}
+        </>}
+      />
 
-        <div className="flex" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          {[
-            { list: errors,      color: '#ef4444', label: 'Errors' },
-            { list: warnings,    color: '#f59e0b', label: 'Warnings' },
-            { list: suggestions, color: '#3b82f6', label: 'Suggestions' },
-          ].map(({ list, color, label }, idx) => (
-            <div key={label} className="flex-1 flex items-center gap-2.5 px-7 py-4"
-              style={{ borderRight: idx < 2 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
-              <span style={{ fontSize: 22, fontWeight: 900, color: list.length > 0 ? color : 'rgba(255,255,255,0.15)', fontVariantNumeric: 'tabular-nums' }}>
-                {list.length}
-              </span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: list.length > 0 ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                {label}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Issues */}
+      {result && legacyReportEnabled && <>
+      {/* Legacy result sections retained temporarily for backward-safe data rendering. */}
       {result.issues.length > 0 && (
-        <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 18, overflow: 'hidden' }}>
           <div style={{ padding: '12px 20px', borderBottom: `1px solid ${border}` }}>
             <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: muted }}>Issues</p>
           </div>
@@ -322,7 +299,7 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
         const pct        = Math.round((passed / total) * 100);
         const trackColor = pct === 100 ? '#22c55e' : pct >= 60 ? '#f59e0b' : '#ef4444';
         return (
-          <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 18, overflow: 'hidden' }}>
             <div className="flex items-center justify-between" style={{ padding: '12px 20px', borderBottom: `1px solid ${border}` }}>
               <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: muted }}>Assignment Rubric</p>
               <div className="flex items-center gap-3">
@@ -352,7 +329,7 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
       })()}
 
       {/* Category scores */}
-      <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 18, overflow: 'hidden' }}>
         <div style={{ padding: '12px 20px', borderBottom: `1px solid ${border}` }}>
           <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: muted }}>Score Breakdown</p>
         </div>
@@ -381,44 +358,40 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
 
       {/* Top recommendations */}
       {result.topRecommendations.length > 0 && (
-        <div style={{ background: isDark ? '#111827' : '#0f172a', borderRadius: 12, overflow: 'hidden' }}>
-          <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: '#ADEE66' }}>Priority Actions</p>
+        <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 18, overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: `1px solid ${border}` }}>
+            <p style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.14em', color: accentColor }}>Priority Actions</p>
           </div>
           {result.topRecommendations.map((r, i) => (
             <div key={i} className="flex items-start gap-4"
-              style={{ padding: '16px 20px', borderBottom: i < result.topRecommendations.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
-              <span style={{ flexShrink: 0, width: 20, height: 20, background: '#ADEE66', color: '#0f172a',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, borderRadius: 4 }}>
+              style={{ padding: '16px 20px', borderBottom: i < result.topRecommendations.length - 1 ? `1px solid ${border}` : 'none' }}>
+              <span style={{ flexShrink: 0, width: 22, height: 22, background: accentColor, color: '#ffffff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, borderRadius: 7 }}>
                 {i + 1}
               </span>
-              <p style={{ fontSize: 13, lineHeight: 1.65, color: 'rgba(255,255,255,0.65)' }}>{r}</p>
+              <p style={{ fontSize: 13, lineHeight: 1.65, color: text }}>{r}</p>
             </div>
           ))}
         </div>
       )}
+      </>}
 
       {/* Completion / gate */}
       {minScore && result.overallScore < minScore ? (
-        <div className="flex items-start gap-3 px-4 py-3" style={{ background: 'rgba(239,68,68,0.08)', borderLeft: '2px solid #ef4444' }}>
-          <div style={{ flexShrink: 0, marginTop: 1 }}>
-            <div style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ width: 6, height: 6, background: '#ef4444', borderRadius: '50%' }} />
-            </div>
-          </div>
+        <div className="flex items-start gap-3 rounded-2xl px-4 py-3.5" style={{ background: 'rgba(239,68,68,0.08)' }}>
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" style={{ color: '#ef4444' }} />
           <div>
             <p style={{ fontSize: 12, fontWeight: 700, color: '#ef4444', marginBottom: 2 }}>
-              Score too low · {result.overallScore.toFixed(1)}/100 · Minimum required: {minScore}/100
+              Minimum score not reached · {result.overallScore.toFixed(1)}/100 · Required: {minScore}/100
             </p>
-            <p style={{ fontSize: 12, color: '#ef4444', opacity: 0.8 }}>You can continue or try again with an improved spreadsheet -- no point awarded until the minimum is reached.</p>
+            <p style={{ fontSize: 12, color: '#ef4444', opacity: 0.8 }}>Use the improvement path above, update your workbook, and submit another review.</p>
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-2 px-4 py-3"
-          style={{ background: `${accentColor}10`, borderLeft: `2px solid ${accentColor}` }}>
+        <div className="flex items-center gap-2 rounded-2xl px-4 py-3.5" style={{ background: `${accentColor}10` }}>
           <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
           <p style={{ fontSize: 12, fontWeight: 600, color: accentColor }}>
-            Review complete · {result.issues.length} issue{result.issues.length !== 1 ? 's' : ''} identified
+            Review complete · {result.issues.length} finding{result.issues.length !== 1 ? 's' : ''} identified
           </p>
         </div>
       )}
