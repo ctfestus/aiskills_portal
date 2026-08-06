@@ -15,8 +15,8 @@ export function channelFor(role?: string, fallback = 'project-war-room'): string
 function chatPalette(isDark: boolean) {
   return {
     bg:     isDark ? '#1A1D21' : '#FFFFFF',
-    header: isDark ? '#19171D' : '#F8F8F8',
-    line:   isDark ? '#33363B' : '#E2E2E2',
+    header: isDark ? '#202127' : '#F7F9F8',
+    line:   isDark ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.07)',
     text:   isDark ? '#D1D2D3' : '#1D1C1D',
     muted:  isDark ? '#ABABAD' : '#616061',
     faint:  isDark ? '#7A7D81' : '#9E9EA0',
@@ -49,12 +49,14 @@ export function ChatCard({ isDark, reqId, company, channel, members, unread = fa
   }, [isNew]);
 
   return (
-    <div ref={rootRef} className={isNew ? 've-mail-in' : undefined} style={{ border: `1px solid ${p.line}`, background: p.bg, borderRadius: 14, overflow: 'hidden' }}>
+    <div ref={rootRef} className={isNew ? 've-mail-in' : undefined}
+      style={{ border: 'none', background: p.bg, borderRadius: 20, overflow: 'hidden', boxShadow: isDark ? '0 0 0 1px rgba(255,255,255,0.065)' : '0 10px 30px rgba(15,23,42,0.07)' }}>
       <WorkplaceKeyframes />
 
       {/* Workspace strip */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', background: p.header, borderBottom: `1px solid ${p.line}` }}>
-        <span style={{ width: 20, height: 20, borderRadius: 5, background: '#2BAC76', color: '#fff', fontSize: 10.5, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: p.header, borderBottom: `1px solid ${p.line}` }}>
+        <span className="ve-pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: '#2BAC76', flexShrink: 0 }} />
+        <span style={{ width: 22, height: 22, borderRadius: 7, background: '#2BAC76', color: '#fff', fontSize: 10.5, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           {(company || 'W')[0].toUpperCase()}
         </span>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: p.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -67,9 +69,9 @@ export function ChatCard({ isDark, reqId, company, channel, members, unread = fa
       </div>
 
       {/* Channel header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderBottom: `1px solid ${p.line}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '11px 16px', borderBottom: `1px solid ${p.line}` }}>
         <span style={{ fontSize: 16, fontWeight: 900, color: p.muted, lineHeight: 1 }}>#</span>
-        <span style={{ fontSize: 14, fontWeight: 700, color: p.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{channel}</span>
+        <span style={{ fontSize: 14, fontWeight: 750, color: p.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{channel}</span>
         <Star size={12} style={{ color: p.faint, flexShrink: 0 }} aria-hidden />
         {unread && (
           <span style={{ marginLeft: 2, background: '#CD2553', color: '#fff', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 6px', lineHeight: '15px', flexShrink: 0 }}>1</span>
@@ -79,7 +81,7 @@ export function ChatCard({ isDark, reqId, company, channel, members, unread = fa
         <span style={{ display: 'inline-flex', alignItems: 'center' }} aria-hidden>
           {facepile.map((name, i) => (
             <span key={name} style={{ marginLeft: i === 0 ? 0 : -7, borderRadius: '50%', border: `2px solid ${p.bg}`, display: 'inline-flex' }}>
-              <PersonAvatar name={name} size={20} color={['#2BAC76', '#E8912D', '#4A9EDE'][i % 3]} />
+              <PersonAvatar name={name} size={20} color={['#2BAC76', '#E8912D', '#4A9EDE'][i % 3]} isDark={isDark} />
             </span>
           ))}
         </span>
@@ -102,7 +104,7 @@ export function ChatCard({ isDark, reqId, company, channel, members, unread = fa
 
       {/* Composer (decorative: quick actions above do the real work) */}
       <div style={{ padding: '0 14px 14px' }} aria-hidden>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${p.line}`, borderRadius: 10, padding: '8px 12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: 'none', background: isDark ? 'rgba(255,255,255,0.045)' : '#f7f9f8', borderRadius: 12, padding: '10px 12px', boxShadow: `0 0 0 1px ${p.line}` }}>
           <Plus size={15} style={{ color: p.faint, flexShrink: 0 }} />
           <span style={{ flex: 1, fontSize: 13, color: p.faint, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Message #{channel}</span>
           <AtSign size={14} style={{ color: p.faint }} />
@@ -129,7 +131,7 @@ export function ChatMsg({ isDark, author, meName, time, children, reactions }: {
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '4px 0' }}>
       {isMe
         ? <MeAvatar name={meName || 'Me'} size={30} isDark={isDark} />
-        : <PersonAvatar name={(author as Person).name} size={30} color={(author as Person).color} presence="active" />}
+        : <PersonAvatar {...(author as Person)} size={30} presence="active" isDark={isDark} />}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontWeight: 700, fontSize: 14, color: p.text }}>{isMe ? 'You' : (author as Person).name}</span>
@@ -156,7 +158,7 @@ export function ChatTypingMsg({ isDark, author, meName }: {
     <div ref={ref} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '4px 0' }}>
       {isMe
         ? <MeAvatar name={meName || 'Me'} size={30} isDark={isDark} />
-        : <PersonAvatar name={(author as Person).name} size={30} color={(author as Person).color} presence="active" />}
+        : <PersonAvatar {...(author as Person)} size={30} presence="active" isDark={isDark} />}
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <span style={{ fontWeight: 700, fontSize: 14, color: p.text }}>{isMe ? 'You' : (author as Person).name}</span>

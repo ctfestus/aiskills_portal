@@ -12,8 +12,9 @@ import { clampLinkedInSharePoints, DEFAULT_LINKEDIN_SHARE_POINTS, MAX_LINKEDIN_S
 import { useTheme } from '@/components/ThemeProvider';
 import {
   ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight, ChevronLeft,
-  Plus, Trash2, X, Check, RefreshCw, Upload, Pencil, Star, Clock, Download,
+  Plus, Trash2, X, Check, Upload, Pencil, Star, Clock, Download,
   Link as LinkIcon, FileText, FileCode, Database, PenLine, Table, GripVertical, Video, Search, Eye, Images, Paperclip, Mail,
+  Blocks, Building2, MessageSquareText, Workflow, Palette, CheckCircle2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { RichTextEditor } from '@/components/RichTextEditor';
@@ -186,6 +187,19 @@ interface ProjectConfig {
   modules: Module[];
   managerName?: string;
   managerTitle?: string;
+  guideId?: string | null;
+  guideSnapshot?: {
+    fullName: string;
+    professionalTitle?: string;
+    company?: string;
+    profilePhotoUrl?: string;
+    linkedUserId?: string;
+    sourceType?: 'external' | 'instructor';
+    consentStatus?: 'pending' | 'confirmed' | 'not_required';
+    bio?: string;
+    linkedinUrl?: string;
+    expertise?: string[];
+  } | null;
   badgeImageUrl?: string | null;
   dataset?: { filename: string; description: string; csvContent?: string; url?: string };
 }
@@ -203,12 +217,12 @@ const INDUSTRIES = [
 
 // Carousel sections for the step-2 editor
 const VE_SECTIONS = [
-  { id: 'overview',   label: 'Overview' },
-  { id: 'setup',      label: 'Setup' },
-  { id: 'brief',      label: 'Brief' },
-  { id: 'curriculum', label: 'Curriculum' },
-  { id: 'branding',   label: 'Branding' },
-  { id: 'delivery',   label: 'Delivery & Publish' },
+  { id: 'overview',   label: 'Overview', Icon: Blocks },
+  { id: 'setup',      label: 'Setup', Icon: Building2 },
+  { id: 'brief',      label: 'Brief', Icon: MessageSquareText },
+  { id: 'curriculum', label: 'Curriculum', Icon: Workflow },
+  { id: 'branding',   label: 'Branding', Icon: Palette },
+  { id: 'delivery',   label: 'Publish', Icon: CheckCircle2 },
 ] as const;
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
@@ -414,6 +428,15 @@ function VirtualExperienceCreatePageInner() {
   const [bunnySearch,        setBunnySearch]        = useState('');
   const [bunnyError,         setBunnyError]         = useState('');
   const [sessionToken,       setSessionToken]       = useState('');
+  const [experienceGuides, setExperienceGuides] = useState<any[]>([]);
+  const [showGuideForm, setShowGuideForm] = useState(false);
+  const [showGuideManager, setShowGuideManager] = useState(false);
+  const [editingGuideId, setEditingGuideId] = useState<string | null>(null);
+  const [savingGuide, setSavingGuide] = useState(false);
+  const [guideError, setGuideError] = useState('');
+  const emptyGuideDraft = { full_name: '', professional_title: '', company: '', profile_photo_url: '', bio: '', linkedin_url: '', expertise: '', consent_confirmed: false };
+  const [guideDraft, setGuideDraft] = useState(emptyGuideDraft);
+  const guidePhotoRef = useRef<HTMLInputElement>(null);
 
   // Load cohorts + existing project if editing
   useEffect(() => {
@@ -421,6 +444,12 @@ function VirtualExperienceCreatePageInner() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push('/auth'); return; }
       setSessionToken(session.access_token);
+
+      const guideRes = await fetch('/api/experience-guides', { headers: { Authorization: `Bearer ${session.access_token}` } });
+      if (guideRes.ok) {
+        const guideJson = await guideRes.json();
+        setExperienceGuides([...(guideJson.guides ?? []), ...(guideJson.instructors ?? [])]);
+      }
 
       const { data: cohortData } = await supabase.from('cohorts').select('id, name').order('name');
       setCohorts(cohortData ?? []);
@@ -434,6 +463,7 @@ function VirtualExperienceCreatePageInner() {
             difficulty: ve.difficulty, role: ve.role, company: ve.company, duration: ve.duration,
             tools: ve.tools, toolLogos: ve.tool_logos ?? {}, tagline: ve.tagline, background: ve.background,
             learnOutcomes: ve.learn_outcomes, managerName: ve.manager_name, managerTitle: ve.manager_title,
+            guideId: ve.guide_id || (ve.guide_snapshot?.linkedUserId ? `instructor:${ve.guide_snapshot.linkedUserId}` : null), guideSnapshot: ve.guide_snapshot,
             dataset: ve.dataset, coverImage: ve.cover_image, deadline_days: ve.deadline_days,
             badgeImageUrl: ve.badge_image_url ?? null,
           };
@@ -466,6 +496,156 @@ function VirtualExperienceCreatePageInner() {
   }, [editId, router]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const selectExperienceGuide = (rawId: string) => {
+    if (!rawId) {
+      setConfig(c => c ? { ...c, guideId: null, guideSnapshot: null } : c);
+      return;
+    }
+    const guide = experienceGuides.find(g => g.id === rawId);
+    if (!guide) return;
+    const snapshot = {
+      fullName: guide.full_name,
+      professionalTitle: guide.professional_title || undefined,
+      company: guide.company || undefined,
+      profilePhotoUrl: guide.profile_photo_url || undefined,
+      linkedUserId: guide.linked_user_id || undefined,
+      sourceType: guide.source_type,
+      consentStatus: guide.consent_status || (guide.source_type === 'instructor' ? 'not_required' : 'pending'),
+      bio: guide.bio || undefined,
+      linkedinUrl: guide.linkedin_url || undefined,
+      expertise: Array.isArray(guide.expertise) ? guide.expertise : [],
+    };
+    setConfig(c => c ? {
+      ...c,
+      guideId: guide.id,
+      guideSnapshot: snapshot,
+      managerName: snapshot.fullName,
+      managerTitle: snapshot.professionalTitle || 'Experience Guide',
+    } : c);
+  };
+
+  const uploadGuidePhoto = async (file?: File) => {
+    if (!file) return;
+    setSavingGuide(true); setGuideError('');
+    try {
+      const url = await uploadToCloudinary(file, 'experience-guides');
+      setGuideDraft(d => ({ ...d, profile_photo_url: url }));
+    } catch (e: any) {
+      setGuideError(e?.message || 'Photo upload failed.');
+    } finally { setSavingGuide(false); }
+  };
+
+  const createExperienceGuide = async () => {
+    if (!guideDraft.full_name.trim()) { setGuideError('Professional name is required.'); return; }
+    if (!guideDraft.consent_confirmed) { setGuideError('Please confirm permission before saving this professional profile.'); return; }
+    setSavingGuide(true); setGuideError('');
+    try {
+      const res = await fetch('/api/experience-guides', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}` },
+        body: JSON.stringify({
+          ...guideDraft,
+          expertise: guideDraft.expertise.split(',').map(x => x.trim()).filter(Boolean),
+          consent_status: guideDraft.consent_confirmed ? 'confirmed' : 'pending',
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Could not create the professional profile.');
+      setExperienceGuides(list => [...list, json.guide]);
+      setShowGuideForm(false);
+      setGuideDraft(emptyGuideDraft);
+      selectExperienceGuide(json.guide.id);
+      // selectExperienceGuide reads the pre-update list; apply the freshly created row directly.
+      setConfig(c => c ? {
+        ...c,
+        guideId: json.guide.id,
+        guideSnapshot: {
+          fullName: json.guide.full_name,
+          professionalTitle: json.guide.professional_title || undefined,
+          company: json.guide.company || undefined,
+          profilePhotoUrl: json.guide.profile_photo_url || undefined,
+          sourceType: 'external',
+          consentStatus: json.guide.consent_status,
+          bio: json.guide.bio || undefined,
+          linkedinUrl: json.guide.linkedin_url || undefined,
+          expertise: json.guide.expertise || [],
+        },
+        managerName: json.guide.full_name,
+        managerTitle: json.guide.professional_title || 'Experience Guide',
+      } : c);
+    } catch (e: any) { setGuideError(e?.message || 'Could not create the professional profile.'); }
+    finally { setSavingGuide(false); }
+  };
+
+  const beginEditGuide = (guide: any) => {
+    if (guide.source_type !== 'external') return;
+    setEditingGuideId(guide.id);
+    setGuideDraft({
+      full_name: guide.full_name || '',
+      professional_title: guide.professional_title || '',
+      company: guide.company || '',
+      profile_photo_url: guide.profile_photo_url || '',
+      bio: guide.bio || '',
+      linkedin_url: guide.linkedin_url || '',
+      expertise: Array.isArray(guide.expertise) ? guide.expertise.join(', ') : '',
+      consent_confirmed: guide.consent_status === 'confirmed',
+    });
+    setShowGuideForm(true);
+    setGuideError('');
+  };
+
+  const updateExperienceGuide = async () => {
+    if (!editingGuideId || !guideDraft.full_name.trim()) { setGuideError('Professional name is required.'); return; }
+    if (!guideDraft.consent_confirmed) { setGuideError('Please confirm permission before saving this professional profile.'); return; }
+    setSavingGuide(true); setGuideError('');
+    try {
+      const res = await fetch('/api/experience-guides', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}` },
+        body: JSON.stringify({
+          id: editingGuideId,
+          ...guideDraft,
+          expertise: guideDraft.expertise.split(',').map(x => x.trim()).filter(Boolean),
+          consent_status: 'confirmed',
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Could not update the professional profile.');
+      setExperienceGuides(list => list.map(g => g.id === json.guide.id ? json.guide : g));
+      if (config?.guideId === json.guide.id) selectExperienceGuideFromRow(json.guide);
+      setEditingGuideId(null); setShowGuideForm(false); setGuideDraft(emptyGuideDraft);
+    } catch (e: any) { setGuideError(e?.message || 'Could not update the professional profile.'); }
+    finally { setSavingGuide(false); }
+  };
+
+  const selectExperienceGuideFromRow = (guide: any) => {
+    const snapshot = {
+      fullName: guide.full_name,
+      professionalTitle: guide.professional_title || undefined,
+      company: guide.company || undefined,
+      profilePhotoUrl: guide.profile_photo_url || undefined,
+      linkedUserId: guide.linked_user_id || undefined,
+      sourceType: guide.source_type,
+      consentStatus: guide.consent_status || (guide.source_type === 'instructor' ? 'not_required' : 'pending'),
+      bio: guide.bio || undefined,
+      linkedinUrl: guide.linkedin_url || undefined,
+      expertise: Array.isArray(guide.expertise) ? guide.expertise : [],
+    };
+    setConfig(c => c ? { ...c, guideId: guide.id, guideSnapshot: snapshot, managerName: snapshot.fullName, managerTitle: snapshot.professionalTitle || 'Experience Guide' } : c);
+  };
+
+  const setGuideStatus = async (guide: any, status: 'active' | 'archived') => {
+    setGuideError('');
+    const res = await fetch('/api/experience-guides', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify({ id: guide.id, status }),
+    });
+    const json = await res.json();
+    if (!res.ok) { setGuideError(json.error || 'Could not update this profile.'); return; }
+    setExperienceGuides(list => list.map(g => g.id === guide.id ? json.guide : g));
+  };
 
   const handleModuleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -921,6 +1101,11 @@ function VirtualExperienceCreatePageInner() {
 
   const handleSave = async (status: 'draft' | 'published') => {
     if (!config || !title.trim()) { setSaveError('Title is required'); return; }
+    if (status === 'published' && config.guideSnapshot?.sourceType === 'external' && config.guideSnapshot.consentStatus !== 'confirmed') {
+      setSaveError('Confirm permission to use the selected professional’s name and photo before publishing.');
+      setActiveSection('brief');
+      return;
+    }
     setSaving(true); setSaveError(''); setSaveSuccess(false);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -966,14 +1151,15 @@ function VirtualExperienceCreatePageInner() {
 
   // Render
   const inp = {
-    width: '100%', padding: '9px 13px', borderRadius: 10,
-    border: `1px solid ${C.cardBorder}`, background: C.input,
-    color: C.text, fontSize: 15, outline: 'none',
+    width: '100%', padding: '8px 12px', borderRadius: 10,
+    border: '1px solid transparent', background: C.card,
+    boxShadow: C === DARK_C ? '0 0 0 1px rgba(255,255,255,0.07)' : '0 0 0 1px rgba(15,23,42,0.08)',
+    color: C.text, fontSize: 15, outline: 'none', transition: 'box-shadow 160ms ease, background 160ms ease',
   } as React.CSSProperties;
 
   const card = {
-    background: 'transparent', border: 'none',
-    borderRadius: 0, boxShadow: 'none',
+    background: C.pill, border: '1px solid transparent',
+    borderRadius: 18, boxShadow: 'none',
   } as React.CSSProperties;
 
   const REQ_COLORS: Record<string, string> = {
@@ -982,57 +1168,70 @@ function VirtualExperienceCreatePageInner() {
 
   return (
     <div className="min-h-screen" style={{ background: C.page, color: C.text, fontFamily: "'Google Sans', 'Inter', sans-serif" }}>
-      {/* Header */}
-      <header className="sticky top-0 z-20 backdrop-blur-md px-4 sm:px-8 py-3 flex items-center gap-3"
-        style={{ background: C.nav, borderBottom: `1px solid ${C.navBorder}` }}>
-        <Link href="/dashboard"
-          className="flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:opacity-70"
-          style={{ color: C.muted, background: C.pill }}>
-          <ArrowLeft className="w-4 h-4" />
-        </Link>
-        <span className="font-semibold text-[15px]" style={{ color: C.text }}>
-          {effectiveId ? 'Edit Virtual Experience' : 'Create Virtual Experience'}
-        </span>
-        {step === 2 && (
-          <div className="ml-auto flex items-center gap-2">
-            {veSlug ? (
-              <a href={`/${veSlug}`} target="_blank" rel="noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[13px] font-medium border transition-all hover:opacity-70"
-                style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card, textDecoration: 'none' }}>
-                <Eye className="w-3.5 h-3.5" /> Preview
-              </a>
+      {/* Experience Studio header */}
+      <header className="px-4 sm:px-6 pt-6" style={{ background: C.page }}>
+        <div className={`max-w-6xl mx-auto px-4 sm:px-6 pt-5 pb-3 ${step === 2 ? 'rounded-t-2xl' : 'rounded-2xl'}`}
+          style={{ background: C.card }}>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <Link href="/dashboard" aria-label="Back to dashboard"
+                className="flex items-center justify-center w-9 h-9 rounded-xl transition-all hover:opacity-70 flex-shrink-0"
+                style={{ color: C.muted, background: C.pill }}>
+                <ArrowLeft className="w-4 h-4" />
+              </Link>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="relative flex w-2 h-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-20" style={{ background: C.cta }}/>
+                    <span className="relative inline-flex rounded-full w-2 h-2" style={{ background: C.cta }}/>
+                  </span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: C.cta }}>Experience Studio</span>
+                </div>
+                <h1 className="text-[17px] sm:text-[18px] font-bold leading-tight truncate" style={{ color: C.text }}>
+                  {step === 2 ? (title || 'Untitled experience') : (effectiveId ? 'Edit Virtual Experience' : 'New Virtual Experience')}
+                </h1>
+              </div>
+            </div>
+            {step === 2 ? (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {veSlug ? (
+                  <a href={`/${veSlug}`} target="_blank" rel="noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all hover:opacity-70"
+                    style={{ color: C.muted, background: C.pill, textDecoration: 'none' }}>
+                    <Eye className="w-3.5 h-3.5" /> Preview
+                  </a>
+                ) : (
+                  <span title="Save the experience first to preview it"
+                    className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold cursor-not-allowed opacity-40"
+                    style={{ color: C.muted, background: C.pill }}>
+                    <Eye className="w-3.5 h-3.5" /> Preview
+                  </span>
+                )}
+                <button onClick={() => handleSave('draft')} disabled={saving}
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold transition-colors hover:opacity-70"
+                  style={{ color: C.muted, background: 'transparent' }}>
+                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+                  Save draft
+                </button>
+                <button onClick={() => handleSave('published')} disabled={saving}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[12px] font-bold transition-all hover:opacity-85"
+                  style={{ background: saveSuccess ? '#16a34a' : C.cta, color: C.ctaText }}>
+                  {saveSuccess ? <Check className="w-3.5 h-3.5"/> : <CheckCircle2 className="w-3.5 h-3.5"/>}
+                  {saveSuccess ? 'Saved' : effectiveId ? 'Update' : 'Publish'}
+                </button>
+              </div>
             ) : (
-              <span title="Save the experience first to preview it"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[13px] font-medium border cursor-not-allowed opacity-40"
-                style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
-                <Eye className="w-3.5 h-3.5" /> Preview
-              </span>
-            )}
-            <button onClick={() => handleSave('draft')} disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[13px] font-medium border transition-all hover:opacity-70"
-              style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              Save Draft
-            </button>
-            <button onClick={() => handleSave('published')} disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[13px] font-semibold transition-all hover:opacity-80"
-              style={{ background: C.cta, color: C.ctaText }}>
-              {effectiveId ? 'Update' : 'Publish'}
-            </button>
-            {saveSuccess && (
-              <span className="flex items-center gap-1 text-[13px] font-medium" style={{ color: '#16a34a' }}>
-                <Check className="w-3.5 h-3.5" /> Saved
-              </span>
+              <span className="text-[11px] font-semibold px-3 py-1.5 rounded-full" style={{ background: C.pill, color: C.faint }}>Setup</span>
             )}
           </div>
-        )}
+        </div>
       </header>
 
-      <div className="px-4 sm:px-6 py-10">
+      <div className={`px-4 sm:px-6 pb-4 ${step === 2 ? 'pt-0' : 'pt-3'}`}>
 
         {/* STEP 1: Configure */}
         {step === 1 && (
-          <div className="max-w-3xl mx-auto px-4 py-6">
+          <div className="max-w-5xl mx-auto px-0 sm:px-4 py-6">
           <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: C === DARK_C ? '1px solid transparent' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
             <div className="px-6 sm:px-8 pt-6 pb-5" style={{ borderBottom: `1px solid ${C.divider}` }}>
               <h2 className="text-lg sm:text-xl font-bold leading-tight" style={{ color: C.text }}>What kind of project?</h2>
@@ -1401,32 +1600,34 @@ function VirtualExperienceCreatePageInner() {
         {/* STEP 2: Review & Edit */}
         {step === 2 && config && (() => {
           const indInfo = INDUSTRIES.find(i => i.id === config.industry) || INDUSTRIES[0];
-          const managerName  = config.managerName  || 'Your Manager';
-          const managerTitle = config.managerTitle || 'Head of Analytics';
+          const managerName  = config.guideSnapshot?.fullName || config.managerName  || 'Your Manager';
+          const managerTitle = config.guideSnapshot?.professionalTitle || config.managerTitle || 'Head of Analytics';
+          const managerPhoto = config.guideSnapshot?.profilePhotoUrl;
           const managerInitials = managerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
           const companyInitials = config.company?.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() || '??';
           const dataset = config.dataset;
 
           return (
-          <div className="max-w-4xl mx-auto px-4 py-6">
-            {/* Regenerate bar */}
-            {!editId && (
-              <div className="flex items-center gap-3 mb-4">
-                <button onClick={() => setStep(1)}
-                  className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-xl border transition-all hover:opacity-70"
-                  style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
-                  <RefreshCw className="w-3.5 h-3.5" /> Regenerate
-                </button>
-                <span className="text-[13px]" style={{ color: C.faint }}>Not happy with the result? Go back and try different settings.</span>
-              </div>
-            )}
-
+          <div className="max-w-6xl mx-auto py-0">
             {/* Carousel: navigable sections */}
             {(() => {
               const ids = VE_SECTIONS.map(s => s.id) as readonly string[];
               const si = ids.indexOf(activeSection);
               return (
-              <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: C === DARK_C ? '1px solid transparent' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
+              <div className="rounded-b-2xl overflow-hidden" style={{ background: C.card, border: 'none', boxShadow: C === DARK_C ? '0 16px 38px rgba(0,0,0,0.12)' : '0 16px 38px rgba(15,23,42,0.045)' }}>
+                <nav className="flex items-center gap-2 overflow-x-auto px-4 sm:px-6 py-3" aria-label="Virtual experience editor sections"
+                  style={{ scrollbarWidth: 'none', borderBottom: `1px solid ${C.divider}` }}>
+                  {VE_SECTIONS.map(section => {
+                    const active = activeSection === section.id;
+                    return (
+                      <button key={section.id} type="button" onClick={() => goToSection(section.id)} aria-current={active ? 'page' : undefined}
+                        className={`flex items-center gap-2 flex-shrink-0 px-3.5 py-2.5 rounded-xl text-[14px] transition-colors ${active ? 'font-bold' : 'font-semibold'}`}
+                        style={{ background: active ? `${C.cta}14` : 'transparent', color: active ? C.cta : C.faint }}>
+                        <section.Icon className="w-4 h-4" /> {section.label}
+                      </button>
+                    );
+                  })}
+                </nav>
                 <div className="flex items-center justify-between gap-4 px-6 sm:px-8 pt-6 pb-5" style={{ borderBottom: `1px solid ${C.divider}` }}>
                   <div className="min-w-0">
                     <h2 className="text-lg sm:text-xl font-bold leading-tight truncate" style={{ color: C.text }}>{VE_SECTIONS[si]?.label}</h2>
@@ -1460,44 +1661,53 @@ function VirtualExperienceCreatePageInner() {
                       <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 60%)' }} />
                     </div>
                   ) : (
-                    <div style={{ height: 160, background: C.pill, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ fontSize: 52 }}>{indInfo.emoji}</span>
-                    </div>
+                    <button type="button" onClick={() => goToSection('branding')}
+                      className="w-full flex flex-col items-center justify-center gap-2 transition-opacity hover:opacity-75"
+                      style={{ height: 132, background: C.card, color: C.muted }}>
+                      <Images className="w-6 h-6" />
+                      <span className="text-[12px] font-semibold">Add cover image</span>
+                      <span className="text-[10px]" style={{ color: C.faint }}>Opens Branding</span>
+                    </button>
                   )}
 
-                  <div className="p-5 space-y-4">
+                  <div className="p-5 sm:p-6 space-y-3">
                     {/* Company identity */}
-                    <div className="flex items-center gap-3">
-                      <div style={{ width: 44, height: 44, borderRadius: 10, background: C.pill, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900, color: C.text, flexShrink: 0, letterSpacing: 1 }}>
-                        {companyInitials}
+                    <div className="flex items-end gap-3">
+                      <div style={{ width: 44, height: 44, borderRadius: 12, background: C.card, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900, color: C.text, flexShrink: 0, letterSpacing: 1 }}>
+                        {companyInitials === '??' ? <Building2 className="w-4 h-4" style={{ color: C.muted }} /> : companyInitials}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: C.faint }}>{config.industry} · Virtual Experience</p>
+                        <div className="flex items-center justify-between gap-3 mb-1.5">
+                          <label className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: C.faint }}>Company name</label>
+                          <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.cta }}>{config.industry} · Virtual Experience</p>
+                        </div>
                         <input
                           value={config.company || ''}
                           onChange={e => setConfig(c => c ? { ...c, company: e.target.value } : c)}
-                          className="w-full bg-transparent outline-none text-[14px] font-bold mt-0.5"
-                          style={{ color: C.text }}
+                          className="w-full outline-none text-[14px] font-semibold"
+                          style={{ ...inp, color: C.text }}
                           placeholder="Company name…"
                         />
                       </div>
                     </div>
 
                     {/* Editable title */}
+                    <label className="block text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: C.faint }}>Experience title</label>
                     <input
                       value={title}
                       onChange={e => setTitle(e.target.value)}
-                      className="w-full text-[20px] font-black bg-transparent outline-none border-b-2 pb-1 transition-colors"
-                      style={{ color: C.text, borderColor: C.divider }}
+                      className="!mt-1.5 w-full text-[16px] font-bold outline-none"
+                      style={{ ...inp, color: C.text }}
                       placeholder="Program title…"
                     />
 
                     {/* Editable tagline */}
+                    <label className="block text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: C.faint }}>Tagline</label>
                     <input
                       value={config.tagline || ''}
                       onChange={e => setConfig(c => c ? { ...c, tagline: e.target.value } : c)}
-                      className="w-full bg-transparent outline-none text-[14px]"
-                      style={{ color: C.muted }}
+                      className="!mt-1.5 w-full outline-none text-[13px]"
+                      style={{ ...inp, color: C.muted }}
                       placeholder="One-line tagline…"
                     />
 
@@ -1517,7 +1727,7 @@ function VirtualExperienceCreatePageInner() {
                           {(config.tools || []).map(t => {
                             const logo = (config.toolLogos || {})[t];
                             return (
-                              <div key={t} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+                              <div key={t} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg" style={{ background: C.card }}>
                                 {logo
                                   ? <img src={logo} alt={t} className="w-4 h-4 rounded object-contain flex-shrink-0" />
                                   : <div className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center text-[9px] font-bold" style={{ background: C.pill, color: C.muted }}>{t[0]}</div>
@@ -1531,7 +1741,7 @@ function VirtualExperienceCreatePageInner() {
                     )}
 
                     {/* Dataset - replace/attach/remove works here even for an already-saved VE */}
-                    <div className="p-3 rounded-xl" style={{ background: C.pill }}>
+                    <div className="p-4 rounded-2xl" style={{ background: C.card, border: `1px dashed ${C.cardBorder}` }}>
                       <input ref={datasetReplaceRef} type="file" accept=".csv,.tsv,.txt" className="hidden" onChange={handleDatasetReplace} />
                       {dataset ? (
                         <div className="flex items-start gap-2">
@@ -1585,9 +1795,9 @@ function VirtualExperienceCreatePageInner() {
                 {/* Manager brief card */}
                 <div style={{ ...card, overflow: 'hidden' }}>
                   {/* Header strip */}
-                  <div className="flex items-center gap-3 px-5 pt-1 pb-3">
-                    <div style={{ width: 32, height: 32, borderRadius: 999, background: C.pill, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: C.text, flexShrink: 0 }}>
-                      {managerInitials}
+                  <div className="flex items-center gap-3 px-4 py-3 m-4 mb-0 rounded-2xl" style={{ background: C.card }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 999, overflow: 'hidden', background: C.pill, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: C.text, flexShrink: 0 }}>
+                      {managerPhoto ? <img src={managerPhoto} alt={managerName} className="w-full h-full object-cover" /> : managerInitials}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-bold" style={{ color: C.text }}>{managerName} <span className="font-normal" style={{ color: C.muted }}>· {managerTitle}</span></p>
@@ -1597,7 +1807,90 @@ function VirtualExperienceCreatePageInner() {
                   </div>
 
                   {/* Editable fields */}
-                  <div className="px-5 pt-4 pb-2 grid grid-cols-2 gap-3">
+                  <div className="px-5 pt-4 pb-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="sm:col-span-2">
+                      <div className="flex items-end justify-between gap-3 mb-1.5">
+                        <div>
+                          <label className="block text-[11px] font-bold uppercase tracking-widest" style={{ color: C.faint }}>Experience guide</label>
+                          <p className="text-[11px] mt-0.5" style={{ color: C.muted }}>Choose the professional learners will hear from throughout this experience.</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button type="button" onClick={() => setShowGuideManager(v => !v)}
+                            className="text-[12px] font-semibold px-3 py-2 rounded-xl" style={{ color: C.muted, background: C.pill }}>Manage profiles</button>
+                          <button type="button" onClick={() => { setEditingGuideId(null); setGuideDraft(emptyGuideDraft); setShowGuideForm(true); setGuideError(''); }}
+                            className="text-[12px] font-bold flex items-center gap-1.5 px-3 py-2 rounded-xl"
+                            style={{ color: C.cta, background: `${C.cta}12` }}>
+                            <Plus className="w-3.5 h-3.5" /> Add professional
+                          </button>
+                        </div>
+                      </div>
+                      <select value={config.guideId || ''} onChange={e => selectExperienceGuide(e.target.value)} style={{ ...inp, fontSize: 13 }}>
+                        <option value="">Default generated manager</option>
+                        {experienceGuides.some(g => g.source_type === 'external' && (g.status !== 'archived' || g.id === config.guideId)) && <optgroup label="External professionals">
+                          {experienceGuides.filter(g => g.source_type === 'external' && (g.status !== 'archived' || g.id === config.guideId)).map(g => <option key={g.id} value={g.id}>{g.full_name}{g.professional_title ? ` — ${g.professional_title}` : ''}{g.status === 'archived' ? ' (Archived)' : ''}</option>)}
+                        </optgroup>}
+                        {experienceGuides.some(g => g.source_type === 'instructor') && <optgroup label="Instructors">
+                          {experienceGuides.filter(g => g.source_type === 'instructor').map(g => <option key={g.id} value={g.id}>{g.full_name}</option>)}
+                        </optgroup>}
+                      </select>
+                    </div>
+
+                    {showGuideManager && <div className="sm:col-span-2 rounded-2xl overflow-hidden" style={{ border: `1px solid ${C.divider}` }}>
+                      <div className="px-4 py-3 flex items-center justify-between" style={{ background: C.card }}>
+                        <div>
+                          <p className="text-[13px] font-bold" style={{ color: C.text }}>Experience guide profiles</p>
+                          <p className="text-[11px]" style={{ color: C.faint }}>External profiles are editable. Instructor identities stay linked to their accounts.</p>
+                        </div>
+                        <button type="button" onClick={() => setShowGuideManager(false)} style={{ color: C.faint }}><X className="w-4 h-4" /></button>
+                      </div>
+                      <div>
+                        {experienceGuides.filter(g => g.source_type === 'external').length === 0 && <p className="px-4 py-5 text-[12px]" style={{ color: C.muted }}>No external professionals yet. Use “Add professional” to create one.</p>}
+                        {experienceGuides.filter(g => g.source_type === 'external').map(g => <div key={g.id} className="px-4 py-3 flex items-center gap-3" style={{ borderTop: `1px solid ${C.divider}`, opacity: g.status === 'archived' ? 0.6 : 1 }}>
+                          <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center text-[11px] font-bold flex-shrink-0" style={{ background: C.pill, color: C.muted }}>
+                            {g.profile_photo_url ? <img src={g.profile_photo_url} alt={g.full_name} className="w-full h-full object-cover" /> : g.full_name.split(/\s+/).map((x: string) => x[0]).join('').slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] font-bold truncate" style={{ color: C.text }}>{g.full_name}</p>
+                            <p className="text-[11px] truncate" style={{ color: C.muted }}>{[g.professional_title, g.company].filter(Boolean).join(' · ') || 'Professional profile'}</p>
+                          </div>
+                          {g.status === 'archived' && <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: C.faint }}>Archived</span>}
+                          <button type="button" onClick={() => beginEditGuide(g)} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ color: C.cta, background: `${C.cta}10` }}>Edit</button>
+                          <button type="button" onClick={() => setGuideStatus(g, g.status === 'archived' ? 'active' : 'archived')} className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg" style={{ color: C.muted, background: C.pill }}>{g.status === 'archived' ? 'Restore' : 'Archive'}</button>
+                        </div>)}
+                        {experienceGuides.filter(g => g.source_type === 'instructor').map(g => <div key={g.id} className="px-4 py-3 flex items-center gap-3" style={{ borderTop: `1px solid ${C.divider}` }}>
+                          <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center text-[11px] font-bold flex-shrink-0" style={{ background: C.pill, color: C.muted }}>
+                            {g.profile_photo_url ? <img src={g.profile_photo_url} alt={g.full_name} className="w-full h-full object-cover" /> : g.full_name.split(/\s+/).map((x: string) => x[0]).join('').slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0"><p className="text-[13px] font-bold" style={{ color: C.text }}>{g.full_name}</p><p className="text-[11px]" style={{ color: C.muted }}>Instructor · Linked account</p></div>
+                          <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: C.cta }}>Synced</span>
+                        </div>)}
+                      </div>
+                    </div>}
+
+                    {showGuideForm && <div className="sm:col-span-2 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-[auto_1fr_1fr] gap-3" style={{ background: C.card, border: `1px solid ${C.divider}` }}>
+                      <div className="sm:row-span-2 flex flex-col items-center gap-2">
+                        <div className="w-16 h-16 rounded-full overflow-hidden flex items-center justify-center font-bold" style={{ background: C.pill, color: C.muted }}>
+                          {guideDraft.profile_photo_url ? <img src={guideDraft.profile_photo_url} alt="Professional preview" className="w-full h-full object-cover" /> : (guideDraft.full_name || 'Guide').split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase()}
+                        </div>
+                        <input ref={guidePhotoRef} type="file" accept="image/*" className="hidden" onChange={e => uploadGuidePhoto(e.target.files?.[0])} />
+                        <button type="button" disabled={savingGuide} onClick={() => guidePhotoRef.current?.click()} className="text-[11px] font-bold" style={{ color: C.cta }}>{guideDraft.profile_photo_url ? 'Change photo' : 'Upload photo'}</button>
+                      </div>
+                      <input value={guideDraft.full_name} onChange={e => setGuideDraft(d => ({ ...d, full_name: e.target.value }))} style={{ ...inp, fontSize: 13 }} placeholder="Full name" />
+                      <input value={guideDraft.professional_title} onChange={e => setGuideDraft(d => ({ ...d, professional_title: e.target.value }))} style={{ ...inp, fontSize: 13 }} placeholder="Professional title" />
+                      <input value={guideDraft.company} onChange={e => setGuideDraft(d => ({ ...d, company: e.target.value }))} style={{ ...inp, fontSize: 13 }} placeholder="Company (optional)" />
+                      <input value={guideDraft.linkedin_url} onChange={e => setGuideDraft(d => ({ ...d, linkedin_url: e.target.value }))} style={{ ...inp, fontSize: 13 }} placeholder="LinkedIn profile URL" />
+                      <textarea value={guideDraft.bio} onChange={e => setGuideDraft(d => ({ ...d, bio: e.target.value }))} rows={3} className="sm:col-start-2 sm:col-span-2" style={{ ...inp, fontSize: 13, resize: 'vertical' }} placeholder="Short professional bio" />
+                      <input value={guideDraft.expertise} onChange={e => setGuideDraft(d => ({ ...d, expertise: e.target.value }))} className="sm:col-start-2 sm:col-span-2" style={{ ...inp, fontSize: 13 }} placeholder="Areas of expertise, separated by commas" />
+                      <div className="flex items-center justify-end gap-2">
+                        <button type="button" onClick={() => { setShowGuideForm(false); setEditingGuideId(null); setGuideDraft(emptyGuideDraft); }} className="px-3 py-2 rounded-xl text-[12px] font-semibold" style={{ color: C.muted }}>Cancel</button>
+                        <button type="button" disabled={savingGuide} onClick={editingGuideId ? updateExperienceGuide : createExperienceGuide} className="px-3 py-2 rounded-xl text-[12px] font-bold text-white disabled:opacity-50" style={{ background: C.cta }}>{savingGuide ? 'Saving…' : editingGuideId ? 'Update profile' : 'Save profile'}</button>
+                      </div>
+                      {guideError && <p className="sm:col-start-2 sm:col-span-2 text-[11px] text-red-500">{guideError}</p>}
+                      <label className="sm:col-start-2 sm:col-span-2 flex items-start gap-2 text-[11px] cursor-pointer" style={{ color: C.muted }}>
+                        <input type="checkbox" checked={guideDraft.consent_confirmed} onChange={e => setGuideDraft(d => ({ ...d, consent_confirmed: e.target.checked }))} className="mt-0.5 accent-emerald-500" />
+                        <span>I confirm I have permission to use this person’s name and profile photo in learner-facing experiences.</span>
+                      </label>
+                    </div>}
                     <div>
                       <label className="block text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: C.faint }}>Role</label>
                       <input value={config.role || ''} onChange={e => setConfig(c => c ? { ...c, role: e.target.value } : c)}
@@ -1605,12 +1898,12 @@ function VirtualExperienceCreatePageInner() {
                     </div>
                     <div>
                       <label className="block text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: C.faint }}>Manager Name</label>
-                      <input value={config.managerName || ''} onChange={e => setConfig(c => c ? { ...c, managerName: e.target.value } : c)}
+                      <input value={config.managerName || ''} onChange={e => setConfig(c => c ? { ...c, managerName: e.target.value, guideId: null, guideSnapshot: null } : c)}
                         style={{ ...inp, fontSize: 13 }} placeholder="e.g. Amara Diallo" />
                     </div>
-                    <div className="col-span-2">
+                    <div className="sm:col-span-2">
                       <label className="block text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: C.faint }}>Manager Title</label>
-                      <input value={config.managerTitle || ''} onChange={e => setConfig(c => c ? { ...c, managerTitle: e.target.value } : c)}
+                      <input value={config.managerTitle || ''} onChange={e => setConfig(c => c ? { ...c, managerTitle: e.target.value, guideId: null, guideSnapshot: null } : c)}
                         style={{ ...inp, fontSize: 13 }} placeholder="e.g. Head of Analytics" />
                     </div>
                   </div>
@@ -1636,12 +1929,11 @@ function VirtualExperienceCreatePageInner() {
                 </div>
 
                 {/* Learning outcomes card */}
-                {(config.learnOutcomes || []).length > 0 && (
-                  <div style={card} className="p-5 space-y-3">
+                <div style={card} className="p-5 space-y-3">
                     <p className="text-[13px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Learning Outcomes</p>
                     <div className="space-y-2">
                       {(config.learnOutcomes || []).map((o, i) => (
-                        <div key={i} className="flex items-start gap-2">
+                        <div key={i} className="flex items-center gap-2 rounded-xl px-3 py-2.5" style={{ background: C.card }}>
                           <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
                             style={{ background: `${C.cta}18` }}>
                             <Check className="w-3 h-3" style={{ color: C.cta }} />
@@ -1656,11 +1948,10 @@ function VirtualExperienceCreatePageInner() {
                       ))}
                     </div>
                     <button onClick={() => setConfig(c => c ? { ...c, learnOutcomes: [...(c.learnOutcomes||[]), ''] } : c)}
-                      className="text-[13px] flex items-center gap-1 hover:opacity-70" style={{ color: C.muted }}>
+                      className="text-[13px] font-semibold flex items-center gap-1.5 rounded-xl px-3 py-2 hover:opacity-70" style={{ color: C.muted, background: C.card }}>
                       <Plus className="w-3.5 h-3.5" /> Add outcome
                     </button>
-                  </div>
-                )}
+                </div>
                 </div>)}
                 {activeSection === 'curriculum' && (
                 <div className="space-y-4">
@@ -1670,8 +1961,8 @@ function VirtualExperienceCreatePageInner() {
                   <div className="flex items-center justify-between px-5 pt-5 pb-3">
                     <p className="text-[13px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Program Outline</p>
                     <button onClick={addModule}
-                      className="flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-xl border transition-all hover:opacity-70"
-                      style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
+                      className="flex items-center gap-1.5 text-[12px] font-semibold px-3 py-2 rounded-xl transition-all hover:opacity-70"
+                      style={{ color: C.muted, background: C.card }}>
                       <Plus className="w-3 h-3" /> Add Milestone
                     </button>
                   </div>
@@ -1683,7 +1974,7 @@ function VirtualExperienceCreatePageInner() {
                       return (
                       <SortableVEShell key={mod.id} id={mod.id}>
                         {({ dragHandle: moduleDragHandle }) => (
-                        <div className="rounded-2xl group" style={{ background: C.pill }}>
+                        <div className="rounded-2xl group overflow-hidden" style={{ background: C.card, boxShadow: C === DARK_C ? 'none' : '0 1px 2px rgba(15,23,42,0.04)' }}>
 
                           {/* MODULE HEADER */}
                           <div className="flex items-center gap-2 px-4 pt-3.5 pb-2.5">
@@ -1714,7 +2005,7 @@ function VirtualExperienceCreatePageInner() {
                               return (
                               <SortableVEShell key={les.id} id={les.id}>
                                 {({ dragHandle: lessonDragHandle }) => (
-                                <div className="rounded-xl overflow-hidden group" style={{ background: C.card }}>
+                                <div className="rounded-xl overflow-hidden group" style={{ background: C.input }}>
 
                                   {/* Lesson header row */}
                                   <div className="flex items-center gap-2 px-3 py-2.5">
@@ -1756,7 +2047,7 @@ function VirtualExperienceCreatePageInner() {
                                         </select>
                                       )}
                                       <button onClick={() => removeLesson(mod.id, les.id)}
-                                        className="hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                        className="hover:text-red-400 opacity-60 group-hover:opacity-100 transition-opacity flex-shrink-0"
                                         style={{ color: C.faint }}>
                                         <Trash2 className="w-3.5 h-3.5" />
                                       </button>
@@ -1838,7 +2129,7 @@ function VirtualExperienceCreatePageInner() {
                                           return (
                                             <SortableVEShell key={req.id} id={req.id}>
                                             {({ dragHandle: reqDragHandle }) => (
-                                            <div className="rounded-xl p-3 space-y-2 group" style={{ background: C.pill }}>
+                                            <div className="rounded-xl p-3.5 space-y-3 group" style={{ background: C.card, boxShadow: C === DARK_C ? '0 0 0 1px rgba(255,255,255,0.05)' : '0 0 0 1px rgba(15,23,42,0.06)' }}>
                                               <div className="flex items-center gap-2">
                                                 {reqDragHandle}
                                                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
@@ -1865,7 +2156,7 @@ function VirtualExperienceCreatePageInner() {
                                                       sharePoints: type === 'linkedin_share' ? (req.sharePoints ?? DEFAULT_LINKEDIN_SHARE_POINTS) : undefined,
                                                     });
                                                   }}
-                                                  style={{ padding: '2px 6px', borderRadius: 6, border: `1px solid ${C.cardBorder}`, background: C.card, color: C.text, fontSize: 11, fontWeight: 700 }}>
+                                                  style={{ padding: '6px 9px', borderRadius: 9, border: '1px solid transparent', background: C.input, color: C.text, fontSize: 11, fontWeight: 700 }}>
                                                   <option value="mcq">Multiple Choice</option>
                                                   <option value="text">Short Answer</option>
                                                   <option value="upload">File Upload</option>
@@ -2346,19 +2637,19 @@ function VirtualExperienceCreatePageInner() {
                 {/* Industry card */}
                 <div style={card} className="p-5 space-y-3">
                   <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Industry</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                     {INDUSTRIES.map(ind => (
                       <button key={ind.id} onClick={() => { setIndustry(ind.id); setConfig(c => c ? { ...c, industry: ind.id } : c); }}
-                        className="flex items-center gap-2 px-3 py-2 rounded-xl text-left transition-all"
-                        style={{ border: `1.5px solid ${industry === ind.id ? C.cta : C.cardBorder}`, background: industry === ind.id ? `${C.cta}12` : 'transparent' }}>
+                        className="flex items-center gap-2 px-3 py-3 rounded-xl text-left transition-all"
+                        style={{ border: '1px solid transparent', background: industry === ind.id ? `${C.cta}12` : C.card, boxShadow: industry === ind.id ? `0 0 0 2px ${C.cta}` : 'none' }}>
                         <span className="text-base">{ind.emoji}</span>
                         <span className="text-[12px] font-semibold" style={{ color: C.text }}>{ind.label}</span>
                         {industry === ind.id && <Check className="w-3 h-3 ml-auto flex-shrink-0" style={{ color: C.cta }} />}
                       </button>
                     ))}
                     <button onClick={() => setIndustry('other')}
-                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-left transition-all"
-                      style={{ border: `1.5px solid ${industry === 'other' ? C.cta : C.cardBorder}`, background: industry === 'other' ? `${C.cta}12` : 'transparent' }}>
+                      className="flex items-center gap-2 px-3 py-3 rounded-xl text-left transition-all"
+                      style={{ border: '1px solid transparent', background: industry === 'other' ? `${C.cta}12` : C.card, boxShadow: industry === 'other' ? `0 0 0 2px ${C.cta}` : 'none' }}>
                       <span className="text-base">✏️</span>
                       <span className="text-[12px] font-semibold" style={{ color: C.text }}>Other</span>
                       {industry === 'other' && <Check className="w-3 h-3 ml-auto flex-shrink-0" style={{ color: C.cta }} />}
@@ -2382,6 +2673,18 @@ function VirtualExperienceCreatePageInner() {
                 {/* Duration card */}
                 <div style={card} className="p-5 space-y-3">
                   <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Duration</p>
+                  <div className="flex flex-wrap gap-2">
+                    {['1-2 hours', '3-4 hours', '1 day', '1 week'].map(option => {
+                      const selected = config.duration === option;
+                      return (
+                        <button key={option} type="button" onClick={() => setConfig(c => c ? { ...c, duration: option } : c)}
+                          className="rounded-xl px-3 py-2 text-[12px] font-semibold transition-all"
+                          style={{ background: selected ? `${C.cta}14` : C.card, color: selected ? C.cta : C.muted, boxShadow: selected ? `0 0 0 2px ${C.cta}` : 'none' }}>
+                          {option}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <input
                     value={config.duration || ''}
                     onChange={e => setConfig(c => c ? { ...c, duration: e.target.value } : c)}
@@ -2403,10 +2706,10 @@ function VirtualExperienceCreatePageInner() {
                       {(config.tools || []).map(t => {
                         const logo = (config.toolLogos || {})[t];
                         return (
-                          <div key={t} className="flex items-center gap-2">
+                          <div key={t} className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-2xl p-3" style={{ background: C.card }}>
                             {/* Logo preview */}
-                            <div className="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden"
-                              style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+                            <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center overflow-hidden"
+                              style={{ background: C.pill }}>
                               {logo
                                 ? <img src={logo} alt={t} className="w-full h-full object-contain p-0.5" />
                                 : <span className="text-[10px] font-bold" style={{ color: C.muted }}>{t[0]}</span>
@@ -2425,8 +2728,8 @@ function VirtualExperienceCreatePageInner() {
                             <button
                               onClick={() => { (toolLogoRef.current as any)._toolName = t; toolLogoRef.current?.click(); }}
                               disabled={uploadingToolLogo === t}
-                              className="flex items-center justify-center w-8 h-8 rounded-lg border flex-shrink-0 transition-all hover:opacity-70"
-                              style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
+                              className="flex items-center justify-center w-10 h-10 rounded-xl flex-shrink-0 transition-all hover:opacity-70"
+                              style={{ color: C.muted, background: C.pill }}>
                               {uploadingToolLogo === t ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
                             </button>
                             {/* Remove logo */}
@@ -2461,19 +2764,28 @@ function VirtualExperienceCreatePageInner() {
                 <div style={card} className="p-5 space-y-3">
                   <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Cover Image</p>
                   {coverImage && (
-                    <img src={resolveCoverUrl(coverImage)} alt="cover" className="w-full object-cover rounded-xl"
-                      style={{ height: 112 }} onError={e => (e.target as HTMLImageElement).style.display = 'none'} />
+                    <img src={resolveCoverUrl(coverImage)} alt="cover" className="w-full object-cover rounded-2xl"
+                      style={{ height: 180 }} onError={e => (e.target as HTMLImageElement).style.display = 'none'} />
+                  )}
+                  {!coverImage && (
+                    <button type="button" onClick={() => coverRef.current?.click()}
+                      className="w-full min-h-36 rounded-2xl flex flex-col items-center justify-center gap-2 transition-opacity hover:opacity-75"
+                      style={{ background: C.card, border: `1px dashed ${C.cardBorder}`, color: C.muted }}>
+                      <Images className="w-6 h-6" />
+                      <span className="text-[13px] font-semibold">Upload or choose a cover image</span>
+                      <span className="text-[11px]" style={{ color: C.faint }}>Recommended 16:9 landscape image</span>
+                    </button>
                   )}
                   <div className="flex gap-2">
                     <input style={{ ...inp, fontSize: 13 }} value={coverImage} onChange={e => setCoverImage(e.target.value)} placeholder="Paste image URL…" />
                     <button onClick={() => coverRef.current?.click()} disabled={uploadingCover}
-                      className="flex items-center justify-center w-10 h-10 rounded-xl border flex-shrink-0 transition-all hover:opacity-70"
-                      style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
+                      className="flex items-center justify-center w-11 h-11 rounded-xl flex-shrink-0 transition-all hover:opacity-70"
+                      style={{ color: C.muted, background: C.card }}>
                       {uploadingCover ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                     </button>
                     <button type="button" onClick={() => setShowCoverLibrary(true)} title="Select from library"
-                      className="flex items-center justify-center w-10 h-10 rounded-xl flex-shrink-0 transition-all hover:opacity-70"
-                      style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
+                      className="flex items-center justify-center w-11 h-11 rounded-xl flex-shrink-0 transition-all hover:opacity-70"
+                      style={{ color: C.muted, background: C.card }}>
                       <Images className="w-4 h-4" />
                     </button>
                   </div>
@@ -2496,7 +2808,7 @@ function VirtualExperienceCreatePageInner() {
                     Students earn this badge on completing the virtual experience, alongside their certificate.
                   </p>
                   {config?.badgeImageUrl && (
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 rounded-2xl p-3" style={{ background: C.card }}>
                       <img src={config.badgeImageUrl} alt="Badge" className="w-16 h-16 rounded-xl object-contain flex-shrink-0"
                         style={{ border: `1px solid ${C.cardBorder}`, background: C.input }}/>
                       <button onClick={() => setConfig(c => c ? { ...c, badgeImageUrl: null } : c)}
@@ -2506,8 +2818,8 @@ function VirtualExperienceCreatePageInner() {
                   )}
                   <div className="flex gap-2">
                     <button onClick={() => badgeInputRef.current?.click()} disabled={uploadingBadge}
-                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-[13px] font-medium transition-all hover:opacity-70 disabled:opacity-50"
-                      style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
+                      className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all hover:opacity-70 disabled:opacity-50"
+                      style={{ color: C.muted, background: C.card }}>
                       {uploadingBadge ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                       {uploadingBadge ? 'Uploading...' : config?.badgeImageUrl ? 'Change badge' : 'Upload badge'}
                     </button>
@@ -2523,15 +2835,18 @@ function VirtualExperienceCreatePageInner() {
                   <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Target Audience</p>
                   {cohorts.length === 0
                     ? <p className="text-[13px]" style={{ color: C.faint }}>No cohorts available.</p>
-                    : <div className="flex flex-wrap gap-2">
+                    : <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         {cohorts.map(c => {
                           const sel = selectedCohorts.includes(c.id);
                           return (
                             <button key={c.id}
                               onClick={() => setSelectedCohorts(prev => sel ? prev.filter(x => x !== c.id) : [...prev, c.id])}
-                              className="px-3 py-1.5 rounded-full text-[13px] font-medium transition-all"
-                              style={{ border: `1.5px solid ${sel ? C.cta : C.cardBorder}`, background: sel ? `${C.cta}18` : 'transparent', color: sel ? C.cta : C.muted }}>
-                              {sel && <Check className="w-3 h-3 inline mr-1" />}{c.name}
+                              className="flex items-center gap-2 px-3 py-3 rounded-xl text-[13px] font-semibold text-left transition-all"
+                              style={{ border: '1px solid transparent', background: sel ? `${C.cta}14` : C.card, color: sel ? C.cta : C.muted, boxShadow: sel ? `0 0 0 2px ${C.cta}` : 'none' }}>
+                              <span className="w-5 h-5 rounded-full grid place-items-center flex-shrink-0" style={{ background: sel ? C.cta : C.pill, color: sel ? C.ctaText : C.faint }}>
+                                {sel && <Check className="w-3 h-3" />}
+                              </span>
+                              {c.name}
                             </button>
                           );
                         })}
@@ -2542,6 +2857,18 @@ function VirtualExperienceCreatePageInner() {
                 {/* Deadline card */}
                 <div style={card} className="p-5 space-y-3">
                   <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Deadline</p>
+                  <div className="flex flex-wrap gap-2">
+                    {['', '7', '14', '30'].map(days => {
+                      const selected = deadlineDays === days;
+                      return (
+                        <button key={days || 'none'} type="button" onClick={() => setDeadlineDays(days)}
+                          className="rounded-xl px-3 py-2 text-[12px] font-semibold transition-all"
+                          style={{ background: selected ? `${C.cta}14` : C.card, color: selected ? C.cta : C.muted, boxShadow: selected ? `0 0 0 2px ${C.cta}` : 'none' }}>
+                          {days ? `${days} days` : 'No deadline'}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <div className="flex items-center gap-2">
                     <input
                       style={{ ...inp, width: 80, textAlign: 'center' }}
@@ -2558,7 +2885,7 @@ function VirtualExperienceCreatePageInner() {
                 </div>
 
                 {/* Save section */}
-                <div className="space-y-2 pb-16">
+                <div className="space-y-2 rounded-2xl p-5 pb-16 sm:pb-5" style={{ background: C.pill }}>
                   {saveError && (
                     <div className="px-4 py-3 rounded-xl text-[13px]" style={{ background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
                       {saveError}
@@ -2571,13 +2898,13 @@ function VirtualExperienceCreatePageInner() {
                   )}
                   <button onClick={() => handleSave('published')} disabled={saving}
                     className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-[15px] transition-all hover:opacity-90 disabled:opacity-60"
-                    style={{ background: C.cta, color: C.ctaText, boxShadow: `0 4px 16px ${C.cta}30` }}>
+                    style={{ background: C.cta, color: C.ctaText }}>
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                     {effectiveId ? 'Update Program' : 'Publish Program'}
                   </button>
                   <button onClick={() => handleSave('draft')} disabled={saving}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-medium text-[15px] border transition-all hover:opacity-70 disabled:opacity-60"
-                    style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-semibold text-[15px] transition-all hover:opacity-70 disabled:opacity-60"
+                    style={{ color: C.muted, background: C.card }}>
                     <Save className="w-4 h-4" /> Save as Draft
                   </button>
                 </div>

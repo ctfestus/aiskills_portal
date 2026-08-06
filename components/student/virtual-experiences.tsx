@@ -18,10 +18,6 @@ import {
   Briefcase, Check, CheckCircle, ChevronLeft, ChevronRight, FileText, Play, RefreshCw, Star, X, Zap,
 } from 'lucide-react';
 
-const IND_COLORS: Record<string, string> = {
-  fintech: '#6366f1', marketing: '#f59e0b', hr: '#10b981', finance: '#3b82f6',
-  edtech: '#8b5cf6', healthcare: '#ef4444', ecommerce: '#f97316', consulting: '#14b8a6',
-};
 const DEADLINE_REFERENCE_MS = Date.now();
 
 // --- Virtual Experience Card ---
@@ -31,7 +27,7 @@ function VirtualExperienceCard({ form, attempt, deadline, C, onDetails }: {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const cfg = form.config || {};
-  const color = IND_COLORS[cfg.industry] || '#6366f1';
+  const color = C.cta;
   const slug  = form.slug || form.id;
   // Shared rule, so a skipped optional LinkedIn share cannot hold this below 100% while the
   // status beside it reads Completed.
@@ -62,10 +58,11 @@ function VirtualExperienceCard({ form, attempt, deadline, C, onDetails }: {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -3 }}
       className="rounded-2xl overflow-hidden flex flex-col"
-      style={{ background: C.card }}>
+      style={{ background: C.card, boxShadow: isDark ? '0 0 0 1px rgba(255,255,255,0.06)' : '0 10px 28px rgba(15,23,42,0.07)' }}>
       {/* Cover */}
-      <div className="relative h-36 overflow-hidden cursor-pointer group flex-shrink-0"
+      <div className="relative h-40 overflow-hidden cursor-pointer group flex-shrink-0"
         style={{ background: `${color}14` }} onClick={onDetails}>
         <div className="absolute inset-0 flex items-center justify-center">
           <Briefcase className="w-10 h-10 opacity-25" style={{ color }}/>
@@ -130,12 +127,12 @@ function VirtualExperienceCard({ form, attempt, deadline, C, onDetails }: {
         {/* Actions */}
         <div className="mt-auto flex items-center gap-2">
           <button onClick={onDetails}
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl transition-opacity hover:opacity-70"
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2.5 rounded-xl transition-opacity hover:opacity-70"
             style={{ background: C.pill, color: C.muted }}>
             <FileText className="w-3 h-3"/> Details
           </button>
           <a href={actionHref}
-            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-opacity hover:opacity-80"
+            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2.5 rounded-xl transition-opacity hover:opacity-80"
             style={{
               background: isCompleted ? C.pill : color,
               color: isCompleted ? C.muted : 'white',
@@ -156,7 +153,7 @@ function VirtualExperienceDetailPane({ form, attempt, C, onClose }: {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const cfg = form.config || {};
-  const color = IND_COLORS[cfg.industry] || '#6366f1';
+  const color = C.cta;
   const slug  = form.slug || form.id;
   const [imgErr, setImgErr] = useState(false);
 
@@ -186,12 +183,16 @@ function VirtualExperienceDetailPane({ form, attempt, C, onClose }: {
         initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 28, stiffness: 260 }}
         className="fixed right-0 top-0 bottom-0 z-50 flex flex-col"
-        style={{ width: 'min(600px, 100vw)', background: C.card, boxShadow: '-4px 0 40px rgba(0,0,0,0.18)' }}
+        style={{ width: 'min(620px, 100vw)', background: C.card, boxShadow: '-12px 0 48px rgba(0,0,0,0.20)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 flex-shrink-0"
           style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
           <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-20" style={{ background: color }} />
+              <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: color }} />
+            </span>
             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
               style={{ background: `${color}18`, color }}>
               {cfg.industry}
@@ -244,11 +245,11 @@ function VirtualExperienceDetailPane({ form, attempt, C, onClose }: {
             )}
             {isCompleted && (
               <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
-                style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0"/>
-                <span className="text-sm font-semibold text-emerald-700">Project completed</span>
+                style={{ background: `${color}12`, color }}>
+                <CheckCircle className="w-4 h-4 flex-shrink-0"/>
+                <span className="text-sm font-semibold">Project completed</span>
                 {attempt?.review?.score !== undefined && (
-                  <span className="ml-auto text-sm font-bold text-emerald-700">{attempt.review.score}/100</span>
+                  <span className="ml-auto text-sm font-bold">{attempt.review.score}/100</span>
                 )}
               </div>
             )}

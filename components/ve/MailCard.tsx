@@ -40,12 +40,12 @@ export function RichTextArea({
     const el = editorRef.current;
     if (el) { el.focus(); onChange(el.innerHTML); setIsEmpty(!el.innerText?.trim()); }
   };
-  const bd = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.1)';
+  const bd = isDark ? 'rgba(255,255,255,0.16)' : '#cbd5e1';
   const tc = isDark ? '#f0f0f0' : '#111';
   const mc = isDark ? '#777' : '#bbb';
   const tb: React.CSSProperties = { width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', borderRadius: 4, cursor: 'pointer', color: tc, fontSize: 13 };
   return (
-    <div style={noBorder ? { background: isDark ? 'rgba(255,255,255,0.02)' : '#fff' } : { border: `1px solid ${bd}`, borderRadius: 10, overflow: 'hidden', background: isDark ? 'rgba(255,255,255,0.02)' : '#fff' }}>
+    <div style={noBorder ? { background: isDark ? 'rgba(255,255,255,0.02)' : '#fff' } : { border: `1.5px solid ${bd}`, borderRadius: 10, overflow: 'hidden', background: isDark ? 'rgba(255,255,255,0.055)' : '#fff', boxShadow: isDark ? 'none' : '0 1px 2px rgba(15,23,42,0.04)' }}>
       {!readOnly && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '6px 10px', background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', borderBottom: `1px solid ${bd}` }}>
           <button onClick={() => exec('bold')} style={tb} title="Bold"><Bold size={14} /></button>
@@ -78,7 +78,7 @@ export interface MailAttachment { name: string; url?: string; onClick?: () => vo
 
 export function MailCard({
   isDark, accent, reqId, subject, sender, toName, toEmail, stamp, bodyHtml,
-  attachments, company, done = false, muteArrival = false, signature = true, chatAction, children,
+  attachments, company, done = false, muteArrival = false, signature = true, signatureAfterChildren = false, chatAction, children,
 }: {
   isDark: boolean;
   accent: string;
@@ -94,6 +94,8 @@ export function MailCard({
   done?: boolean;
   muteArrival?: boolean;     // review/preview: no chime, no arrival animation
   signature?: boolean;
+  /** Assessment emails keep upload/review controls inside the message, before the sign-off. */
+  signatureAfterChildren?: boolean;
   // Optional chat launcher in the action toolbar (e.g. "Chat with Sarah").
   // attention shows a pulsing dot until the chat has been opened once.
   chatAction?: { label: string; onClick: () => void; attention?: boolean };
@@ -113,7 +115,7 @@ export function MailCard({
   }, [isNew]);
 
   const winBg   = isDark ? '#1b1c20' : '#ffffff';
-  const barBg   = isDark ? '#202127' : '#f6f8fc';
+  const barBg   = isDark ? '#202127' : '#f7f9f8';
   const line    = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
   const tText   = isDark ? '#e8eaed' : '#202124';
   const tMuted  = isDark ? '#9aa0a6' : '#5f6368';
@@ -124,13 +126,14 @@ export function MailCard({
   return (
     <div ref={rootRef} className={isNew ? 've-mail-in' : undefined}
       onClick={() => { if (unread) setRead(true); }}
-      style={{ position: 'relative', background: winBg, border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, borderRadius: 16, overflow: 'hidden' }}>
+      style={{ position: 'relative', background: winBg, border: 'none', borderRadius: 20, overflow: 'hidden', boxShadow: isDark ? '0 0 0 1px rgba(255,255,255,0.065)' : '0 10px 30px rgba(15,23,42,0.07)' }}>
       <WorkplaceKeyframes />
 
       {/* App bar: mail identity */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: barBg, borderBottom: `1px solid ${line}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: barBg, borderBottom: `1px solid ${line}` }}>
+        <span className="ve-pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: accent, flexShrink: 0 }} />
         <Inbox style={{ width: 15, height: 15, color: tMuted, flexShrink: 0 }} />
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: tText }}>Inbox</span>
+        <span style={{ fontSize: 12.5, fontWeight: 750, color: tText }}>Work inbox</span>
         <span className="hidden sm:inline" style={{ fontSize: 11.5, color: tFaint, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{toEmail}</span>
         {unread && (
           <span style={{ marginLeft: 4, minWidth: 16, height: 16, borderRadius: 8, background: '#D93025', color: '#fff', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>1</span>
@@ -178,9 +181,9 @@ export function MailCard({
       )}
 
       {/* Subject */}
-      <div style={{ padding: '18px 22px 0', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+      <div style={{ padding: '20px 22px 0', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         {unread && <span title="Unread" style={{ width: 8, height: 8, borderRadius: '50%', background: '#1a73e8', marginTop: 9, flexShrink: 0 }} />}
-        <h3 style={{ fontSize: 19, fontWeight: 700, color: tText, lineHeight: 1.3, margin: 0, flex: 1, minWidth: 0 }}>{subject}</h3>
+        <h3 style={{ fontSize: 18, fontWeight: 750, color: tText, lineHeight: 1.35, margin: 0, flex: 1, minWidth: 0 }}>{subject}</h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginTop: 2 }}>
           <Chip isDark={isDark}>Inbox</Chip>
           <Star size={16} style={{ color: done ? '#f4b400' : tFaint }} fill={done ? '#f4b400' : 'none'} aria-hidden />
@@ -189,7 +192,7 @@ export function MailCard({
 
       {/* Sender row */}
       <div style={{ padding: '14px 22px 0', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-        <PersonAvatar name={sender.name} size={42} color={sender.color} presence="active" />
+        <PersonAvatar {...sender} size={42} presence="active" isDark={isDark} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: tText }}>{sender.name}</span>
@@ -213,7 +216,7 @@ export function MailCard({
       )}
 
       {/* Signature */}
-      {signature && (sender.title || company) && (
+      {signature && !signatureAfterChildren && (sender.title || company) && (
         <div style={{ padding: '10px 22px 4px' }}>
           <p style={{ margin: 0, fontSize: 12.5, color: tMuted, lineHeight: 1.6 }}>
             {sender.name}<br />
@@ -247,6 +250,14 @@ export function MailCard({
           {children}
         </div>
       )}
+      {signature && signatureAfterChildren && (sender.title || company) && (
+        <div style={{ padding: '10px 22px 16px' }}>
+          <p style={{ margin: 0, fontSize: 12.5, color: tMuted, lineHeight: 1.6 }}>
+            {sender.name}<br />
+            <span style={{ color: tFaint }}>{[sender.title, company].filter(Boolean).join(' | ')}</span>
+          </p>
+        </div>
+      )}
       {children == null && <div style={{ height: 14 }} />}
     </div>
   );
@@ -270,7 +281,7 @@ export function MailThreadMsg({ isDark, from, meName, time = 'Just now', receipt
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
       {isMe
         ? <MeAvatar name={meName || 'Me'} size={38} isDark={isDark} />
-        : <PersonAvatar name={(from as Person).name} size={38} color={(from as Person).color} presence="active" />}
+        : <PersonAvatar {...(from as Person)} size={38} presence="active" isDark={isDark} />}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
           <span style={{ fontSize: 13.5, fontWeight: 700, color: tText }}>{isMe ? 'Me' : (from as Person).name}</span>
@@ -301,7 +312,7 @@ export function MailTypingRow({ isDark, person }: { isDark: boolean; person: Per
   }, []);
   return (
     <div ref={ref} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <PersonAvatar name={person.name} size={38} color={person.color} presence="active" />
+      <PersonAvatar {...person} size={38} presence="active" isDark={isDark} />
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 18, background: isDark ? '#2a2b31' : '#f1f3f4' }}>
         <TypingDots isDark={isDark} />
       </div>
@@ -368,7 +379,7 @@ export function MailComposer({
           <CornerUpLeft size={13} style={{ color: tFaint, flexShrink: 0 }} />
           <span style={{ fontSize: 12, color: tMuted }}>To:</span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '2px 10px 2px 3px', borderRadius: 14, background: isDark ? 'rgba(255,255,255,0.07)' : '#f1f3f4' }}>
-            <PersonAvatar name={to.name} size={18} color={to.color} />
+            <PersonAvatar {...to} size={18} isDark={isDark} />
             <span style={{ fontSize: 12, fontWeight: 600, color: isDark ? '#e8eaed' : '#202124' }}>{to.name}</span>
           </span>
         </div>

@@ -256,9 +256,9 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
         onClick={() => inputRef.current?.click()}
         className="cursor-pointer rounded-2xl flex flex-col items-center justify-center gap-3 py-14 px-6 transition-all hover:-translate-y-px"
         style={{
-          border: `1.5px dashed ${dragging ? accentColor : border}`,
-          background: dragging ? `${accentColor}08` : isDark ? 'rgba(255,255,255,0.02)' : '#fafafa',
-          boxShadow: dragging ? `0 0 0 4px ${accentColor}12` : 'none',
+          border: `1.5px dashed ${dragging ? accentColor : isDark ? 'rgba(255,255,255,0.16)' : '#cbd5e1'}`,
+          background: dragging ? `${accentColor}08` : isDark ? 'rgba(255,255,255,0.055)' : '#ffffff',
+          boxShadow: dragging ? `0 0 0 4px ${accentColor}12` : isDark ? 'none' : '0 1px 2px rgba(15,23,42,0.04)',
         }}
       >
         <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${accentColor}15` }}>

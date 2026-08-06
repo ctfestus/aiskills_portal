@@ -84,7 +84,7 @@ export function BriefAskThread({ isDark, accent, manager, studentName, veId, req
 
   const managerBubble = (children: React.ReactNode) => (
     <div style={{ display: 'flex', gap: 8, alignSelf: 'flex-start', maxWidth: '90%', alignItems: 'flex-end' }}>
-      <PersonAvatar name={manager.name} size={24} color={manager.color} />
+      <PersonAvatar {...manager} size={24} isDark={isDark} />
       <div style={{ padding: '8px 12px', borderRadius: '14px 14px 14px 4px', background: isDark ? '#26272c' : '#f1f3f4', color: tText, fontSize: 13.5, lineHeight: 1.55, wordBreak: 'break-word' }}>
         {children}
       </div>
@@ -99,7 +99,7 @@ export function BriefAskThread({ isDark, accent, manager, studentName, veId, req
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: barBg, borderBottom: `1px solid ${line}` }}>
-        <PersonAvatar name={manager.name} size={32} color={manager.color} presence="active" />
+        <PersonAvatar {...manager} size={32} presence="active" isDark={isDark} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: tText, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{manager.name}</p>
           <p style={{ margin: 0, fontSize: 11, color: '#22c55e', fontWeight: 600 }}>Active now</p>
@@ -138,7 +138,7 @@ export function BriefAskThread({ isDark, accent, manager, studentName, veId, req
             maxLength={500}
             autoFocus
             placeholder={`Message ${firstNameOf(manager.name)}...`}
-            style={{ flex: 1, padding: '9px 14px', borderRadius: 18, border: `1px solid ${line}`, background: isDark ? 'rgba(255,255,255,0.03)' : '#fff', color: tText, fontSize: 13.5, outline: 'none' }} />
+            style={{ flex: 1, padding: '9px 14px', borderRadius: 18, border: `1.5px solid ${isDark ? 'rgba(255,255,255,0.16)' : '#cbd5e1'}`, background: isDark ? 'rgba(255,255,255,0.055)' : '#fff', boxShadow: isDark ? 'none' : '0 1px 2px rgba(15,23,42,0.04)', color: tText, fontSize: 13.5, outline: 'none' }} />
           <button onClick={send} disabled={!input.trim() || waiting} title="Send" aria-label="Send"
             style={{ width: 34, height: 34, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', border: 'none', background: input.trim() && !waiting ? accent : (isDark ? '#333' : '#e0e0e0'), color: input.trim() && !waiting ? '#fff' : (isDark ? '#666' : '#aaa'), cursor: input.trim() && !waiting ? 'pointer' : 'not-allowed' }}>
             <Send size={14} />

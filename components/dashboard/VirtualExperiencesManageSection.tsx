@@ -157,6 +157,8 @@ export function VirtualExperiencesManageSection({ C, forms, setFormToDelete, onD
           learn_outcomes: original.learn_outcomes,
           manager_name:  original.manager_name,
           manager_title: original.manager_title,
+          guide_id:      original.guide_id,
+          guide_snapshot: original.guide_snapshot,
           modules:       original.modules,
           dataset:       original.dataset,
           cover_image:   original.cover_image,
@@ -181,7 +183,8 @@ export function VirtualExperiencesManageSection({ C, forms, setFormToDelete, onD
         role: newVe.role, company: newVe.company, duration: newVe.duration,
         tools: newVe.tools, tagline: newVe.tagline, background: newVe.background,
         learnOutcomes: newVe.learn_outcomes, managerName: newVe.manager_name,
-        managerTitle: newVe.manager_title, dataset: newVe.dataset,
+        managerTitle: newVe.manager_title, guideId: newVe.guide_id,
+        guideSnapshot: newVe.guide_snapshot, dataset: newVe.dataset,
         coverImage: newVe.cover_image, deadline_days: newVe.deadline_days,
         theme: newVe.theme, mode: newVe.mode, font: newVe.font, customAccent: newVe.custom_accent,
       }};

@@ -166,6 +166,8 @@ export function AssignmentDetail({ assignment, userId, studentName, studentEmail
                 coverImage: veData.cover_image,
                 managerName: veData.manager_name,
                 managerTitle: veData.manager_title,
+                guideId: veData.guide_id,
+                guideSnapshot: veData.guide_snapshot,
                 dataset: veData.dataset,
                 background: veData.background,
               },

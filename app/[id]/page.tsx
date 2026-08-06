@@ -380,6 +380,7 @@ export default function PublicFormPage() {
           industry: ve.industry, difficulty: ve.difficulty, role: ve.role, company: ve.company,
           duration: ve.duration, tools: ve.tools, toolLogos: ve.tool_logos ?? {}, tagline: ve.tagline, background: ve.background,
           learnOutcomes: ve.learn_outcomes, managerName: ve.manager_name, managerTitle: ve.manager_title,
+          guideId: ve.guide_id, guideSnapshot: ve.guide_snapshot,
           dataset: ve.dataset, coverImage: ve.cover_image, deadline_days: ve.deadline_days,
           theme: ve.theme, mode: ve.mode, font: ve.font, customAccent: ve.custom_accent,
         }};

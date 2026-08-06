@@ -4,13 +4,20 @@
 // used by VirtualExperienceTaker and AssignmentExperiencePlayer. Presentational
 // only: all progress/AI-review logic stays in the players.
 
-import React from 'react';
-import { FileSpreadsheet, FileText, FileImage, FileCode2, File as FileIcon, Paperclip } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Building2, FileSpreadsheet, FileText, FileImage, FileCode2, File as FileIcon, Paperclip } from 'lucide-react';
+import { LinkedInIcon } from '@/components/LinkedInIcon';
 
 export interface Person {
   name: string;
   email?: string;
   title?: string;
+  avatarUrl?: string;
+  company?: string;
+  bio?: string;
+  linkedinUrl?: string;
+  expertise?: string[];
   color: string;
 }
 
@@ -171,20 +178,55 @@ export function anchorZone(reqId: string, delay = 90) {
 
 // -- small visual atoms --------------------------------------------------------
 
-export function PersonAvatar({ name, size, color, presence }: {
-  name: string; size: number; color: string; presence?: 'active' | 'away' | 'none';
+export function PersonAvatar({ name, size, color, presence, avatarUrl, title, company, bio, linkedinUrl, expertise, isDark = false }: {
+  name: string;
+  size: number;
+  color: string;
+  presence?: 'active' | 'away' | 'none';
+  avatarUrl?: string;
+  title?: string;
+  email?: string;
+  company?: string;
+  bio?: string;
+  linkedinUrl?: string;
+  expertise?: string[];
+  isDark?: boolean;
 }) {
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profilePos, setProfilePos] = useState({ top: 0, left: 0 });
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seed = encodeURIComponent(name);
   const dotSize = Math.max(8, Math.round(size * 0.28));
+  const profileBg = isDark ? '#222329' : '#ffffff';
+  const profileText = isDark ? '#f4f5f7' : '#172033';
+  const profileMuted = isDark ? '#aeb4bf' : '#5f6b7a';
+  const profileLine = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.10)';
+  const showProfile = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const cardWidth = 280;
+    const roomOnRight = rect.right + 8 + cardWidth <= window.innerWidth - 12;
+    const roomOnLeft = rect.left - 8 - cardWidth >= 12;
+    const left = roomOnRight ? rect.right + 8 : roomOnLeft ? rect.left - cardWidth - 8 : Math.max(12, Math.min(rect.left, window.innerWidth - cardWidth - 12));
+    const top = Math.max(12, Math.min(rect.top - 16, window.innerHeight - 240));
+    setProfilePos({ top, left });
+    setProfileOpen(true);
+  };
+  const scheduleClose = () => {
+    closeTimer.current = setTimeout(() => setProfileOpen(false), 180);
+  };
+  const keepOpen = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  };
   return (
-    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+    <div onMouseEnter={showProfile} onMouseLeave={scheduleClose} style={{ position: 'relative', width: size, height: size, flexShrink: 0, cursor: 'default' }}>
       <div style={{ width: size, height: size, borderRadius: '50%', overflow: 'hidden', position: 'relative', background: color }}>
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: Math.floor(size * 0.33), fontWeight: 800, color: '#fff' }}>
           {initialsOf(name)}
         </div>
         <img
-          src={`https://api.dicebear.com/8.x/personas/svg?seed=${seed}`}
-          alt=""
+          src={avatarUrl || `https://api.dicebear.com/8.x/personas/svg?seed=${seed}`}
+          alt={avatarUrl ? name : ''}
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
           onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = '0'; }}
         />
@@ -195,6 +237,37 @@ export function PersonAvatar({ name, size, color, presence }: {
           background: presence === 'active' ? '#2BAC76' : '#E8A427',
           border: '2px solid #fff', boxSizing: 'border-box',
         }} />
+      )}
+      {profileOpen && typeof document !== 'undefined' && createPortal(
+        <div onMouseEnter={keepOpen} onMouseLeave={scheduleClose} role="tooltip" style={{
+          position: 'fixed', top: profilePos.top, left: profilePos.left, width: 280, zIndex: 10000,
+          background: profileBg, color: profileText, border: `1px solid ${profileLine}`, borderRadius: 16,
+          boxShadow: isDark ? '0 18px 44px rgba(0,0,0,0.46)' : '0 16px 38px rgba(15,23,42,0.16)', padding: 14,
+        }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <div style={{ width: 44, height: 44, position: 'relative', flexShrink: 0 }}>
+              <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', overflow: 'hidden', background: color }}>
+                <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800 }}>{initialsOf(name)}</div>
+                <img src={avatarUrl || `https://api.dicebear.com/8.x/personas/svg?seed=${seed}`} alt={avatarUrl ? name : ''} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.opacity = '0'; }} />
+              </div>
+              {presence === 'active' && <span style={{ position: 'absolute', right: -2, bottom: -2, width: 13, height: 13, borderRadius: '50%', background: '#2BAC76', border: `2.5px solid ${profileBg}`, boxSizing: 'border-box' }} />}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <p style={{ margin: 0, fontSize: 16, lineHeight: 1.2, fontWeight: 800 }}>{name}</p>
+                {linkedinUrl && <a href={linkedinUrl} target="_blank" rel="noopener noreferrer" aria-label={`Open ${name}'s LinkedIn profile`} title="View LinkedIn profile" style={{ width: 16, height: 16, display: 'inline-flex', flexShrink: 0, color: '#0A66C2', textDecoration: 'none' }}><LinkedInIcon style={{ width: 16, height: 16 }} /></a>}
+              </div>
+              {title && <p style={{ margin: '3px 0 0', fontSize: 12, color: profileMuted, lineHeight: 1.3 }}>{title}</p>}
+              {company && <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Building2 aria-hidden="true" style={{ width: 14, height: 14, color: isDark ? '#949ba7' : '#7a8695', flexShrink: 0 }} />
+                <span style={{ fontSize: 11.5, color: isDark ? '#b7bdc7' : '#667085', fontWeight: 650 }}>{company}</span>
+              </div>}
+            </div>
+          </div>
+          {bio && <p style={{ margin: '13px 0 0', fontSize: 12.5, lineHeight: 1.5, color: isDark ? '#c7cbd3' : '#465366' }}>{bio}</p>}
+          {!!expertise?.length && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 12 }}>{expertise.slice(0, 4).map(item => <span key={item} style={{ padding: '4px 8px', borderRadius: 999, background: isDark ? 'rgba(54,211,153,0.12)' : '#eef9f4', color: isDark ? '#75d9ae' : '#147554', fontSize: 10.5, fontWeight: 700 }}>{item}</span>)}</div>}
+        </div>,
+        document.body,
       )}
     </div>
   );
@@ -305,7 +378,7 @@ export function ArrivalIndicator({ isDark, accent, manager, hiddenCount, nextKin
   const verb = nextKind === 'plain' ? 'unlocks' : 'arrives';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      {nextKind !== 'plain' && <PersonAvatar name={manager.name} size={26} color={manager.color} presence="active" />}
+      {nextKind !== 'plain' && <PersonAvatar {...manager} size={26} presence="active" isDark={isDark} />}
       <span className="animate-pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: accent, display: 'inline-block', flexShrink: 0 }} />
       <p style={{ fontSize: 12.5, color: tFaint, margin: 0 }}>
         {hiddenCount} more {noun} {preposition} - {pronoun} {verb} once you finish this
