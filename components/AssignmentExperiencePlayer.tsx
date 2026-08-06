@@ -138,9 +138,14 @@ export default function AssignmentExperiencePlayer({
   // Simulated workplace identities for the mail/chat surfaces.
   const workDomain = companyDomain(config.company, config.title);
   const manager: Person = {
-    name:  config.managerName || 'Project Manager',
-    title: config.managerTitle || 'Project Lead',
-    email: personEmail(config.managerName || 'Project Manager', workDomain),
+    name:  config.guideSnapshot?.fullName || config.managerName || 'Project Manager',
+    title: config.guideSnapshot?.professionalTitle || config.managerTitle || 'Project Lead',
+    email: personEmail(config.guideSnapshot?.fullName || config.managerName || 'Project Manager', workDomain),
+    avatarUrl: config.guideSnapshot?.profilePhotoUrl,
+    company: config.guideSnapshot?.company || config.company,
+    bio: config.guideSnapshot?.bio,
+    linkedinUrl: config.guideSnapshot?.linkedinUrl,
+    expertise: config.guideSnapshot?.expertise,
     color: '#3b82f6',
   };
   const meEmail  = personEmail(studentName || 'me', workDomain);
@@ -154,6 +159,9 @@ export default function AssignmentExperiencePlayer({
   const muted    = isDark ? '#aaa' : '#555';
   const faint    = isDark ? '#666' : '#999';
   const subtle   = isDark ? '#2a2b34' : '#fafafa';
+  const fieldBg = isDark ? 'rgba(255,255,255,0.055)' : '#ffffff';
+  const fieldBorder = isDark ? 'rgba(255,255,255,0.16)' : '#cbd5e1';
+  const fieldShadow = isDark ? 'none' : '0 1px 2px rgba(15,23,42,0.04)';
   const barBg    = isDark ? 'rgba(255,255,255,0.08)' : '#eee';
   const divider  = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
   const optionBg = isDark ? '#2a2b34' : 'white';
@@ -625,7 +633,7 @@ export default function AssignmentExperiencePlayer({
               {/* Body */}
               {hasContent && (() => {
                 const bodyContent = currentLes.doc ? (
-                  <LessonRenderer key={currentLes.id} doc={currentLes.doc} isDark={isDark} />
+                  <LessonRenderer key={currentLes.id} doc={currentLes.doc} isDark={isDark} accentColor={accent} />
                 ) : (
                   <div className="rich-content text-sm leading-relaxed" style={{ color: isDark ? '#ccc' : '#333' }}
                     dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentLes.body) }}/>
@@ -888,7 +896,7 @@ export default function AssignmentExperiencePlayer({
                                 sender={manager} toName={studentName} toEmail={meEmail} stamp={stamp}
                                 bodyHtml={(req.emailBody || req.description) ? sanitizeEmailContent(applyNameTags(req.emailBody || req.description || '', studentName)) : undefined}
                                 attachments={efAttachments.length ? efAttachments : undefined}
-                                company={config.company} done={isDone} muteArrival={readOnly || previewMode}>
+                                company={config.company} done={isDone} muteArrival={readOnly || previewMode} signatureAfterChildren>
                                 {children}
                               </MailCard>
                             </div>
@@ -1234,14 +1242,14 @@ export default function AssignmentExperiencePlayer({
                                           {isDeliverable ? 'Attach your deliverable' : 'Attach your file'}
                                         </div>
                                         <div style={{ padding: '14px 16px', background: bg, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 8, border: `1.5px dashed ${border}`, cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, color: muted }}>
+                                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 10, border: `1.5px dashed ${fileUrl ? `${accent}80` : fieldBorder}`, background: fileUrl ? `${accent}08` : fieldBg, boxShadow: fieldShadow, cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, color: fileUrl ? accent : muted }}>
                                             {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
                                             {uploading ? 'Uploading...' : (fileUrl ? 'Replace file' : 'Attach file')}
                                             <input type="file" className="hidden" disabled={uploading} onChange={async e => { const file = e.target.files?.[0]; if (!file) return; await handleFileUpload(req.id, file, true); e.target.value = ''; }} />
                                           </label>
                                           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                             <input value={linkUrl} onChange={e => updateProgress(req.id, { linkUrl: e.target.value })}
-                                              placeholder="Or paste a link..." style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${border}`, background: subtle, color: text, fontSize: 13, outline: 'none' }} />
+                                              placeholder="Or paste a link..." style={{ flex: 1, padding: '9px 12px', borderRadius: 10, border: `1.5px solid ${fieldBorder}`, background: fieldBg, boxShadow: fieldShadow, color: text, fontSize: 13, outline: 'none' }} />
                                           </div>
                                           {(fileUrl || linkUrl) && (
                                             <button onClick={handleEfSend}
@@ -1453,7 +1461,7 @@ export default function AssignmentExperiencePlayer({
                                 placeholder="Type your answer here..."
                                 rows={4}
                                 className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none"
-                                style={{ border: `1px solid ${isDone ? `${accent}40` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: isDone ? `${accent}05` : subtle, color: text }}
+                                style={{ border: `1.5px solid ${isDone ? `${accent}80` : fieldBorder}`, background: isDone ? `${accent}08` : fieldBg, boxShadow: fieldShadow, color: text }}
                               />
                             </div>
                           );
@@ -1570,13 +1578,14 @@ export default function AssignmentExperiencePlayer({
                                       the input) follows its rounded corners instead of drawing a sharp
                                       rectangle inside a bordered wrapper. */}
                                   <div className="flex-1 min-w-0 relative">
-                                    <LinkIcon className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: faint }}/>
+                                    <LinkIcon className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: isDark ? '#8a8a8a' : '#64748b' }}/>
                                     <input type="url" inputMode="url" value={draft} readOnly={readOnly}
                                       placeholder="https://www.linkedin.com/posts/..."
                                       className="w-full min-w-0 pl-9 pr-3 py-2.5 rounded-xl text-sm outline-none"
                                       style={{
-                                        border: `1px solid ${error ? '#f43f5e' : claimed ? `${accent}40` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-                                        background: subtle,
+                                        border: `1.5px solid ${error ? '#f43f5e' : claimed ? `${accent}80` : isDark ? 'rgba(255,255,255,0.16)' : '#cbd5e1'}`,
+                                        background: isDark ? 'rgba(255,255,255,0.055)' : '#ffffff',
+                                        boxShadow: isDark ? 'none' : '0 1px 2px rgba(15,23,42,0.04)',
                                         color: text,
                                       }}
                                       onChange={e => {
@@ -1612,7 +1621,7 @@ export default function AssignmentExperiencePlayer({
                                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveProfileAndRetry(req.id); } }}
                                         placeholder="linkedin.com/in/your-name"
                                         className="flex-1 min-w-0 px-3 py-2.5 rounded-xl text-sm outline-none"
-                                        style={{ border: `1px solid ${profileError ? '#f43f5e' : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: isDark ? 'rgba(255,255,255,0.05)' : '#fff', color: text }}
+                                        style={{ border: `1.5px solid ${profileError ? '#f43f5e' : fieldBorder}`, background: fieldBg, boxShadow: fieldShadow, color: text }}
                                       />
                                       <button
                                         type="button"
@@ -1671,7 +1680,7 @@ export default function AssignmentExperiencePlayer({
                                 {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
                               </div>
                               <label className="flex flex-col items-center gap-2 rounded-xl py-6 transition-all"
-                                style={{ border: `1.5px dashed ${fileUrl ? `${accent}60` : isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'}`, background: fileUrl ? `${accent}04` : subtle, cursor: readOnly ? 'default' : 'pointer' }}>
+                                style={{ border: `1.5px dashed ${fileUrl ? `${accent}80` : fieldBorder}`, background: fileUrl ? `${accent}08` : fieldBg, boxShadow: fieldShadow, cursor: readOnly ? 'default' : 'pointer' }}>
                                 {uploading
                                   ? <Loader2 className="w-5 h-5 animate-spin" style={{ color: accent }}/>
                                   : fileUrl
@@ -1683,8 +1692,8 @@ export default function AssignmentExperiencePlayer({
                                 {fileUrl && <a href={fileUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[11px] underline" style={{ color: accent }}>View file</a>}
                                 <input type="file" className="hidden" disabled={readOnly} onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(req.id, f); }}/>
                               </label>
-                              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
-                                style={{ border: `1px solid ${linkUrl ? `${accent}40` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: subtle }}>
+                              <div className="ve-field-shell flex items-center gap-2 px-3 py-2.5 rounded-xl"
+                                style={{ border: `1.5px solid ${linkUrl ? `${accent}80` : fieldBorder}`, background: fieldBg, boxShadow: fieldShadow }}>
                                 <LinkIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: faint }}/>
                                 <input type="url" value={linkUrl} readOnly={readOnly} placeholder="Or paste a link..."
                                   className="flex-1 bg-transparent text-sm outline-none"
@@ -1695,23 +1704,28 @@ export default function AssignmentExperiencePlayer({
                           );
                         }
 
-                        // Task / Deliverable / Reflection -- checkbox
+                        // Task / Deliverable / Reflection -- lightweight completion row
                         if (['task', 'deliverable', 'reflection'].includes(req.type)) {
                           return (
-                            <div key={req.id} className="flex items-start gap-3">
-                              <button
-                                disabled={readOnly}
-                                className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center mt-0.5 transition-all"
-                                style={{ background: isDone ? accent : 'transparent', border: `1.5px solid ${isDone ? accent : isDark ? '#555' : '#ccc'}`, cursor: readOnly ? 'default' : 'pointer' }}
-                                onClick={() => { if (readOnly) return; updateProgress(req.id, { completed: !isDone }); }}
-                              >
-                                {isDone && <CheckCircle2 style={{ width: 12, height: 12, color: 'white' }}/>}
-                              </button>
+                            <button key={req.id}
+                              disabled={readOnly}
+                              className="flex items-start gap-3 w-full text-left"
+                              style={{ cursor: readOnly ? 'default' : 'pointer' }}
+                              onClick={() => { if (readOnly) return; updateProgress(req.id, { completed: !isDone }); }}>
+                              <span className="flex-shrink-0 mt-0.5 pointer-events-none" aria-hidden="true">
+                                {isDone
+                                  ? <CheckCircle2 className="w-5 h-5" style={{ color: accent }}/>
+                                  : <Circle className="w-5 h-5" style={{ color: accent, opacity: 0.55 }}/>
+                                }
+                              </span>
                               <div className="flex-1">
                                 <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
                                 {req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}
+                                {!isDone && !readOnly && (
+                                  <p className="text-[11.5px] mt-1 font-semibold" style={{ color: accent, opacity: 0.8 }}>Click to mark as done</p>
+                                )}
                               </div>
-                            </div>
+                            </button>
                           );
                         }
 

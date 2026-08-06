@@ -105,6 +105,15 @@ interface ProjectConfig {
   company: string;
   managerName?: string;
   managerTitle?: string;
+  guideSnapshot?: {
+    fullName: string;
+    professionalTitle?: string;
+    company?: string;
+    profilePhotoUrl?: string;
+    bio?: string;
+    linkedinUrl?: string;
+    expertise?: string[];
+  } | null;
   duration: string;
   tools: string[];
   tagline: string;
@@ -211,6 +220,9 @@ export default function VirtualExperienceTaker({
   const text     = isDark ? '#f0f0f0' : '#111';
   const muted    = isDark ? '#888' : '#666';
   const subtle   = isDark ? '#262626' : '#f0f0ec';
+  const fieldBg = isDark ? 'rgba(255,255,255,0.055)' : '#ffffff';
+  const fieldBorder = isDark ? 'rgba(255,255,255,0.16)' : '#cbd5e1';
+  const fieldShadow = isDark ? 'none' : '0 1px 2px rgba(15,23,42,0.04)';
 
   const navText    = isDark ? text : '#111';
   const navMuted   = isDark ? muted : '#666';
@@ -222,9 +234,14 @@ export default function VirtualExperienceTaker({
   // mail/chat surfaces read like a real workplace.
   const workDomain = companyDomain(config.company, config.title);
   const manager: Person = {
-    name:  config.managerName || 'Your Manager',
-    title: config.managerTitle || 'Project Lead',
-    email: personEmail(config.managerName || 'Your Manager', workDomain),
+    name:  config.guideSnapshot?.fullName || config.managerName || 'Your Manager',
+    title: config.guideSnapshot?.professionalTitle || config.managerTitle || 'Project Lead',
+    email: personEmail(config.guideSnapshot?.fullName || config.managerName || 'Your Manager', workDomain),
+    avatarUrl: config.guideSnapshot?.profilePhotoUrl,
+    company: config.guideSnapshot?.company || config.company,
+    bio: config.guideSnapshot?.bio,
+    linkedinUrl: config.guideSnapshot?.linkedinUrl,
+    expertise: config.guideSnapshot?.expertise,
     color: '#3b82f6',
   };
   const meEmail  = personEmail(studentName || 'me', workDomain);
@@ -599,7 +616,7 @@ export default function VirtualExperienceTaker({
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
               onError={e => (e.currentTarget.style.display = 'none')} />
           ) : (
-            <div style={{ position: 'absolute', inset: 0, background: '#0e09dd' }} />
+            <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${accentColor}, ${accentColor}99)` }} />
           )}
           {/* Dark overlay for readability */}
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.25) 100%)' }} />
@@ -627,14 +644,15 @@ export default function VirtualExperienceTaker({
         <div className="flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-4">
 
           {/* Stats row */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 overflow-hidden rounded-2xl"
+            style={{ background: isDark ? '#1c1c1c' : '#fff', boxShadow: isDark ? '0 0 0 1px rgba(255,255,255,0.06)' : '0 10px 28px rgba(15,23,42,0.06)' }}>
             {[
               { label: 'Milestones', value: totalModules },
               { label: 'Missions',   value: totalLessons },
               { label: 'Score',      value: '100%' },
             ].map(s => (
-              <div key={s.label} className="rounded-2xl p-4 text-center"
-                style={{ background: isDark ? '#1c1c1c' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)'}` }}>
+              <div key={s.label} className="p-4 text-center [&:not(:last-child)]:border-r"
+                style={{ borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }}>
                 <p className="text-2xl font-black" style={{ color: accentColor }}>{s.value}</p>
                 <p className="text-[12px] mt-0.5" style={{ color: muted }}>{s.label}</p>
               </div>
@@ -644,7 +662,7 @@ export default function VirtualExperienceTaker({
           {/* Skills demonstrated */}
           {(config.learnOutcomes || []).length > 0 && (
             <div className="rounded-2xl overflow-hidden"
-              style={{ background: isDark ? '#1c1c1c' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)'}` }}>
+              style={{ background: isDark ? '#1c1c1c' : '#fff', boxShadow: isDark ? '0 0 0 1px rgba(255,255,255,0.06)' : '0 10px 28px rgba(15,23,42,0.06)' }}>
               <div className="px-5 py-4 border-b flex items-center gap-2"
                 style={{ borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }}>
                 <Star className="w-4 h-4" style={{ color: accentColor }} fill={accentColor} />
@@ -701,7 +719,7 @@ export default function VirtualExperienceTaker({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-[15px] transition-all hover:opacity-90"
-                  style={{ background: '#0A66C2', color: '#fff', boxShadow: '0 8px 24px rgba(10,102,194,0.35)' }}
+                  style={{ background: '#0A66C2', color: '#fff' }}
                 >
                   <LinkedInIcon className="w-5 h-5" /> Add to LinkedIn Profile
                 </a>
@@ -719,7 +737,7 @@ export default function VirtualExperienceTaker({
               <>
                 <button onClick={handleGetCertificate} disabled={certLoading}
                   className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-[15px] transition-all hover:opacity-90 disabled:opacity-60"
-                  style={{ background: accentColor, color: isDark ? '#111' : '#fff', boxShadow: `0 8px 24px ${accentColor}35` }}>
+                  style={{ background: accentColor, color: isDark ? '#111' : '#fff' }}>
                   {certLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Award className="w-5 h-5" />}
                   {certLoading ? 'Generating Certificate…' : 'Get Certificate'}
                 </button>
@@ -749,11 +767,11 @@ export default function VirtualExperienceTaker({
   return (
     <div className="relative flex flex-col h-screen overflow-hidden font-sans" style={{ background: bg, color: text }}>
 
-      {/* Full-width nav bar -- same background as the body, no divider (matches course) */}
-      <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 sm:px-6 py-2"
-        style={{ background: isDark ? '#141414' : '#F2F5FA', minHeight: 44 }}>
+      {/* Compact workplace bar */}
+      <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 sm:px-6 py-2.5"
+        style={{ background: isDark ? '#141414' : '#F2F5FA', minHeight: 52 }}>
         {/* Left: hamburger (mobile, only when sidebar closed) + logo */}
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           {!sidebarOpen && (
             <button onClick={() => setSidebarOpen(true)}
               className={`sm:hidden p-1.5 rounded-lg transition-colors flex-shrink-0 ${isDark ? 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100'}`}
@@ -766,6 +784,16 @@ export default function VirtualExperienceTaker({
               <img src={(isDark ? (logoDarkUrl || logoUrl) : logoUrl) || undefined} alt="" style={{ height: 24, width: 'auto', objectFit: 'contain' }} />
             </Link>
           )}
+          <div className="hidden sm:block min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-20" style={{ background: accentColor }} />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full" style={{ background: accentColor }} />
+              </span>
+              <span className="text-[9px] font-black uppercase tracking-[0.16em]" style={{ color: accentColor }}>Workplace</span>
+            </div>
+            <p className="max-w-[320px] truncate text-[13px] font-semibold" style={{ color: navText }}>{config.title || config.company || 'Virtual Experience'}</p>
+          </div>
         </div>
         <div className="flex-1" />
         {/* Right: controls */}
@@ -778,7 +806,7 @@ export default function VirtualExperienceTaker({
               <Download className="w-3.5 h-3.5" />
             </button>
           )}
-          <span className="text-xs tabular-nums" style={{ color: navMuted }}>{overallPct}%</span>
+          <span className="rounded-full px-2.5 py-1 text-[11px] font-bold tabular-nums" style={{ color: accentColor, background: `${accentColor}12` }}>{overallPct}% complete</span>
         </div>
       </div>
 
@@ -794,7 +822,7 @@ export default function VirtualExperienceTaker({
       {/* Sidebar: absolute overlay on mobile, in-flow on sm+ -- rounded card to match the course player */}
       <aside className={`absolute inset-y-0 left-0 z-[56] rounded-r-2xl sm:relative sm:inset-auto sm:z-40 flex-shrink-0 flex flex-col transition-all duration-300 sm:my-3 sm:ml-3 sm:rounded-2xl ${!sidebarOpen ? '-translate-x-full sm:translate-x-0' : 'translate-x-0'}`}
         style={{
-          width: sidebarOpen ? 'min(100vw, 360px)' : 48, minWidth: sidebarOpen ? 'min(100vw, 360px)' : 48,
+          width: sidebarOpen ? 'min(100vw, 324px)' : 48, minWidth: sidebarOpen ? 'min(100vw, 324px)' : 48,
           background: surface,
           overflow: sidebarOpen ? 'hidden' : 'visible',
         }}>
@@ -804,9 +832,8 @@ export default function VirtualExperienceTaker({
           {sidebarOpen ? (
             <>
               <div className="min-w-0 flex-1">
-                <p className="text-xl font-bold leading-snug pt-1" style={{ color: text }}>
-                  {config.title || config.company || 'Virtual Experience'}
-                </p>
+                <p className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: accentColor }}>Mission outline</p>
+                <p className="text-[15px] font-bold leading-snug pt-1 truncate" style={{ color: text }}>{config.role || config.title || 'Virtual Experience'}</p>
               </div>
               <div className="relative group ml-2 flex-shrink-0">
                 <button onClick={() => setSidebarOpen(false)} style={{ color: muted }} className="hover:opacity-60 p-1">
@@ -1017,7 +1044,7 @@ export default function VirtualExperienceTaker({
                   const isExpanded = isContentExpanded;
 
                   const lessonBodyContent = currentLes.doc ? (
-                    <LessonRenderer key={currentLes.id} doc={currentLes.doc} isDark={isDark} />
+                    <LessonRenderer key={currentLes.id} doc={currentLes.doc} isDark={isDark} accentColor={accentColor} />
                   ) : (
                     <div
                       className={`prose prose-sm max-w-none [font-size:14.5px] ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
@@ -1104,11 +1131,24 @@ export default function VirtualExperienceTaker({
                         && !typingAcks.has(r.id) && !typingDecisions.has(r.id) && !efTyping[r.id]
                       )) return null;
 
-                      const rowStyle: React.CSSProperties = {
+                      const workplaceSurface = req.emailFrame || ['briefing', 'scenario_update', 'decision', 'debrief'].includes(req.type);
+                      const classicActionSurface = ['task', 'deliverable', 'linkedin_share'].includes(req.type);
+                      const rowStyle: React.CSSProperties = workplaceSurface ? {
+                        background: 'transparent',
+                      } : classicActionSurface ? {
                         borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
                         borderLeft: done ? `3px solid ${accentColor}` : `3px solid ${accentColor}30`,
                         background: done ? (isDark ? `${accentColor}08` : `${accentColor}05`) : 'transparent',
                         transition: 'background 0.2s, border-left-color 0.2s',
+                      } : {
+                        margin: '10px clamp(12px, 3vw, 24px) 16px',
+                        borderRadius: 16,
+                        background: done
+                          ? (isDark ? `${accentColor}0d` : `${accentColor}08`)
+                          : (isDark ? 'rgba(255,255,255,0.035)' : '#f7f8f7'),
+                        boxShadow: isDark ? '0 0 0 1px rgba(255,255,255,0.055)' : '0 0 0 1px rgba(15,23,42,0.055)',
+                        overflow: 'hidden',
+                        transition: 'background 0.2s, box-shadow 0.2s',
                       };
 
                       if (req.type === 'briefing' || req.type === 'scenario_update') {
@@ -1338,7 +1378,7 @@ export default function VirtualExperienceTaker({
                               sender={manager} toName={studentName} toEmail={meEmail} stamp={efStamp}
                               bodyHtml={(req.emailBody || req.description) ? sanitizeEmailContent(applyNameTags(req.emailBody || req.description || '', studentName)) : undefined}
                               attachments={efAttachments.length ? efAttachments : undefined}
-                              company={config.company} done={done} muteArrival={reviewMode || previewMode}>
+                              company={config.company} done={done} muteArrival={reviewMode || previewMode} signatureAfterChildren>
                               {children}
                             </MailCard>
                           </div>
@@ -1695,7 +1735,7 @@ export default function VirtualExperienceTaker({
                                       {isDeliverable ? 'Attach your deliverable' : 'Attach your file'}
                                     </div>
                                     <div style={{ padding: '14px 16px', background: isDark ? '#1a1a1a' : '#fff', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 8, border: `1.5px dashed ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'}`, cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, color: isDark ? '#aaa' : '#666' }}>
+                                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 10, border: `1.5px dashed ${fileUrl ? `${accentColor}80` : fieldBorder}`, background: fileUrl ? `${accentColor}08` : fieldBg, boxShadow: fieldShadow, cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, color: fileUrl ? accentColor : isDark ? '#c3c3c3' : '#475569' }}>
                                         {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
                                         {uploading ? 'Uploading...' : (fileUrl ? 'Replace file' : 'Attach file')}
                                         <input type="file" className="hidden" disabled={uploading} onChange={async e => {
@@ -1706,7 +1746,7 @@ export default function VirtualExperienceTaker({
                                       </label>
                                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                         <input value={linkUrl} onChange={e => setProgress(prev => ({ ...prev, [req.id]: { ...prev[req.id], linkUrl: e.target.value } }))}
-                                          placeholder="Or paste a link..." style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: isDark ? 'rgba(255,255,255,0.04)' : '#f8f8f8', color: isDark ? '#ddd' : '#333', fontSize: 13, outline: 'none' }} />
+                                          placeholder="Or paste a link..." style={{ flex: 1, padding: '9px 12px', borderRadius: 10, border: `1.5px solid ${fieldBorder}`, background: fieldBg, boxShadow: fieldShadow, color: isDark ? '#ddd' : '#333', fontSize: 13, outline: 'none' }} />
                                       </div>
                                       {(fileUrl || linkUrl) && (
                                         <button onClick={handleEfSend}
@@ -1887,7 +1927,7 @@ export default function VirtualExperienceTaker({
                                       });
                                     }}
                                     disabled={done}
-                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left text-[14.5px] transition-all disabled:cursor-default"
+                                    className="w-full flex items-center gap-2.5 px-3.5 py-3 rounded-xl text-left text-[14px] transition-all disabled:cursor-default"
                                     style={{
                                       background: showCorrect
                                         ? `${accentColor}12`
@@ -1895,7 +1935,7 @@ export default function VirtualExperienceTaker({
                                           ? 'rgba(239,68,68,0.07)'
                                           : isSelected
                                             ? `${accentColor}08`
-                                            : isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
+                                            : isDark ? 'rgba(255,255,255,0.055)' : '#ffffff',
                                       border: 'none',
                                       color: showCorrect ? accentColor : showWrong ? '#ef4444' : isDark ? '#e0e0e0' : '#222',
                                     }}>
@@ -2037,7 +2077,7 @@ export default function VirtualExperienceTaker({
                                     so a bare field would ring as a sharp rectangle inside the rounded box. */}
                                 <div className="flex-1 min-w-0 relative">
                                   <LinkIcon className="w-3 h-3 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                                    style={{ color: isDark ? '#666' : '#aaa' }} />
+                                    style={{ color: isDark ? '#8a8a8a' : '#64748b' }} />
                                   <input
                                     type="url" inputMode="url" value={draft} readOnly={reviewMode}
                                     onChange={e => {
@@ -2048,8 +2088,9 @@ export default function VirtualExperienceTaker({
                                     placeholder="https://www.linkedin.com/posts/..."
                                     className="w-full min-w-0 pl-8 pr-3 py-2.5 rounded-lg text-[12.5px] outline-none"
                                     style={{
-                                      background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
-                                      border: `1px solid ${error ? '#f43f5e' : claimed ? `${accentColor}60` : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
+                                      background: isDark ? 'rgba(255,255,255,0.055)' : '#ffffff',
+                                      border: `1.5px solid ${error ? '#f43f5e' : claimed ? `${accentColor}80` : isDark ? 'rgba(255,255,255,0.16)' : '#cbd5e1'}`,
+                                      boxShadow: isDark ? 'none' : '0 1px 2px rgba(15,23,42,0.04)',
                                       color: isDark ? '#f0f0f0' : '#111',
                                     }}
                                   />
@@ -2084,8 +2125,9 @@ export default function VirtualExperienceTaker({
                                       placeholder="linkedin.com/in/your-name"
                                       className="flex-1 min-w-0 px-3 py-2.5 rounded-lg text-[12.5px] outline-none"
                                       style={{
-                                        background: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
-                                        border: `1px solid ${profileError ? '#f43f5e' : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                                        background: fieldBg,
+                                        border: `1.5px solid ${profileError ? '#f43f5e' : fieldBorder}`,
+                                        boxShadow: fieldShadow,
                                         color: isDark ? '#f0f0f0' : '#111',
                                       }}
                                     />
@@ -2148,8 +2190,9 @@ export default function VirtualExperienceTaker({
                             <label className="block cursor-pointer">
                               <div className="rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1.5 py-5 px-4 transition-all hover:opacity-80"
                                 style={{
-                                  borderColor: fileUrl ? accentColor : isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
-                                  background: fileUrl ? `${accentColor}08` : isDark ? 'rgba(255,255,255,0.03)' : '#fafafa',
+                                  borderColor: fileUrl ? accentColor : fieldBorder,
+                                  background: fileUrl ? `${accentColor}0d` : fieldBg,
+                                  boxShadow: fieldShadow,
                                 }}>
                                 {uploading
                                   ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: accentColor }} />
@@ -2173,10 +2216,11 @@ export default function VirtualExperienceTaker({
 
                             <div className="space-y-1">
                               <p className="text-[12.5px] font-medium" style={{ color: isDark ? '#888' : '#666' }}>Or share a link</p>
-                              <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
+                              <div className="ve-field-shell flex items-center gap-2 px-3 py-2 rounded-lg"
                                 style={{
-                                  background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
-                                  border: `1px solid ${linkUrl ? `${accentColor}60` : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
+                                  background: fieldBg,
+                                  border: `1.5px solid ${linkUrl ? `${accentColor}80` : fieldBorder}`,
+                                  boxShadow: fieldShadow,
                                 }}>
                                 <LinkIcon className="w-3 h-3 flex-shrink-0" style={{ color: isDark ? '#666' : '#aaa' }} />
                                 <input type="url" value={linkUrl} onChange={e => setUploadLink(req.id, e.target.value)}
@@ -2375,11 +2419,12 @@ export default function VirtualExperienceTaker({
                                 disabled={showDone && !reviewMode}
                                 placeholder="Type your answer here (2000 characters max)..."
                                 rows={4}
-                                className="w-full text-[14.5px] rounded-lg p-3 outline-none resize-none"
+                                className="w-full text-[14px] rounded-xl p-3.5 outline-none resize-none"
                                 style={{
-                                  background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
+                                  background: fieldBg,
                                   color: isDark ? '#f0f0f0' : '#111',
-                                  border: `1px solid ${showDone ? accentColor : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
+                                  border: `1.5px solid ${showDone ? accentColor : fieldBorder}`,
+                                  boxShadow: fieldShadow,
                                   lineHeight: 1.6,
                                   opacity: showDone && !reviewMode ? 0.7 : 1,
                                 }}
@@ -2517,15 +2562,16 @@ export default function VirtualExperienceTaker({
                               disabled={done && !reviewMode}
                               placeholder="Type your answer here…"
                               rows={3}
-                              className="w-full text-[14.5px] rounded-lg p-3 outline-none resize-none"
+                              className="w-full text-[14px] rounded-xl p-3.5 outline-none resize-none"
                               style={{
-                                background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
+                                background: fieldBg,
                                 color: isDark ? '#f0f0f0' : '#111',
-                                border: `1px solid ${
+                                border: `1.5px solid ${
                                   wrongAnswer ? '#ef4444' :
                                   done ? accentColor :
-                                  isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'
+                                  fieldBorder
                                 }`,
+                                boxShadow: fieldShadow,
                                 lineHeight: 1.6,
                                 opacity: done && !reviewMode ? 0.7 : 1,
                               }}
@@ -2571,8 +2617,8 @@ export default function VirtualExperienceTaker({
                       const meta    = REQ_META[req.type] || REQ_META.task;
                       const noteVal = noteValues[req.id] ?? (progress[req.id]?.notes || '');
 
-                      // Pure task: just a checkbox, no textarea
-                      if (req.type === 'task') {
+                      // Simple completion items: a clear status circle without an extra response field.
+                      if (req.type === 'task' || req.type === 'deliverable') {
                         return (
                           <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-4">
                             <button onClick={() => !reviewMode && toggleReq(req.id)}
@@ -2620,11 +2666,12 @@ export default function VirtualExperienceTaker({
                           <div className="pl-0 sm:pl-7">
                             <textarea value={noteVal} onChange={e => setNote(req.id, e.target.value)}
                               placeholder="Add your notes or work summary…" rows={2}
-                              className="w-full text-[14.5px] rounded-lg p-3 outline-none resize-none"
+                              className="w-full text-[14px] rounded-xl p-3.5 outline-none resize-none"
                               style={{
-                                background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
+                                background: fieldBg,
                                 color: isDark ? '#f0f0f0' : '#111',
-                                border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
+                                border: `1.5px solid ${fieldBorder}`,
+                                boxShadow: fieldShadow,
                                 lineHeight: 1.6,
                               }} />
                           </div>

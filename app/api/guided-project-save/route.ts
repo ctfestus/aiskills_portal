@@ -35,6 +35,9 @@ export async function POST(req: NextRequest) {
   const formStatus = bodyStatus === 'draft' ? 'draft' : 'published';
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
   if (!config)        return NextResponse.json({ error: 'Config is required' }, { status: 400 });
+  if (formStatus === 'published' && config.guideSnapshot?.sourceType === 'external' && config.guideSnapshot?.consentStatus !== 'confirmed') {
+    return NextResponse.json({ error: 'Permission must be confirmed before publishing a professional profile.' }, { status: 400 });
+  }
 
   const newCohortIds: string[] = Array.isArray(cohort_ids) ? cohort_ids : [];
   // Standalone VEs are cohort-only. Group targeting applies only through the assignment system
@@ -67,6 +70,8 @@ export async function POST(req: NextRequest) {
     learn_outcomes: config.learnOutcomes ?? [],
     manager_name:   config.managerName   ?? null,
     manager_title:  config.managerTitle  ?? 'Manager',
+    guide_id:       config.guideId && !String(config.guideId).startsWith('instructor:') ? config.guideId : null,
+    guide_snapshot: config.guideSnapshot ?? null,
     is_short_course: is_short_course ?? false,
     badge_image_url: config.badgeImageUrl ?? null,
     dataset:        null, // set below after optional GitHub upload

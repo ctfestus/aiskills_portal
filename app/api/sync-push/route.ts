@@ -77,6 +77,8 @@ export async function POST(req: NextRequest) {
         learnOutcomes: v.learn_outcomes,
         managerName: v.manager_name,
         managerTitle: v.manager_title,
+        guideId: v.guide_id,
+        guideSnapshot: v.guide_snapshot,
         dataset: v.dataset,
         coverImage: v.cover_image,
         deadline_days: v.deadline_days,

@@ -167,7 +167,8 @@ export default function DashboardPage() {
           modules: v.modules ?? [], industry: v.industry, difficulty: v.difficulty,
           role: v.role, company: v.company, duration: v.duration, tools: v.tools,
           tagline: v.tagline, background: v.background, learnOutcomes: v.learn_outcomes,
-          managerName: v.manager_name, managerTitle: v.manager_title, dataset: v.dataset,
+          managerName: v.manager_name, managerTitle: v.manager_title,
+          guideId: v.guide_id, guideSnapshot: v.guide_snapshot, dataset: v.dataset,
           coverImage: v.cover_image, deadline_days: v.deadline_days,
           theme: v.theme, mode: v.mode, font: v.font, customAccent: v.custom_accent,
         }});

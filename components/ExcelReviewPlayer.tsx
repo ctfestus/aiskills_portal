@@ -191,11 +191,11 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
           onClick={() => inputRef.current?.click()}
           className="flex flex-col items-center justify-center gap-3 cursor-pointer transition-all hover:-translate-y-px"
           style={{
-            border: `1.5px dashed ${dragging || file ? accentColor : border}`,
+            border: `1.5px dashed ${dragging || file ? accentColor : isDark ? 'rgba(255,255,255,0.16)' : '#cbd5e1'}`,
             borderRadius: 16,
             padding: '42px 24px',
-            background: dragging || file ? `${accentColor}08` : inner,
-            boxShadow: dragging ? `0 0 0 4px ${accentColor}12` : 'none',
+            background: dragging || file ? `${accentColor}08` : isDark ? 'rgba(255,255,255,0.055)' : '#ffffff',
+            boxShadow: dragging ? `0 0 0 4px ${accentColor}12` : isDark ? 'none' : '0 1px 2px rgba(15,23,42,0.04)',
           }}>
           <input ref={inputRef} type="file" accept=".xlsx" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) pickFile(f); }} />

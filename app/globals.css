@@ -43,6 +43,16 @@ select:focus-visible,
    at the cursor. Suppress the ring there; keep it for real inputs/rich-text. */
 .cm-editor .cm-content:focus-visible { outline: none !important; }
 
+/* Composite fields place an icon and a borderless input inside one rounded shell.
+   Keep keyboard focus on that shell so the ring follows the visible field shape. */
+.ve-field-shell > input:focus-visible {
+  outline: none !important;
+}
+.ve-field-shell:focus-within {
+  border-color: #00bf63 !important;
+  box-shadow: 0 0 0 2px rgba(0, 191, 99, 0.14), 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);

@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
   const { data: ve, error } = await supabase
     .from('virtual_experiences')
-    .select('id, title, slug, modules, company, role, industry, tagline, cover_image, manager_name, manager_title, dataset, background, user_id')
+    .select('id, title, slug, modules, company, role, industry, tagline, cover_image, manager_name, manager_title, guide_id, guide_snapshot, dataset, background, user_id')
     .eq('id', veId)
     .single();
 

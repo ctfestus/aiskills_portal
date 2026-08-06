@@ -2187,15 +2187,32 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-20" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-500">Experience report</p>
+          </div>
+          <h2 className={`mt-1 text-xl font-bold ${textPrim}`}>Learner progress</h2>
+          <p className={`mt-1 text-sm ${textMut}`}>Track progress, review submitted work, and provide feedback.</p>
+        </div>
+        <button onClick={exportCSV}
+          className={`flex items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-opacity hover:opacity-80 ${isDark ? 'bg-zinc-800 text-zinc-200' : 'bg-[#f3f5f4] text-[#44504a]'}`}>
+          <Download className="h-3.5 w-3.5" /> Export CSV
+        </button>
+      </div>
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-2 overflow-hidden rounded-2xl border sm:grid-cols-4 ${card}`}>
         {[
-          { label: 'Total Enrolled', value: attempts.length, color: '#8b5cf6' },
+          { label: 'Total Enrolled', value: attempts.length, color: '#00b95c' },
           { label: 'Not Started',    value: notStarted,       color: '#6b7280' },
           { label: 'In Progress',    value: inProgress,       color: '#f59e0b' },
           { label: 'Completed',      value: completed,        color: '#10b981' },
         ].map(s => (
-          <div key={s.label} className={`border rounded-2xl p-4 sm:p-5 ${card}`}>
+          <div key={s.label} className={`p-4 sm:p-5 [&:not(:last-child)]:border-r ${isDark ? 'border-zinc-800/70' : 'border-[rgba(0,0,0,0.06)]'}`}>
             <p className={`text-xs font-medium uppercase tracking-wide mb-3 ${textMut}`}>{s.label}</p>
             <p className="text-3xl font-bold" style={{ color: s.color }}>{s.value}</p>
           </div>
@@ -2203,13 +2220,10 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
       </div>
 
       {/* Table */}
-      <div className={`rounded-3xl border overflow-hidden ${card}`}>
+      <div className={`rounded-2xl border overflow-hidden ${card}`}>
         <div className={`px-6 py-4 border-b flex items-center justify-between ${cardHeader}`}>
           <h3 className={`text-base font-semibold ${textPrim}`}>Student Progress</h3>
-          <button onClick={exportCSV}
-            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:opacity-80 ${isDark ? 'bg-zinc-700 text-zinc-200' : 'bg-zinc-100 text-zinc-700'}`}>
-            Export CSV
-          </button>
+          <span className={`text-xs ${textMut}`}>{attempts.length} learner{attempts.length === 1 ? '' : 's'}</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -2247,7 +2261,7 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
                       {isStarted ? (
                         <div className="flex items-center gap-2">
                           <div className={`h-1.5 w-20 rounded-full overflow-hidden ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
-                            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: isCompleted ? '#10b981' : '#6366f1' }} />
+                            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: '#10b981' }} />
                           </div>
                           <span className={`text-xs ${textMut}`}>{doneReqs}/{counts.totalReqs}</span>
                         </div>
@@ -2257,7 +2271,7 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
                     </td>
                     {needsReview && (
                       <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 ${textMut}`}>
-                        {a.review?.score !== undefined ? <span className="font-semibold" style={{ color: '#6366f1' }}>{a.review.score}/100</span> : '--'}
+                        {a.review?.score !== undefined ? <span className="font-semibold" style={{ color: '#10b981' }}>{a.review.score}/100</span> : '--'}
                       </td>
                     )}
                     <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 text-xs ${textMut}`}>
@@ -2267,7 +2281,7 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
                       <td className="px-3 sm:px-6 py-3">
                         {isStarted ? (
                           <button onClick={() => { setReviewing(a); setRevScore(a.review?.score ?? ''); setRevFeedback(a.review?.feedback ?? ''); }}
-                            className={`text-xs font-medium px-3 py-1.5 rounded-xl transition-all hover:opacity-80 ${isDark ? 'bg-indigo-500/15 text-indigo-300' : 'bg-indigo-50 text-indigo-700'}`}>
+                            className={`text-xs font-medium px-3 py-1.5 rounded-xl transition-all hover:opacity-80 ${isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-700'}`}>
                             {a.review ? 'Edit Review' : 'Review'}
                           </button>
                         ) : (
@@ -2340,7 +2354,7 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
                             fileUrl
                               ? <a href={fileUrl} target="_blank" rel="noreferrer"
                                   className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg"
-                                  style={{ background: '#6366f115', color: '#6366f1' }}>
+                                  style={{ background: '#10b98115', color: '#10b981' }}>
                                   View uploaded file
                                 </a>
                               : <p className={`text-xs italic ${textMut}`}>No file submitted</p>
@@ -2396,7 +2410,7 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
                 <button onClick={() => setReviewing(null)} className={`flex-1 py-2.5 rounded-xl text-sm border ${isDark ? 'border-zinc-700 text-zinc-400' : 'border-[rgba(0,0,0,0.1)] text-[#888]'}`}>Cancel</button>
                 <button onClick={submitReview} disabled={revSaving}
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-80"
-                  style={{ background: '#6366f1' }}>
+                  style={{ background: '#00b95c' }}>
                   {revSaving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Submit Review'}
                 </button>
               </div>
@@ -2513,7 +2527,8 @@ export default function FormDetailPage() {
           modules: veRow.modules ?? [], industry: veRow.industry, difficulty: veRow.difficulty,
           role: veRow.role, company: veRow.company, duration: veRow.duration, tools: veRow.tools,
           tagline: veRow.tagline, background: veRow.background, learnOutcomes: veRow.learn_outcomes,
-          managerName: veRow.manager_name, managerTitle: veRow.manager_title, dataset: veRow.dataset,
+          managerName: veRow.manager_name, managerTitle: veRow.manager_title,
+          guideId: veRow.guide_id, guideSnapshot: veRow.guide_snapshot, dataset: veRow.dataset,
           coverImage: veRow.cover_image, deadline_days: veRow.deadline_days,
           theme: veRow.theme, mode: veRow.mode, font: veRow.font, customAccent: veRow.custom_accent,
         }};
