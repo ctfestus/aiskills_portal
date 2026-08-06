@@ -6,7 +6,8 @@
 // and show feedback (informational); MCQ is auto-marked right/wrong into a preliminary score;
 // written/upload tasks are collected for the instructor. The instructor sets the final grade.
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { useTheme } from '@/components/ThemeProvider';
 import { useC } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
@@ -21,7 +22,8 @@ import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
 import DocumentReviewPlayer from '@/components/DocumentReviewPlayer';
 import {
   CheckCircle, CheckCircle2, Circle, Upload as UploadIcon, Loader2, X, FileText, AlertCircle, Check,
-  Calendar, BookOpen, Layers, ListChecks, Download, ExternalLink,
+  Calendar, BookOpen, Layers, ListChecks, Download, ExternalLink, PenLine, Code2,
+  FileSpreadsheet, LayoutDashboard,
 } from 'lucide-react';
 import {
   type ScenarioConfig, type AssignmentTask, type RawTaskAnswer, type TaskGradeMap,
@@ -87,7 +89,14 @@ export default function StandardAssignmentPlayer({
 }: Props) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const reduceMotion = useReducedMotion();
   const C = useC();
+  // Keep this assignment experience locally green in light mode without changing the
+  // course/dashboard theme. Dark mode deliberately retains the existing theme tokens.
+  const scenarioAccent = isDark ? C.green : '#00bf63';
+  const scenarioAccentSoft = isDark ? C.lime : 'rgba(0,191,99,0.10)';
+  const scenarioAccentText = isDark ? C.cta : '#008f4b';
+  const scenarioAction = isDark ? C.cta : scenarioAccent;
   const [activeTab, setActiveTab] = useState<string>(() => config.scenarios[0]?.id ?? RESOURCES_TAB);
   // Dark mode uses borderless cards (separated by background contrast), matching the app theme.
   const cardBorder = isDark ? 'none' : `1px solid ${C.divider}`;
@@ -101,7 +110,7 @@ export default function StandardAssignmentPlayer({
 
   // Render interactive content (LessonDoc) with the VE renderer, falling back to sanitized HTML.
   const renderRich = (doc: LessonDoc | undefined, html: string | undefined, style?: React.CSSProperties) => {
-    if (doc) return <LessonRenderer doc={doc} isDark={isDark} />;
+    if (doc) return <LessonRenderer doc={doc} isDark={isDark} accentColor={scenarioAccent} />;
     if (html && html.replace(/<[^>]*>/g, '').trim()) {
       return <div className="rich-content" style={style} dangerouslySetInnerHTML={{ __html: sanitizeRichText(html) }} />;
     }
@@ -214,11 +223,11 @@ export default function StandardAssignmentPlayer({
             list only reflects the student's own selection (no correct/wrong reveal here). */}
         {(task.options ?? []).filter(Boolean).map((opt, i) => {
           const selected = a.selectedOption === opt;
-          const ring = selected ? C.green : (isDark ? 'transparent' : C.divider);
+          const ring = selected ? scenarioAccent : (isDark ? 'transparent' : C.divider);
           return (
             <button key={i} type="button" disabled={readOnly}
               onClick={() => patch(task.id, { selectedOption: opt })}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', padding: '11px 14px', borderRadius: 10, border: `1.5px solid ${ring}`, background: selected ? `${C.green}10` : C.input, color: C.text, fontSize: 14, cursor: readOnly ? 'default' : 'pointer' }}>
+              style={{ display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', padding: '11px 14px', borderRadius: 10, border: `1.5px solid ${ring}`, background: selected ? scenarioAccentSoft : C.input, color: C.text, fontSize: 14, cursor: readOnly ? 'default' : 'pointer' }}>
               {selected ? <CheckCircle2 style={{ width: 18, height: 18, color: ring, flexShrink: 0 }} /> : <Circle style={{ width: 18, height: 18, color: C.faint, flexShrink: 0 }} />}
               <span style={{ flex: 1 }}>{opt}</span>
             </button>
@@ -234,8 +243,8 @@ export default function StandardAssignmentPlayer({
     return (
       <div>
         {a.fileUrl ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: C.pill, border: `1px solid ${C.divider}` }}>
-            <FileText style={{ width: 16, height: 16, color: C.green, flexShrink: 0 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '12px 14px', borderRadius: 12, background: scenarioAccentSoft, border: `1px solid ${isDark ? C.divider : 'rgba(0,191,99,.22)'}` }}>
+            <span style={{ width: 32, height: 32, flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: 9, background: C.card, color: scenarioAccent }}><FileText style={{ width: 16, height: 16 }} /></span>
             <a href={a.fileUrl} target="_blank" rel="noreferrer" style={{ flex: 1, fontSize: 13, fontWeight: 500, color: C.text, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.fileName || 'Uploaded file'}</a>
             {!readOnly && (
               <button type="button" onClick={() => patch(task.id, { fileUrl: undefined, fileName: undefined })}
@@ -248,9 +257,9 @@ export default function StandardAssignmentPlayer({
           <>
             <input ref={el => { fileRefs.current[task.id] = el; }} type="file" style={{ display: 'none' }} onChange={e => handleUpload(task, e)} />
             <button type="button" onClick={() => fileRefs.current[task.id]?.click()} disabled={busy}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 10, border: `1px solid ${C.divider}`, background: C.pill, color: C.muted, fontSize: 13, fontWeight: 600, cursor: busy ? 'not-allowed' : 'pointer' }}>
-              {busy ? <Loader2 style={{ width: 15, height: 15 }} className="animate-spin" /> : <UploadIcon style={{ width: 15, height: 15 }} />}
-              {busy ? 'Uploading...' : 'Choose file'}
+              style={{ width: '100%', minHeight: 62, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, padding: '12px 16px', borderRadius: 12, border: `1px dashed ${isDark ? C.divider : 'rgba(0,191,99,.35)'}`, background: C.input, color: scenarioAccentText, fontSize: 13, fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer' }}>
+              {busy ? <Loader2 style={{ width: 17, height: 17 }} className="animate-spin" /> : <UploadIcon style={{ width: 17, height: 17 }} />}
+              {busy ? 'Uploading...' : 'Choose a file to submit'}
             </button>
           </>
         )}
@@ -280,7 +289,7 @@ export default function StandardAssignmentPlayer({
     // Re-runnable while the assignment is still editable (draft OR submitted-not-graded),
     // consistent with the text/upload tasks; read-only once graded or for a non-leader viewer.
     const completed = readOnly;
-    const common = { reqId, isDark, accentColor: C.green, completed, rubric: task.rubric, minScore: task.minScore } as const;
+    const common = { reqId, isDark, accentColor: scenarioAccent, completed, rubric: task.rubric, minScore: task.minScore } as const;
     if (task.type === 'code_review') {
       return <CodeReviewPlayer {...common} savedResult={a.report} schema={task.schema}
         onComplete={(result: any) => patch(task.id, { report: result, score: typeof result?.overallScore === 'number' ? result.overallScore : null })} />;
@@ -345,8 +354,8 @@ export default function StandardAssignmentPlayer({
   // A scenario is "done" once every one of its tasks is answered (checks the timeline node).
   const scenarioDone = (s: ScenarioConfig['scenarios'][number]) => s.tasks.every(t => isAnswered(t));
   const timelineSteps = [
-    ...(resources.length > 0 ? [{ key: RESOURCES_TAB, label: 'Resources', done: false, isResources: true, num: 0 }] : []),
-    ...config.scenarios.map((s, i) => ({ key: s.id, label: `Scenario ${i + 1}`, done: scenarioDone(s), isResources: false, num: i + 1 })),
+    ...(resources.length > 0 ? [{ key: RESOURCES_TAB, label: 'Resources', title: 'Resources', done: false, isResources: true, num: 0 }] : []),
+    ...config.scenarios.map((s, i) => ({ key: s.id, label: `Scenario ${i + 1}`, title: s.title?.trim() || `Scenario ${i + 1}`, done: scenarioDone(s), isResources: false, num: i + 1 })),
   ];
   // Bottom nav: Save-and-continue + Next through the steps; Submit shows only on the final step
   // (the last scenario), so students can't submit before reaching the end.
@@ -366,27 +375,40 @@ export default function StandardAssignmentPlayer({
       </div>
     </div>
   );
+  const taskTypeIcon = (type: AssignmentTask['type']) => {
+    if (type === 'text') return <PenLine style={{ width: 18, height: 18 }} />;
+    if (type === 'upload') return <UploadIcon style={{ width: 18, height: 18 }} />;
+    if (type === 'mcq') return <ListChecks style={{ width: 18, height: 18 }} />;
+    if (type === 'code_review') return <Code2 style={{ width: 18, height: 18 }} />;
+    if (type === 'excel_review') return <FileSpreadsheet style={{ width: 18, height: 18 }} />;
+    if (type === 'dashboard_critique') return <LayoutDashboard style={{ width: 18, height: 18 }} />;
+    return <FileText style={{ width: 18, height: 18 }} />;
+  };
   const renderScenarioBody = (scenario: ScenarioConfig['scenarios'][number]) => (
     <>
       {(scenario.doc || scenario.description) && (
         <div style={{ marginBottom: 16 }}>{renderRich(scenario.doc, scenario.description, { color: C.muted })}</div>
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
         {scenario.tasks.map((task, tIdx) => {
           const done = isAnswered(task);
           return (
-            // No box/padding: task content shares the same left edge as the title, overview,
-            // and scenario description (all at the card's padding). Tasks separate by spacing.
-            <div key={task.id}>
-              <div style={{ marginBottom: 12 }}>
-                {/* Type tag as an eyebrow above the title, so a long title keeps the full width */}
-                <span style={{ display: 'inline-block', marginBottom: 8, fontSize: 10.5, fontWeight: 700, letterSpacing: 0.2, padding: '3px 9px', borderRadius: 7, background: C.lime, color: C.cta, whiteSpace: 'nowrap' }}>{TASK_TYPE_LABEL[task.type]}</span>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            // The header establishes task type and status without indenting the instructions or
+            // response control, so every task keeps the full available content width.
+            <div key={task.id} style={{ paddingTop: tIdx > 0 ? 14 : 0, paddingBottom: tIdx < scenario.tasks.length - 1 ? 14 : 0, borderBottom: tIdx < scenario.tasks.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 14 }}>
+                <span style={{ width: 40, height: 40, flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: 12, background: done ? scenarioAccentSoft : C.pill, color: done ? scenarioAccent : C.muted }}>
+                  {taskTypeIcon(task.type)}
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', marginBottom: 3, fontSize: 10.5, fontWeight: 800, letterSpacing: '.075em', textTransform: 'uppercase', color: done ? scenarioAccentText : C.faint }}>{TASK_TYPE_LABEL[task.type]}</span>
+                  <span style={{ display: 'block', fontSize: 15.5, lineHeight: 1.35, fontWeight: 750, color: C.text }}>{task.title || `Task ${tIdx + 1}`}</span>
+                </span>
+                <span aria-label={done ? 'Task completed' : 'Task not completed'} style={{ flexShrink: 0, display: 'grid', placeItems: 'center' }}>
                   {done
-                    ? <CheckCircle style={{ width: 18, height: 18, color: C.green, flexShrink: 0, marginTop: 2 }} />
-                    : <Circle style={{ width: 18, height: 18, color: C.faint, flexShrink: 0, marginTop: 2 }} />}
-                  <span style={{ flex: 1, fontSize: 15.5, fontWeight: 700, color: C.text }}>{task.title || `Task ${tIdx + 1}`}</span>
-                </div>
+                    ? <motion.span initial={reduceMotion ? false : { scale: 0 }} animate={{ scale: 1 }}><CheckCircle2 style={{ width: 20, height: 20, color: scenarioAccent }} /></motion.span>
+                    : <Circle style={{ width: 20, height: 20, color: C.faint }} />}
+                </span>
               </div>
               {(task.doc || task.description) && (
                 <div style={{ marginBottom: 12, fontSize: 14, color: C.muted }}>{renderRich(task.doc, task.description)}</div>
@@ -424,7 +446,7 @@ export default function StandardAssignmentPlayer({
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.faint, margin: 0 }}>Detail</p>
                 {deadline && detailRow(<Calendar style={{ width: 15, height: 15 }} />, 'Deadline', new Date(deadline).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }))}
-                {courseTitle && detailRow(<BookOpen style={{ width: 15, height: 15 }} />, 'Related course', courseHref ? <a href={courseHref} style={{ color: C.green, textDecoration: 'none' }}>{courseTitle}</a> : courseTitle)}
+                {courseTitle && detailRow(<BookOpen style={{ width: 15, height: 15 }} />, 'Related course', courseHref ? <a href={courseHref} style={{ color: scenarioAccent, textDecoration: 'none' }}>{courseTitle}</a> : courseTitle)}
                 {detailRow(<Layers style={{ width: 15, height: 15 }} />, 'Scenarios', scenarioCount)}
                 {detailRow(<ListChecks style={{ width: 15, height: 15 }} />, 'Tasks', totalTasks)}
                 {!readOnly && detailRow(<CheckCircle style={{ width: 15, height: 15 }} />, 'Answered', `${answeredCount} / ${totalTasks}`)}
@@ -441,47 +463,49 @@ export default function StandardAssignmentPlayer({
             <div>{renderRich(config.introDoc, config.introBody, { color: C.muted })}</div>
           )}
 
-          {/* Scenario timeline -- true full width: fixed-width node columns at both ends with the
-              connectors between them growing to fill, so the first/last nodes sit at the edges.
-              Each node checks off when its tasks are all answered. */}
+          {/* Studio-style scenario navigation: compact tabs above a connected workspace,
+              mirroring the course editor while preserving progress and completion states. */}
           {timelineSteps.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'flex-start', width: '100%', paddingTop: 4, overflowX: isMobile ? 'auto' : 'visible' }}>
-              {timelineSteps.map((step, i) => {
-                const active = activeTab === step.key;
-                return (
-                  <Fragment key={step.key}>
-                    {i > 0 && (
-                      <div style={{ flex: 1, minWidth: isMobile ? 20 : 0, height: 2, marginTop: 14, background: timelineSteps[i - 1].done ? C.green : C.divider }} />
-                    )}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, width: isMobile ? 68 : 88 }}>
-                      <button type="button" onClick={() => setActiveTab(step.key)} title={step.label}
-                        style={{
-                          width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-                          border: active && !step.done ? `2px solid ${C.green}` : `2px solid ${step.done ? C.green : 'transparent'}`,
-                          background: step.done ? C.green : (active ? 'transparent' : C.pill),
-                          color: step.done ? '#fff' : (active ? C.green : C.faint),
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 13, fontWeight: 700, padding: 0,
-                        }}>
-                        {step.isResources ? <Download style={{ width: 14, height: 14 }} /> : step.done ? <Check style={{ width: 16, height: 16 }} /> : step.num}
-                      </button>
-                      <button type="button" onClick={() => setActiveTab(step.key)}
-                        style={{ marginTop: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: active ? 700 : 600, color: active ? C.text : C.faint, textAlign: 'center', padding: '0 2px', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {step.label}
-                      </button>
-                    </div>
-                  </Fragment>
-                );
-              })}
+            <div role="tablist" aria-label="Assignment scenarios" style={{ width: '100%', overflowX: 'auto', scrollbarWidth: 'thin', paddingBottom: 14, borderBottom: `1px solid ${C.divider}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 'max-content' }}>
+                {timelineSteps.map(step => {
+                  const active = activeTab === step.key;
+                  return (
+                    <motion.button key={step.key} type="button" role="tab" aria-selected={active} onClick={() => setActiveTab(step.key)} title={step.title}
+                      whileTap={reduceMotion ? undefined : { scale: .97 }}
+                      animate={{ backgroundColor: active ? scenarioAccentSoft : 'rgba(0,0,0,0)', color: active ? scenarioAccentText : C.faint }}
+                      transition={{ duration: reduceMotion ? 0 : .2 }}
+                      style={{ position: 'relative', flexShrink: 0, minHeight: 42, display: 'flex', alignItems: 'center', gap: 8, padding: '9px 13px', border: 'none', borderRadius: 12, cursor: 'pointer', fontSize: 13.5, fontWeight: active ? 750 : 650 }}>
+                      {step.isResources ? (
+                        <Download style={{ width: 15, height: 15 }} />
+                      ) : step.done ? (
+                        <motion.span initial={reduceMotion ? false : { scale: 0 }} animate={{ scale: 1 }}>
+                          <CheckCircle2 style={{ width: 16, height: 16, color: scenarioAccent }} />
+                        </motion.span>
+                      ) : (
+                        <span style={{ position: 'relative', width: 16, height: 16, display: 'grid', placeItems: 'center' }}>
+                          {active && <motion.span aria-hidden="true" animate={reduceMotion ? undefined : { scale: [1, 1.45, 1], opacity: [.24, .06, .24] }} transition={{ duration: 1.8, repeat: Infinity }} style={{ position: 'absolute', inset: 2, borderRadius: '50%', background: scenarioAccent }} />}
+                          <span style={{ position: 'relative', width: 7, height: 7, borderRadius: '50%', background: active ? scenarioAccent : C.faint }} />
+                        </span>
+                      )}
+                      <span>{step.label}</span>
+                    </motion.button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
           {activeTab === RESOURCES_TAB ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <h3 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: '0 0 4px' }}>Resources</h3>
+              <div style={{ marginBottom: 8 }}>
+                <h3 style={{ fontSize: 20, fontWeight: 800, color: C.text, margin: 0 }}>Resources</h3>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: C.faint }}>Assignment resources</p>
+              </div>
               {resources.map(r => (
                 <a key={r.id} href={r.url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, background: 'transparent', border: cardBorder, textDecoration: 'none' }}>
                   <span style={{ width: 34, height: 34, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.pill, flexShrink: 0 }}>
-                    {r.resource_type === 'file' ? <FileText style={{ width: 16, height: 16, color: C.green }} /> : <ExternalLink style={{ width: 16, height: 16, color: C.green }} />}
+                    {r.resource_type === 'file' ? <FileText style={{ width: 16, height: 16, color: scenarioAccent }} /> : <ExternalLink style={{ width: 16, height: 16, color: scenarioAccent }} />}
                   </span>
                   <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: C.text }}>{r.name || r.url}</span>
                   <Download style={{ width: 15, height: 15, color: C.faint }} />
@@ -490,7 +514,10 @@ export default function StandardAssignmentPlayer({
             </div>
           ) : activeScenario ? (
             <div>
-              <h3 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: '0 0 12px' }}>{activeScenario.title || 'Scenario'}</h3>
+              <div style={{ marginBottom: 18 }}>
+                <h3 style={{ fontSize: 20, fontWeight: 800, color: C.text, margin: 0 }}>{activeScenario.title || 'Scenario'}</h3>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: C.faint }}>Scenario {Math.max(1, config.scenarios.findIndex(s => s.id === activeScenario.id) + 1)} of {scenarioCount}</p>
+              </div>
               {renderScenarioBody(activeScenario)}
             </div>
           ) : (
@@ -515,7 +542,7 @@ export default function StandardAssignmentPlayer({
               ) : (
                 <>
                   {submitted && !justSubmitted && (
-                    <p style={{ fontSize: 12, marginBottom: 10, padding: '8px 12px', borderRadius: 8, background: C.pill, color: C.green }}>Submitted - you can still edit and resubmit until it is graded.</p>
+                    <p style={{ fontSize: 12, marginBottom: 10, padding: '8px 12px', borderRadius: 8, background: scenarioAccentSoft, color: scenarioAccentText }}>Submitted - you can still edit and resubmit until it is graded.</p>
                   )}
                   {justSubmitted ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderRadius: 12, background: 'rgba(16,185,129,0.10)', border: '1px solid rgba(16,185,129,0.25)' }}>
@@ -540,14 +567,14 @@ export default function StandardAssignmentPlayer({
                         )}
                         {!isLastStep ? (
                           <button type="button" onClick={goNext}
-                            style={{ padding: '12px 26px', borderRadius: 12, border: 'none', background: C.cta, color: C.ctaText, fontSize: 15, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                            style={{ padding: '12px 26px', borderRadius: 12, border: 'none', background: scenarioAction, color: C.ctaText, fontSize: 15, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                             Next
                           </button>
                         ) : (
                           <button type="button"
                             onClick={() => { if (unansweredCount > 0 && !confirmIncomplete) { setConfirmIncomplete(true); return; } handleSubmit(); }}
                             disabled={submitting || anyUploading}
-                            style={{ padding: '12px 26px', borderRadius: 12, border: 'none', background: C.cta, color: C.ctaText, fontSize: 15, fontWeight: 700, cursor: (submitting || anyUploading) ? 'not-allowed' : 'pointer', opacity: (submitting || anyUploading) ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                            style={{ padding: '12px 26px', borderRadius: 12, border: 'none', background: scenarioAction, color: C.ctaText, fontSize: 15, fontWeight: 700, cursor: (submitting || anyUploading) ? 'not-allowed' : 'pointer', opacity: (submitting || anyUploading) ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                             {submitting ? <Loader2 style={{ width: 16, height: 16 }} className="animate-spin" /> : null}
                             {submitting ? 'Submitting...' : (confirmIncomplete && unansweredCount > 0) ? 'Submit anyway' : submitted ? 'Resubmit for review' : 'Submit for review'}
                           </button>

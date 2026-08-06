@@ -5,7 +5,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { motion } from 'motion/react';
-import { ArrowLeft, CheckCircle2, ChevronDown, ClipboardList, Copy, Download, Edit2, ExternalLink, FileText, Loader2, Plus, RotateCcw, Trash2, Users, TrendingUp } from 'lucide-react';
+import { ArrowLeft, BarChart3, CheckCircle2, ChevronDown, Circle, CircleCheckBig, ClipboardList, Copy, Download, Edit2, ExternalLink, Eye, FileText, Loader2, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Users, TrendingUp, Clock3 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
@@ -31,7 +31,6 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   const [deletingId, setDeletingId]         = useState<string | null>(null);
   const [duplicatingId, setDuplicatingId]   = useState<string | null>(null);
   const [selected, setSelected]             = useState<any>(null);
-  const [activeTab, setActiveTab]           = useState<'details' | 'responses'>('details');
   const [submissions, setSubmissions]       = useState<any[]>([]);
   const [assignedStudents, setAssignedStudents] = useState<any[]>([]);
   const [loadingSubs, setLoadingSubs]       = useState(false);
@@ -54,6 +53,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   const [veProgressMap, setVeProgressMap]   = useState<Record<string, { pct: number; completedAt: string | null }>>({});
   const [statusFilter, setStatusFilter]     = useState<string>('all');
   const [cohortFilter, setCohortFilter]     = useState<string>('all');
+  const [responseSearch, setResponseSearch] = useState('');
   const [cohorts, setCohorts]               = useState<{ id: string; name: string }[]>([]);
   const openToken = useRef(0);
   // Separate guard for openSubmission, so its slower fetches (files, MCQ marking, VE progress)
@@ -84,8 +84,8 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     // Guard against out-of-order responses when assignments are clicked in quick succession:
     // only the latest call's fetched data is applied.
     const token = ++openToken.current;
-    setSelected(a); setViewingSub(null); setSubFiles([]); setActiveTab('details'); setLoadingSubs(true);
-    setExpandedGroups(new Set()); setVeProgressMap({}); setStatusFilter('all'); setCohortFilter('all'); setCohorts([]); setSolutions([]);
+    setSelected(a); setViewingSub(null); setSubFiles([]); setLoadingSubs(true);
+    setExpandedGroups(new Set()); setVeProgressMap({}); setStatusFilter('all'); setCohortFilter('all'); setResponseSearch(''); setCohorts([]); setSolutions([]);
     const groupIds: string[] = Array.isArray(a.group_ids) && a.group_ids.length > 0 ? a.group_ids : [];
     // Solution files (released to students only after grading) -- shown to the grader so they can
     // check the model answer while marking. Non-blocking: failure just leaves the list empty.
@@ -617,14 +617,21 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     const responseRows = isGroupAssignment ? groupRows : rows;
     // Status filter (Submitted, Graded, etc.). Only offer statuses actually present in this list.
     const STATUS_LABELS: Record<string, string> = { submitted: 'Submitted', graded: 'Graded', done_unsubmitted: 'Done, not submitted', in_progress: 'In Progress', draft: 'Draft', not_started: 'Not Started' };
+    const STATUS_ICONS: Record<string, typeof Circle> = { all: SlidersHorizontal, submitted: Send, graded: CheckCircle2, done_unsubmitted: CircleCheckBig, in_progress: Clock3, draft: FileText, not_started: Circle };
     const STATUS_ORDER = ['submitted', 'graded', 'done_unsubmitted', 'in_progress', 'draft', 'not_started'];
     const presentStatuses = STATUS_ORDER.filter(s => responseRows.some((r: any) => r._status === s));
     // Cohort filter only applies to the individual (cohort-based) view, and only when the
     // assignment spans more than one cohort. Group view is grouped by group, not cohort.
     const showCohortFilter = !isGroupAssignment && cohorts.length > 1;
-    const visibleRows = responseRows.filter((r: any) =>
-      (statusFilter === 'all' || r._status === statusFilter) &&
-      (cohortFilter === 'all' || r.cohort_id === cohortFilter));
+    const normalizedSearch = responseSearch.trim().toLowerCase();
+    const visibleRows = responseRows.filter((r: any) => {
+      const searchable = isGroupAssignment
+        ? [r.name, r.leader?.full_name, r.leader?.email, ...(r.members ?? []).flatMap((m: any) => [m.full_name, m.email])]
+        : [r.full_name, r.email, r.group_name];
+      return (statusFilter === 'all' || r._status === statusFilter) &&
+        (cohortFilter === 'all' || r.cohort_id === cohortFilter) &&
+        (!normalizedSearch || searchable.some(value => String(value ?? '').toLowerCase().includes(normalizedSearch)));
+    });
     const responded = isGroupAssignment
       ? groupRows.filter((row: any) => row.sub != null).length
       : submissions.length;
@@ -636,142 +643,133 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
       ? gradedSubs.filter((r: any) => (r.sub?.score ?? 0) >= passMark).length
       : submissions.filter(s => s.status === 'graded' && s.score >= passMark).length;
     const passRate  = graded > 0 ? Math.round((passed / graded) * 100) : 0;
+    const assignedTotal = isGroupAssignment ? groupRows.length : assignedStudents.length;
+    const awaitingGrade = responseRows.filter((row: any) => row._status === 'submitted').length;
+    const gradedScores = gradedSubs
+      .map((row: any) => isGroupAssignment ? row.sub?.score : row.score)
+      .filter((value: any): value is number => typeof value === 'number');
+    const averageScore = gradedScores.length
+      ? Math.round(gradedScores.reduce((sum: number, value: number) => sum + value, 0) / gradedScores.length)
+      : null;
+    const responseRate = assignedTotal > 0 ? Math.round((responded / assignedTotal) * 100) : 0;
+    const reportAccent = isDark ? C.cta : '#00bf63';
+    const reportAccentSoft = isDark ? C.lime : 'rgba(0,191,99,.10)';
 
     return (
-      <div>
+      <div style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 20, overflow: 'hidden' }}>
         {/* Top bar */}
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between gap-4 px-5 pt-5 pb-3">
           <div className="flex items-center gap-3 min-w-0">
             <button onClick={() => setSelected(null)} className="flex items-center justify-center w-8 h-8 rounded-xl flex-shrink-0 hover:opacity-70 transition-opacity" style={{ background: C.pill, border: 'none', cursor: 'pointer', color: C.muted }}>
               <ArrowLeft className="w-4 h-4"/>
             </button>
             <div className="flex items-center gap-2.5 min-w-0">
-              <h2 className="text-base font-bold truncate" style={{ color: C.text }}>{selected.title}</h2>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] mb-0.5" style={{ color: reportAccent }}>Assignment report</p>
+                <h2 className="text-lg font-bold truncate" style={{ color: C.text }}>{selected.title}</h2>
+              </div>
               <span className="text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0" style={{ background: selected.status === 'published' ? 'rgba(16,185,129,0.1)' : C.pill, color: selected.status === 'published' ? '#10b981' : C.faint }}>
                 {selected.status}
               </span>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="hidden sm:inline-flex items-center px-3 py-2 rounded-xl text-xs font-semibold" style={{ background: reportAccentSoft, color: reportAccent }}>
+              Pass mark {passMark}%
+            </span>
+            <Link href={`/create/assignment?edit=${selected.id}&preview=1`} target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold hover:opacity-80"
+              style={{ background: reportAccentSoft, color: reportAccent, textDecoration: 'none' }}>
+              <Eye className="w-3.5 h-3.5"/> Preview
+            </Link>
             <Link href={`/create/assignment?edit=${selected.id}`}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold hover:opacity-80"
               style={{ background: C.pill, color: C.muted, textDecoration: 'none' }}>
               <Edit2 className="w-3.5 h-3.5"/> Edit
             </Link>
-            <button onClick={() => deleteAssignment(selected.id)} disabled={deletingId === selected.id}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold"
-              style={{ background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}`, cursor: deletingId === selected.id ? 'not-allowed' : 'pointer', opacity: deletingId === selected.id ? 0.6 : 1 }}>
-              <Trash2 className="w-3.5 h-3.5"/> {deletingId === selected.id ? 'Deleting…' : 'Delete'}
-            </button>
           </div>
         </div>
 
-        {/* Tab pills */}
-        <div className="flex gap-1 p-1 rounded-xl mb-6 w-fit" style={{ background: C.pill }}>
-          {(['details', 'responses'] as const).map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              className="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
-              style={{ background: activeTab === tab ? C.card : 'transparent', color: activeTab === tab ? C.text : C.faint, boxShadow: activeTab === tab ? '0 1px 4px rgba(0,0,0,0.08)' : 'none' }}>
-              {tab === 'responses' ? `Responses (${responded})` : 'Details'}
-            </button>
-          ))}
-        </div>
-
-        {/* -- Details tab -- */}
-        {activeTab === 'details' && (
-          <div className="space-y-4">
-            {[
-              { key: 'scenario',               label: 'Scenario' },
-              { key: 'brief',                  label: 'Brief' },
-              { key: 'tasks',                  label: 'Tasks' },
-              { key: 'requirements',           label: 'Requirements' },
-              { key: 'submission_instructions',label: 'Submission Instructions' },
-            ].filter(f => selected[f.key]).map(f => (
-              <div key={f.key} className="rounded-2xl p-5" style={{ ...cardStyle(C) }}>
-                <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.faint }}>{f.label}</p>
-                <div className="rich-content text-sm" dangerouslySetInnerHTML={{ __html: sanitizeRichText(selected[f.key]) }}/>
-              </div>
-            ))}
-            {solutions.length > 0 && (
-              <div className="rounded-2xl p-5" style={{ ...cardStyle(C) }}>
-                <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: C.faint }}>Solution files</p>
-                <p className="text-xs mb-3" style={{ color: C.faint }}>Each student gets these on their results page once their own submission is graded.</p>
-                <SolutionFilesList solutions={solutions} C={C}/>
-              </div>
-            )}
-            {!selected.scenario && !selected.brief && !selected.tasks && !selected.requirements && solutions.length === 0 && (
-              <div className="text-center py-16 rounded-2xl" style={{ ...cardStyle(C) }}>
-                <p className="text-sm" style={{ color: C.faint }}>No details added yet. <Link href={`/create/assignment?edit=${selected.id}`} style={{ color: C.green }}>Edit assignment</Link></p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* -- Responses tab -- */}
-        {activeTab === 'responses' && (
-          <div>
+        {/* Responses report */}
+        <div className="px-5 py-5" style={{ borderTop: `1px solid ${C.divider}` }}>
             {/* Stats */}
-            <div className="grid grid-cols-4 gap-3 mb-5">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 mb-5 pb-5" style={{ borderBottom: `1px solid ${C.divider}` }}>
               {[
-                { label: isGroupAssignment ? 'Groups' : 'Assigned', value: isGroupAssignment ? groupRows.length : assignedStudents.length, icon: Users, color: C.text, bg: C.card },
-                { label: 'Responded',  value: responded,               icon: FileText,   color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
-                { label: 'Graded',     value: graded,                  icon: CheckCircle2,color:'#d97706', bg: 'rgba(217,119,6,0.12)' },
-                { label: 'Pass Rate',  value: `${passRate}%`,          icon: TrendingUp, color: '#10b981', bg: 'rgba(16,185,129,0.08)' },
-              ].map(s => (
-                <div key={s.label} className="rounded-2xl p-4" style={{ ...cardStyle(C) }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold" style={{ color: C.faint }}>{s.label}</p>
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: s.bg }}>
-                      <s.icon className="w-3.5 h-3.5" style={{ color: s.color }}/>
+                { label: isGroupAssignment ? 'Groups' : 'Assigned', value: assignedTotal, icon: Users, color: C.muted, bg: C.pill },
+                { label: 'Response rate', value: `${responseRate}%`, icon: FileText, color: '#2563eb', bg: 'rgba(37,99,235,0.10)' },
+                { label: 'Needs grading', value: awaitingGrade, icon: Clock3, color: '#d97706', bg: 'rgba(217,119,6,0.11)' },
+                { label: 'Graded', value: graded, icon: CheckCircle2, color: reportAccent, bg: reportAccentSoft },
+                { label: 'Average score', value: averageScore == null ? '--' : `${averageScore}%`, icon: BarChart3, color: C.muted, bg: C.pill },
+                { label: 'Pass rate', value: `${passRate}%`, icon: TrendingUp, color: reportAccent, bg: reportAccentSoft },
+              ].map((s, index) => (
+                <div key={s.label} className="px-4 py-2 first:pl-0" style={{ borderRight: index < 5 ? `1px solid ${C.divider}` : 'none' }}>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: s.bg }}>
+                      <s.icon className="w-4 h-4" style={{ color: s.color }}/>
                     </div>
                   </div>
-                  <p className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</p>
+                  <p className="text-xl font-bold" style={{ color: C.text }}>{s.value}</p>
+                  <p className="text-[11px] font-semibold mt-1" style={{ color: C.faint }}>{s.label}</p>
                 </div>
               ))}
             </div>
 
             {/* Filter + export */}
             {responseRows.length > 0 && (
-              <div className="flex items-center justify-between gap-3 mb-3">
-                <div className="flex items-center gap-2">
+              <div className="pb-4 mb-4" style={{ borderBottom: `1px solid ${C.divider}` }}>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="flex flex-1 flex-col sm:flex-row sm:items-center gap-2">
+                    <label className="relative flex-1 min-w-0 md:max-w-sm">
+                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: C.faint }}/>
+                      <input value={responseSearch} onChange={e => setResponseSearch(e.target.value)}
+                        placeholder={isGroupAssignment ? 'Search groups or members...' : 'Search students or email...'}
+                        className="w-full pl-9 pr-3 py-2.5 rounded-xl text-xs outline-none"
+                        style={{ background: C.input, color: C.text, border: `1px solid ${C.divider}` }}/>
+                    </label>
                   {showCohortFilter && (
                     <select value={cohortFilter} onChange={e => setCohortFilter(e.target.value)}
-                      className="px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer"
-                      style={{ background: C.pill, color: C.muted, border: `1px solid ${C.divider}` }}>
+                      className="px-3.5 py-2.5 rounded-xl text-xs font-semibold cursor-pointer"
+                      style={{ background: C.input, color: C.muted, border: `1px solid ${C.divider}` }}>
                       <option value="all">All cohorts</option>
                       {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   )}
-                  <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-                    className="px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer"
-                    style={{ background: C.pill, color: C.muted, border: `1px solid ${C.divider}` }}>
-                    <option value="all">All statuses</option>
-                    {presentStatuses.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-                  </select>
+                  </div>
+                  <button onClick={() => isGroupAssignment ? exportGroupCSV(visibleRows, selected.title, passMark) : exportCSV(visibleRows, selected.title, passMark)}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold hover:opacity-80 transition-opacity"
+                    style={{ background: reportAccentSoft, color: reportAccent, border: 'none' }}>
+                    <Download className="w-3.5 h-3.5"/> Export CSV
+                  </button>
                 </div>
-                <button onClick={() => isGroupAssignment ? exportGroupCSV(visibleRows, selected.title, passMark) : exportCSV(visibleRows, selected.title, passMark)}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold hover:opacity-80 transition-opacity"
-                  style={{ background: C.pill, color: C.muted, border: `1px solid ${C.divider}` }}>
-                  <Download className="w-3.5 h-3.5"/> Export CSV
-                </button>
+                <div className="flex items-center gap-1.5 mt-3 overflow-x-auto pb-0.5" role="group" aria-label="Filter responses by status">
+                  {[{ value: 'all', label: 'All' }, ...presentStatuses.map(value => ({ value, label: STATUS_LABELS[value] }))].map(option => {
+                    const active = statusFilter === option.value;
+                    const StatusIcon = STATUS_ICONS[option.value] ?? Circle;
+                    return <button key={option.value} type="button" aria-pressed={active} onClick={() => setStatusFilter(option.value)}
+                      className="flex flex-shrink-0 items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] font-bold transition-colors"
+                      style={{ border: 'none', background: active ? reportAccentSoft : 'transparent', color: active ? reportAccent : C.faint, cursor: 'pointer' }}>
+                      <StatusIcon className="w-3.5 h-3.5"/>{option.label}
+                    </button>;
+                  })}
+                </div>
               </div>
             )}
 
             {loadingSubs ? (
               <div className="space-y-2">{[0,1,2,3].map(i => <div key={i} className="h-16 rounded-2xl animate-pulse" style={{ background: C.card }}/>)}</div>
             ) : responseRows.length === 0 ? (
-              <div className="text-center py-16 rounded-2xl" style={{ ...cardStyle(C) }}>
+              <div className="text-center py-16">
                 <p className="text-sm font-medium mb-1" style={{ color: C.text }}>{isGroupAssignment ? 'No groups assigned' : 'No students assigned'}</p>
                 <p className="text-xs" style={{ color: C.faint }}>{(selected.group_ids?.length ?? 0) > 0 ? 'No group members found for this assignment.' : 'Assign a cohort to this assignment first.'}</p>
               </div>
             ) : visibleRows.length === 0 ? (
-              <div className="text-center py-16 rounded-2xl" style={{ ...cardStyle(C) }}>
+              <div className="text-center py-16">
                 <p className="text-sm font-medium mb-1" style={{ color: C.text }}>No {isGroupAssignment ? 'groups' : 'students'} match the current filter</p>
-                <p className="text-xs" style={{ color: C.faint }}><button onClick={() => { setStatusFilter('all'); setCohortFilter('all'); }} className="font-semibold hover:opacity-70" style={{ color: C.green, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Clear filters</button></p>
+                <p className="text-xs" style={{ color: C.faint }}><button onClick={() => { setStatusFilter('all'); setCohortFilter('all'); setResponseSearch(''); }} className="font-semibold hover:opacity-70" style={{ color: reportAccent, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Clear filters</button></p>
               </div>
             ) : isGroupAssignment ? (
-              <div className="rounded-2xl overflow-hidden">
-                <div className="grid px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ background: C.pill, color: C.faint, gridTemplateColumns: '1.35fr 1fr 90px 120px 110px 70px 80px 80px' }}>
+              <div className="overflow-x-auto">
+                <div className="grid px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ background: C.pill, color: C.faint, gridTemplateColumns: '1.35fr 1fr 90px 120px 110px 70px 80px 80px', minWidth: 960 }}>
                   <span>Group</span>
                   <span>Leader</span>
                   <span className="text-center">Members</span>
@@ -789,7 +787,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                   const statusInfo = statusCfg(row._status, row._pct);
                   return (
                     <div key={row.id} style={{ background: i % 2 === 0 ? C.card : C.page, borderTop: `1px solid ${C.divider}` }}>
-                      <div className="grid px-5 py-3.5 items-center" style={{ gridTemplateColumns: '1.35fr 1fr 90px 120px 110px 70px 80px 80px' }}>
+                      <div className="grid px-5 py-3.5 items-center" style={{ gridTemplateColumns: '1.35fr 1fr 90px 120px 110px 70px 80px 80px', minWidth: 960 }}>
                         <button onClick={() => toggleExpandedGroup(row.id)} className="flex items-center gap-2 min-w-0 text-left hover:opacity-80"
                           style={{ color: C.text, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
                           <ChevronDown className="w-4 h-4 flex-shrink-0 transition-transform" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}/>
@@ -818,7 +816,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                           {sub ? (
                             <button onClick={() => openSubmission(sub)}
                               className="text-xs font-semibold px-3 py-1.5 rounded-lg hover:opacity-80 transition-opacity"
-                              style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: 'pointer' }}>
+                              style={{ background: reportAccent, color: C.ctaText, border: 'none', cursor: 'pointer' }}>
                               {sub.status === 'graded' ? 'Regrade' : 'Grade'}
                             </button>
                           ) : (
@@ -872,9 +870,9 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                 })}
               </div>
             ) : (
-              <div className="rounded-2xl overflow-hidden">
+              <div className="overflow-x-auto">
                 {/* Table head */}
-                <div className="grid px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ background: C.pill, color: C.faint, gridTemplateColumns: '1fr 110px 70px 80px 80px' }}>
+                <div className="grid px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ background: C.pill, color: C.faint, gridTemplateColumns: '1fr 110px 70px 80px 80px', minWidth: 680 }}>
                   <span>Student</span>
                   <span>Status</span>
                   <span className="text-center">Score</span>
@@ -887,7 +885,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                   const isPassed = sc != null && sc >= passMark;
                   const statusInfo = statusCfg(row._status, row._pct);
                   return (
-                    <div key={row.id} className="grid px-5 py-3.5 items-center" style={{ gridTemplateColumns: '1fr 110px 70px 80px 80px', background: i % 2 === 0 ? C.card : C.page, borderTop: `1px solid ${C.divider}` }}>
+                    <div key={row.id} className="grid px-5 py-3.5 items-center" style={{ gridTemplateColumns: '1fr 110px 70px 80px 80px', minWidth: 680, background: i % 2 === 0 ? C.card : C.page, borderTop: `1px solid ${C.divider}` }}>
                       <div className="flex items-center gap-3 min-w-0">
                         <StudentAvatar name={row.full_name} email={row.email} size={34} C={C}/>
                         <div className="min-w-0">
@@ -917,7 +915,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                         {sub ? (
                           <button onClick={() => openSubmission(sub)}
                             className="text-xs font-semibold px-3 py-1.5 rounded-lg hover:opacity-80 transition-opacity"
-                            style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: 'pointer' }}>
+                            style={{ background: reportAccent, color: C.ctaText, border: 'none', cursor: 'pointer' }}>
                             {sub.status === 'graded' ? 'Regrade' : 'Grade'}
                           </button>
                         ) : (
@@ -930,7 +928,6 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
               </div>
             )}
           </div>
-        )}
       </div>
     );
   }
@@ -951,8 +948,15 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="text-base font-semibold" style={{ color: C.text }}>Assignments <span className="text-sm font-normal ml-1" style={{ color: C.faint }}>({assignments.length})</span></h2>
+      <div className="flex items-end justify-between gap-4 mb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="w-2 h-2 rounded-full" style={{ background: C.green, boxShadow: `0 0 0 5px ${C.green}14` }}/>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: C.green }}>Assignment workspace</p>
+          </div>
+          <h2 className="text-xl font-bold tracking-tight" style={{ color: C.text }}>Assignments</h2>
+          <p className="text-xs mt-1" style={{ color: C.faint }}>{assignments.length} learning experiences ready to manage and grade.</p>
+        </div>
         <div className="flex items-center gap-2">
           {assignments.length > 0 && (
             <button onClick={() => exportAllAssignments(assignments, 'assignments_bulk')}
@@ -981,8 +985,8 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
       <div className="space-y-3">
         {assignments.map((a, i) => (
           <motion.div key={a.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
-            className="flex items-center gap-4 p-4 rounded-2xl cursor-pointer group"
-            style={{ background: C.card }}>
+            className="flex items-center gap-4 p-4 rounded-2xl cursor-pointer group transition-all"
+            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: isDark ? 'none' : '0 10px 28px rgba(15,23,42,0.045)' }}>
             {/* Cover / letter */}
             <div className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center text-xl font-black"
               style={{ background: C.thumbBg, color: C.green }}>
@@ -999,7 +1003,12 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                   {a.status}
                 </span>
               </div>
-              <p className="text-xs" style={{ color: C.faint }}>{new Date(a.created_at).toLocaleDateString()}</p>
+              <div className="flex items-center gap-2 text-xs" style={{ color: C.faint }}>
+                <span>{(a.type || 'standard').replaceAll('_', ' ')}</span>
+                <span aria-hidden="true">/</span>
+                <span>{new Date(a.created_at).toLocaleDateString()}</span>
+                {a.deadline_date && <><span aria-hidden="true">/</span><span>Due {new Date(a.deadline_date).toLocaleDateString()}</span></>}
+              </div>
             </button>
             {/* Actions */}
             <div className="flex items-center gap-2 flex-shrink-0">

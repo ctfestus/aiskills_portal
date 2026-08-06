@@ -7,7 +7,7 @@ import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { ImageLibrary } from '@/components/ImageLibrary';
 import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X, Briefcase, ClipboardList, Eye, Images, FileText } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X, Briefcase, ClipboardList, Eye, Images, FileText, Blocks, Video, FolderOpen, Settings, CheckCircle2, Circle, ChevronLeft, ChevronRight } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const AssignmentExperiencePlayer = dynamic(() => import('@/components/AssignmentExperiencePlayer'), { ssr: false });
 const StandardAssignmentPlayer = dynamic(() => import('@/components/StandardAssignmentPlayer'), { ssr: false });
@@ -77,26 +77,31 @@ function isMissingSolutionsTable(err: any): boolean {
 
 function inputStyle(C: typeof LIGHT_C) {
   return {
-    width: '100%', padding: '10px 14px', borderRadius: 10, border: `1px solid ${C.cardBorder}`,
-    background: C.input, color: C.text, fontSize: 14, outline: 'none',
-    transition: 'border-color 0.15s',
+    width: '100%', minHeight: 46, padding: '11px 14px', borderRadius: 12, border: `1px solid ${C.cardBorder}`,
+    background: C.card, color: C.text, fontSize: 13.5, outline: 'none',
+    boxShadow: '0 1px 0 rgba(15,23,42,.02)', transition: 'border-color .15s ease, box-shadow .15s ease',
   } as React.CSSProperties;
 }
 function textareaStyle(C: typeof LIGHT_C) {
-  return { ...inputStyle(C), minHeight: 90, resize: 'vertical' as const, lineHeight: 1.6, fontFamily: 'inherit' };
+  return { ...inputStyle(C), minHeight: 112, resize: 'vertical' as const, lineHeight: 1.6, fontFamily: 'inherit' };
 }
 function labelStyle(C: typeof LIGHT_C) {
-  return { display: 'block', fontSize: 13, fontWeight: 600, color: C.muted, marginBottom: 6 } as React.CSSProperties;
+  return { display: 'block', fontSize: 12, fontWeight: 750, color: C.muted, marginBottom: 8, letterSpacing: '.01em' } as React.CSSProperties;
 }
 function hintStyle(C: typeof LIGHT_C) {
-  return { fontSize: 12, color: C.faint, marginTop: 4 } as React.CSSProperties;
+  return { fontSize: 11.5, lineHeight: 1.5, color: C.faint, marginTop: 6 } as React.CSSProperties;
 }
 
 export default function CreateAssignmentPage() {
-  const C = useC();
+  const activePalette = useC();
+  const isDark = activePalette.page === DARK_C.page;
+  // Keep Assignment Studio green in light mode without changing the tenant palette elsewhere.
+  // Dark mode retains its existing canonical ocean accent.
+  const C = isDark ? activePalette : LIGHT_C;
   const router = useRouter();
 
   const [editId, setEditId]       = useState<string | null>(null);
+  const [activeStudioTab, setActiveStudioTab] = useState<'type' | 'build' | 'content' | 'resources' | 'settings' | 'publish'>('type');
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState('');
   const [courses, setCourses]     = useState<Course[]>([]);
@@ -148,6 +153,9 @@ export default function CreateAssignmentPage() {
   const [showPreview, setShowPreview]             = useState(false);
   const [previewVeConfig, setPreviewVeConfig]     = useState<any>(null);
   const [loadingPreviewVe, setLoadingPreviewVe]   = useState(false);
+  const [editorReady, setEditorReady]             = useState(false);
+  const autoPreviewOpened = useRef(false);
+  const previewButtonRef = useRef<HTMLButtonElement>(null);
   const coverRef = useRef<HTMLInputElement>(null);
   const solutionFileRef = useRef<HTMLInputElement>(null);
   const resourceFileRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -238,6 +246,7 @@ export default function CreateAssignmentPage() {
           for (const s of solData) if (s.storage_path) uploadedSolutionPaths.current.add(s.storage_path);
         }
       }
+      setEditorReady(true);
     };
     init();
   }, [router]);
@@ -545,7 +554,58 @@ export default function CreateAssignmentPage() {
 
   const isLegacyType = !ASSIGNMENT_TYPES.some(t => t.value === assignmentType) && assignmentType !== 'standard';
   const showContentFields = assignmentType !== 'virtual_experience';
-  const isDark = C === DARK_C;
+  const studioTabs = [
+    { id: 'type', label: 'Type', description: 'Choose assignment type', Icon: ClipboardList },
+    { id: 'build', label: 'Build', description: 'Build workspace', Icon: Blocks },
+    { id: 'content', label: 'Content', description: 'Content workspace', Icon: Video },
+    { id: 'resources', label: 'Resources', description: 'Resources workspace', Icon: FolderOpen },
+    { id: 'settings', label: 'Settings', description: 'Settings workspace', Icon: Settings },
+    { id: 'publish', label: 'Publish', description: 'Publish workspace', Icon: CheckCircle2 },
+  ] as const;
+  const activeStudioIndex = studioTabs.findIndex(tab => tab.id === activeStudioTab);
+  const activeStudioConfig = studioTabs[activeStudioIndex];
+  const studioPanelStyle: React.CSSProperties = {
+    background: C.card,
+    border: `1px solid ${C.cardBorder}`,
+    borderRadius: 20,
+    boxShadow: isDark ? 'none' : '0 14px 38px rgba(15,23,42,0.05)',
+    padding: 24,
+  };
+  const tabPanelSectionStyle: React.CSSProperties = {
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 0,
+    boxShadow: 'none',
+    padding: 0,
+  };
+  const fieldGroupStyle: React.CSSProperties = {
+    padding: 16,
+    borderRadius: 15,
+    background: C.page,
+  };
+  const sectionEyebrowStyle: React.CSSProperties = {
+    color: C.cta,
+    fontSize: 10,
+    fontWeight: 800,
+    textTransform: 'uppercase',
+    letterSpacing: '.14em',
+    margin: '0 0 6px',
+  };
+  const contentReady = assignmentType === 'virtual_experience'
+    ? Boolean(veFormId)
+    : assignmentType === 'standard'
+      ? scenarios.length > 0
+      : Boolean(scenario || brief || tasks || requirements);
+  const readinessChecks = [
+    { label: 'Assignment title', complete: Boolean(title.trim()) },
+    { label: 'Assignment content', complete: contentReady },
+    { label: 'Target audience', complete: selectedCohortIds.length > 0 || selectedGroupIds.length > 0 },
+    { label: 'Cover image', complete: Boolean(coverImage) },
+  ];
+  const readinessComplete = readinessChecks.filter(item => item.complete).length;
+  const goToStudioTab = (id: typeof studioTabs[number]['id']) => {
+    setActiveStudioTab(id);
+  };
 
   const openPreview = async () => {
     if (assignmentType === 'virtual_experience' && veFormId) {
@@ -580,6 +640,15 @@ export default function CreateAssignmentPage() {
     setShowPreview(true);
   };
 
+  // Assignment reports link here with `preview=1`. Reuse the real editor preview instead of
+  // maintaining a second renderer in the reporting page.
+  useEffect(() => {
+    if (!editorReady || !editId || autoPreviewOpened.current) return;
+    if (new URLSearchParams(window.location.search).get('preview') !== '1') return;
+    autoPreviewOpened.current = true;
+    previewButtonRef.current?.click();
+  }, [editorReady, editId]);
+
   return (
     <div style={{ minHeight: '100vh', background: C.page }}>
       <header style={{
@@ -587,32 +656,55 @@ export default function CreateAssignmentPage() {
         background: C.nav, borderBottom: `1px solid ${C.navBorder}`,
         backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
       }}>
-        <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ maxWidth: 1040, margin: '0 auto', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center' }}>
           <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 8, color: C.muted, textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>
             <ArrowLeft style={{ width: 16, height: 16 }}/> Back
           </Link>
-          <h1 style={{ fontSize: 16, fontWeight: 700, color: C.text, margin: 0 }}>{editId ? 'Edit Assignment' : 'New Assignment'}</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              type="button" onClick={openPreview} disabled={loadingPreviewVe}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, cursor: 'pointer', background: C.input, color: C.muted, fontSize: 13, fontWeight: 600, transition: 'opacity 0.15s' }}
-            >
-              {loadingPreviewVe ? <Loader2 style={{ width: 14, height: 14 }} className="animate-spin"/> : <Eye style={{ width: 14, height: 14 }}/>}
-              Preview
-            </button>
-            <motion.button
-              type="submit" form="assignment-form" disabled={loading} whileTap={{ scale: 0.96 }}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 10, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', background: C.cta, color: C.ctaText, fontSize: 14, fontWeight: 600, opacity: loading ? 0.7 : 1, transition: 'opacity 0.15s' }}
-            >
-              {loading ? <Loader2 style={{ width: 15, height: 15 }} className="animate-spin"/> : <Save style={{ width: 15, height: 15 }}/>}
-              {loading ? 'Saving…' : editId ? 'Update Assignment' : status === 'draft' ? 'Save Draft' : 'Publish'}
-            </motion.button>
-          </div>
         </div>
       </header>
 
-      <main style={{ maxWidth: 800, margin: '0 auto', padding: '32px 24px 80px' }}>
+      <main style={{ maxWidth: 1040, margin: '0 auto', padding: '28px 24px 120px' }}>
+        <section style={{ ...studioPanelStyle, padding: 0, overflow: 'hidden', marginBottom: 0, borderRadius: '20px 20px 0 0', borderBottom: 'none', boxShadow: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '20px 24px 14px' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={{ position: 'relative', width: 10, height: 10, display: 'grid', placeItems: 'center' }} aria-hidden="true">
+                  <span className="animate-ping" style={{ position: 'absolute', width: 10, height: 10, borderRadius: '50%', background: C.cta, opacity: .2 }}/>
+                  <span style={{ position: 'relative', width: 6, height: 6, borderRadius: '50%', background: C.cta }}/>
+                </span>
+                <span style={{ color: C.cta, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.16em' }}>Assignment Studio</span>
+              </div>
+              <h1 style={{ color: C.text, fontSize: 20, lineHeight: 1.2, fontWeight: 750, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title || (editId ? 'Edit assignment' : 'Untitled assignment')}</h1>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+              <button ref={previewButtonRef} type="button" onClick={openPreview} disabled={loadingPreviewVe} style={{ display: 'flex', alignItems: 'center', gap: 7, minHeight: 38, padding: '8px 13px', borderRadius: 12, border: 'none', cursor: 'pointer', background: C.pill, color: C.muted, fontSize: 12, fontWeight: 700 }}>
+                {loadingPreviewVe ? <Loader2 style={{ width: 14, height: 14 }} className="animate-spin"/> : <Eye style={{ width: 14, height: 14 }}/>} Preview
+              </button>
+              <span style={{ color: C.faint, fontSize: 11 }}>{editId ? 'Editing assignment' : 'New assignment'}</span>
+            </div>
+          </div>
+          <nav aria-label="Assignment studio sections" style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', padding: '0 20px 14px', scrollbarWidth: 'none' }}>
+            {studioTabs.map(tab => {
+              const active = activeStudioTab === tab.id;
+              return <button key={tab.id} type="button" aria-current={active ? 'page' : undefined} onClick={() => goToStudioTab(tab.id)} style={{ display: 'flex', alignItems: 'center', gap: 7, minHeight: 38, padding: '8px 12px', border: 'none', borderRadius: 12, whiteSpace: 'nowrap', cursor: 'pointer', background: active ? `${C.cta}14` : 'transparent', color: active ? C.cta : C.faint, fontSize: 12, fontWeight: 700, transition: 'all .15s ease' }}><tab.Icon style={{ width: 14, height: 14 }}/> {tab.label}</button>;
+            })}
+          </nav>
+        </section>
+        <section style={{ padding: '22px 24px', borderLeft: `1px solid ${C.cardBorder}`, borderRight: `1px solid ${C.cardBorder}`, borderTop: `1px solid ${C.divider}`, borderBottom: `1px solid ${C.divider}`, background: C.card }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+            <div style={{ minWidth: 0 }}>
+              <h2 style={{ color: C.text, fontSize: 20, fontWeight: 750, lineHeight: 1.2, margin: 0 }}>{activeStudioConfig.label}</h2>
+              <p style={{ color: C.faint, fontSize: 11, fontWeight: 600, margin: '7px 0 0' }}>{activeStudioConfig.description}</p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button type="button" aria-label="Previous" disabled={activeStudioIndex <= 0} onClick={() => goToStudioTab(studioTabs[activeStudioIndex - 1].id)} style={{ width: 42, height: 42, display: 'grid', placeItems: 'center', borderRadius: '50%', border: `1px solid ${C.cardBorder}`, background: 'transparent', color: C.muted, cursor: activeStudioIndex <= 0 ? 'default' : 'pointer', opacity: activeStudioIndex <= 0 ? .3 : 1 }}><ChevronLeft style={{ width: 17, height: 17 }}/></button>
+              <button type="button" aria-label="Next" disabled={activeStudioIndex >= studioTabs.length - 1} onClick={() => goToStudioTab(studioTabs[activeStudioIndex + 1].id)} style={{ width: 42, height: 42, display: 'grid', placeItems: 'center', borderRadius: '50%', border: `1px solid ${C.cardBorder}`, background: 'transparent', color: C.muted, cursor: activeStudioIndex >= studioTabs.length - 1 ? 'default' : 'pointer', opacity: activeStudioIndex >= studioTabs.length - 1 ? .3 : 1 }}><ChevronRight style={{ width: 17, height: 17 }}/></button>
+            </div>
+          </div>
+        </section>
         <form id="assignment-form" onSubmit={handleSubmit} noValidate>
+
+          <section aria-live="polite" style={{ ...studioPanelStyle, minHeight: 360, marginTop: 0, borderRadius: '0 0 20px 20px', borderTop: 'none', boxShadow: 'none' }}>
 
           {error && (
             <div style={{ marginBottom: 20, padding: '12px 16px', borderRadius: 10, background: C.errorBg, color: C.errorText, border: `1px solid ${C.errorBorder}`, fontSize: 14 }}>
@@ -621,30 +713,30 @@ export default function CreateAssignmentPage() {
           )}
 
           {/* -- Assignment Type --- */}
-          <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 16, marginTop: 0 }}>Assignment Type</h2>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {ASSIGNMENT_TYPES.map(t => {
-                const active = assignmentType === t.value;
-                return (
-                  <button key={t.value} type="button" onClick={() => setAssignmentType(t.value)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 10,
-                      border: `1.5px solid ${active ? C.cta : C.cardBorder}`,
-                      background: active ? C.cta : C.input, color: active ? C.ctaText : C.muted,
-                      fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
-                    }}
-                  >
-                    {t.icon} {t.label}
-                  </button>
-                );
-              })}
+          <section id="assignment-section-type" style={{ ...tabPanelSectionStyle, display: activeStudioTab === 'type' ? 'block' : 'none' }}>
+            <div style={{ marginBottom: 20 }}>
+              <p style={{ color: C.cta, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.14em', margin: '0 0 6px' }}>Assignment format</p>
+              <h3 style={{ fontSize: 17, fontWeight: 750, color: C.text, margin: 0 }}>How should learners complete this assignment?</h3>
+              <p style={{ ...hintStyle(C), margin: '7px 0 0', maxWidth: 620 }}>Choose a flexible task-based assignment or connect an immersive virtual experience. This choice determines the tools available in the next tabs.</p>
             </div>
-            {ASSIGNMENT_TYPES.find(t => t.value === assignmentType) && assignmentType !== 'standard' && (
-              <p style={{ ...hintStyle(C), marginTop: 10 }}>
-                {ASSIGNMENT_TYPES.find(t => t.value === assignmentType)?.description}
-              </p>
-            )}
+              <div role="radiogroup" aria-label="Assignment type" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12 }}>
+                {ASSIGNMENT_TYPES.map(t => {
+                  const active = assignmentType === t.value;
+                  return (
+                    <button key={t.value} type="button" role="radio" aria-checked={active} onClick={() => setAssignmentType(t.value)}
+                      style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 13, minWidth: 0, minHeight: 92, padding: 16, borderRadius: 15, border: `1px solid ${active ? C.cta : C.divider}`, background: active ? `${C.cta}0e` : C.page, color: active ? C.cta : C.muted, textAlign: 'left', cursor: 'pointer', transition: 'all .15s ease' }}>
+                      <span style={{ width: 42, height: 42, borderRadius: 12, flexShrink: 0, display: 'grid', placeItems: 'center', background: active ? `${C.cta}18` : C.card, color: active ? C.cta : C.faint }}>{t.icon}</span>
+                      <span style={{ minWidth: 0, paddingRight: 22 }}>
+                        <strong style={{ display: 'block', color: active ? C.cta : C.text, fontSize: 13.5, lineHeight: 1.3 }}>{t.label}</strong>
+                        <span style={{ display: 'block', color: C.faint, fontSize: 11.5, lineHeight: 1.45, marginTop: 5 }}>{t.description}</span>
+                      </span>
+                      {active && (
+                        <CheckCircle2 style={{ position: 'absolute', right: 14, top: 14, width: 16, height: 16, color: C.cta }}/>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             {isLegacyType && (
               <p style={{ ...hintStyle(C), marginTop: 10 }}>
                 You are editing a legacy {LEGACY_TYPE_LABELS[assignmentType] ?? assignmentType} assignment. Its settings below still work. New assignments are built as Standard scenarios and tasks.
@@ -654,13 +746,13 @@ export default function CreateAssignmentPage() {
 
           {/* -- Type-specific Config --- */}
           {assignmentType !== 'standard' && (
-            <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20, marginTop: 0 }}>
-                {assignmentType === 'virtual_experience' ? 'Virtual Experience' : 'AI Review Settings'}
-              </h2>
+            <section style={{ ...tabPanelSectionStyle, display: activeStudioTab === 'content' ? 'block' : 'none', marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${C.divider}` }}>
+              <p style={sectionEyebrowStyle}>{assignmentType === 'virtual_experience' ? 'Connected experience' : 'AI assessment'}</p>
+              <h3 style={{ fontSize: 17, fontWeight: 750, color: C.text, margin: 0 }}>{assignmentType === 'virtual_experience' ? 'Virtual Experience' : 'AI review settings'}</h3>
+              <p style={{ ...hintStyle(C), margin: '7px 0 18px' }}>{assignmentType === 'virtual_experience' ? 'Select the immersive experience learners will complete.' : 'Define the rubric, context, and score used for automated review.'}</p>
 
               {assignmentType === 'virtual_experience' ? (
-                <div>
+                <div style={fieldGroupStyle}>
                   <label style={labelStyle(C)}>Select Virtual Experience <span style={{ color: C.errorText }}>*</span></label>
                   {veForms.length === 0 ? (
                     <p style={{ fontSize: 13, color: C.faint }}>No Virtual Experiences found. Create one first from the dashboard.</p>
@@ -675,7 +767,7 @@ export default function CreateAssignmentPage() {
               ) : (
                 <>
                   {/* Rubric */}
-                  <div style={{ marginBottom: 16 }}>
+                  <div style={{ ...fieldGroupStyle, marginBottom: 12 }}>
                     <label style={labelStyle(C)}>Grading Rubric</label>
 
                     {/* Extract from reference solution */}
@@ -693,10 +785,9 @@ export default function CreateAssignmentPage() {
                         onClick={() => rubricFileRefs.current['reference_solution']?.click()}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 6,
-                          padding: '7px 12px', borderRadius: 8,
-                          border: `1px solid ${C.cardBorder}`,
-                          background: C.input, color: C.muted,
-                          fontSize: 12, fontWeight: 600, cursor: extracting ? 'not-allowed' : 'pointer',
+                          minHeight: 40, padding: '8px 12px', borderRadius: 10,
+                          border: 'none', background: C.card, color: C.muted,
+                          fontSize: 11.5, fontWeight: 700, cursor: extracting ? 'not-allowed' : 'pointer',
                           opacity: extracting ? 0.5 : 1, transition: 'opacity 0.15s',
                         }}
                       >
@@ -719,7 +810,7 @@ export default function CreateAssignmentPage() {
 
                   {/* Context (excel_review / document_review) */}
                   {assignmentType === 'document_review' && (
-                    <div style={{ marginBottom: 16 }}>
+                    <div style={{ ...fieldGroupStyle, marginBottom: 12 }}>
                       <label style={labelStyle(C)}>Report scope / context <span style={{ fontSize: 12, fontWeight: 400, color: C.faint }}>(optional)</span></label>
                       <textarea
                         value={context}
@@ -732,7 +823,7 @@ export default function CreateAssignmentPage() {
 
                   {/* Min Score */}
                   {(assignmentType === 'code_review' || assignmentType === 'excel_review' || assignmentType === 'document_review') && (
-                    <div style={{ marginBottom: 16 }}>
+                    <div style={{ ...fieldGroupStyle, marginBottom: 12 }}>
                       <label style={labelStyle(C)}>Minimum Pass Score <span style={{ fontSize: 12, fontWeight: 400 }}>(out of 100)</span></label>
                       <input
                         type="number" min={1} max={100} value={minScore}
@@ -744,7 +835,7 @@ export default function CreateAssignmentPage() {
 
                   {/* Schema (code_review only) */}
                   {assignmentType === 'code_review' && (
-                    <div style={{ marginBottom: 16 }}>
+                    <div style={{ ...fieldGroupStyle, marginBottom: 12 }}>
                       <label style={labelStyle(C)}>Database Schema <span style={{ fontSize: 12, fontWeight: 400, color: C.faint }}>(optional, for SQL review)</span></label>
                       <textarea
                         value={schema}
@@ -757,7 +848,7 @@ export default function CreateAssignmentPage() {
 
                   {/* Context (excel_review) */}
                   {assignmentType === 'excel_review' && (
-                    <div>
+                    <div style={fieldGroupStyle}>
                       <label style={labelStyle(C)}>Business Context <span style={{ fontSize: 12, fontWeight: 400, color: C.faint }}>(optional)</span></label>
                       <textarea
                         value={context}
@@ -774,10 +865,14 @@ export default function CreateAssignmentPage() {
           )}
 
           {/* -- Section: Details --- */}
-          <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20, marginTop: 0 }}>Details</h2>
+          <section style={{ ...tabPanelSectionStyle, display: activeStudioTab === 'build' ? 'block' : 'none' }}>
+            <div style={{ marginBottom: 20 }}>
+              <p style={sectionEyebrowStyle}>Assignment identity</p>
+              <h3 style={{ fontSize: 17, fontWeight: 750, color: C.text, margin: 0 }}>Set the learner-facing details</h3>
+              <p style={{ ...hintStyle(C), marginTop: 6 }}>Use a clear title and a focused cover image learners can recognize at a glance.</p>
+            </div>
 
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ ...fieldGroupStyle, marginBottom: 12 }}>
               <label style={labelStyle(C)}>Title <span style={{ color: C.errorText }}>*</span></label>
               <input
                 type="text" value={title} onChange={e => setTitle(sanitizePlainText(e.target.value))}
@@ -787,24 +882,24 @@ export default function CreateAssignmentPage() {
             </div>
 
             {/* Cover Image */}
-            <div style={{ marginBottom: 16 }}>
+            <div style={fieldGroupStyle}>
               <label style={labelStyle(C)}>Cover Image</label>
               <input ref={coverRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleCoverUpload}/>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 <input type="text" value={coverImage} onChange={e => setCoverImage(e.target.value)}
-                  placeholder="Paste an image URL or upload" style={{ ...inputStyle(C), flex: 1 }}/>
+                  placeholder="Paste an image URL or upload" style={{ ...inputStyle(C), flex: '1 1 260px' }}/>
                 <button type="button" onClick={() => coverRef.current?.click()} disabled={coverUploading}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.pill, color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 46, padding: '10px 14px', borderRadius: 12, border: 'none', background: C.pill, color: C.muted, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   <Upload style={{ width: 14, height: 14 }}/>{coverUploading ? 'Uploading…' : 'Upload'}
                 </button>
                 <button type="button" onClick={() => setShowCoverLibrary(true)} title="Select from library"
-                  style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', borderRadius: 10, border: 'none', background: C.pill, color: C.muted, cursor: 'pointer', flexShrink: 0 }}>
+                  style={{ display: 'flex', alignItems: 'center', minHeight: 46, padding: '10px 13px', borderRadius: 12, border: 'none', background: C.pill, color: C.muted, cursor: 'pointer', flexShrink: 0 }}>
                   <Images style={{ width: 14, height: 14 }}/>
                 </button>
               </div>
               {coverImage && (
-                <div style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.cardBorder}`, position: 'relative' }}>
-                  <img src={resolveCoverUrl(coverImage)} alt="Cover" style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }} onError={e => (e.target as HTMLImageElement).style.display = 'none'}/>
+                <div style={{ marginTop: 12, borderRadius: 14, overflow: 'hidden', position: 'relative', background: C.thumbBg }}>
+                  <img src={resolveCoverUrl(coverImage)} alt="Cover" style={{ width: '100%', height: 190, objectFit: 'cover', display: 'block' }} onError={e => (e.target as HTMLImageElement).style.display = 'none'}/>
                   <button type="button" onClick={() => setCoverImage('')}
                     style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.55)', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                     <X style={{ width: 14, height: 14, color: 'white' }}/>
@@ -822,28 +917,20 @@ export default function CreateAssignmentPage() {
               )}
             </div>
 
-            <div>
-              <label style={labelStyle(C)}>Status</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {(['draft', 'published'] as const).map(s => (
-                  <button key={s} type="button" onClick={() => setStatus(s)}
-                    style={{ padding: '7px 18px', borderRadius: 8, border: `1px solid ${status === s ? C.cta : C.cardBorder}`, background: status === s ? C.cta : C.input, color: status === s ? C.ctaText : C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer', textTransform: 'capitalize', transition: 'all 0.15s' }}
-                  >{s}</button>
-                ))}
-              </div>
-            </div>
           </section>
 
           {/* -- Section: Content (hidden for VE type) --- */}
           {showContentFields && (
-            <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4, marginTop: 0 }}>{assignmentType === 'standard' ? 'Overview' : 'Content'}</h2>
+            <section style={{ ...tabPanelSectionStyle, display: activeStudioTab === 'content' ? 'block' : 'none', marginBottom: assignmentType === 'standard' ? 28 : 0, paddingBottom: assignmentType === 'standard' ? 28 : 0, borderBottom: assignmentType === 'standard' ? `1px solid ${C.divider}` : 'none' }}>
+              <p style={sectionEyebrowStyle}>{assignmentType === 'standard' ? 'Learner briefing' : 'Assignment content'}</p>
+              <h3 style={{ fontSize: 17, fontWeight: 750, color: C.text, margin: 0 }}>{assignmentType === 'standard' ? 'Introduce the assignment' : 'Shape the learner brief'}</h3>
+              <p style={{ ...hintStyle(C), margin: '7px 0 18px' }}>{assignmentType === 'standard' ? 'Give learners the context they need before starting the scenarios.' : 'Explain the situation, expected work, and completion requirements.'}</p>
               {isLegacyType && (
                 <p style={{ ...hintStyle(C), marginBottom: 16 }}>This text is shown to students as a briefing before they interact with the {LEGACY_TYPE_LABELS[assignmentType] ?? assignmentType} tool.</p>
               )}
 
               {assignmentType === 'standard' ? (
-                <div style={{ marginTop: 12 }}>
+                <div>
                   <label style={labelStyle(C)}>Overview <span style={{ fontSize: 12, fontWeight: 400, color: C.faint }}>(optional intro shown above the scenarios)</span></label>
                   <LessonEditor
                     doc={introDoc}
@@ -851,6 +938,7 @@ export default function CreateAssignmentPage() {
                     onChange={({ doc, body }) => { setIntroDoc(doc); setIntroBody(body); }}
                     placeholder="Set the overall context. Add images, steps, callouts, tables..."
                     isDark={isDark}
+                    accentColor={C.cta}
                   />
                 </div>
               ) : (
@@ -860,7 +948,7 @@ export default function CreateAssignmentPage() {
                   { label: 'Tasks', value: tasks, setter: setTasks, placeholder: 'List the tasks students must complete…' },
                   { label: 'Requirements', value: requirements, setter: setRequirements, placeholder: 'List any requirements or constraints…' },
                 ].map(({ label, value, setter, placeholder }) => (
-                  <div key={label} style={{ marginBottom: 16 }}>
+                  <div key={label} style={{ ...fieldGroupStyle, marginBottom: 12 }}>
                     <label style={labelStyle(C)}>{label}</label>
                     <RichTextEditor value={value} onChange={setter} placeholder={placeholder} enableAiAssist />
                   </div>
@@ -871,41 +959,48 @@ export default function CreateAssignmentPage() {
 
           {/* -- Section: Scenarios & Tasks (standard only) --- */}
           {assignmentType === 'standard' && (
-            <ScenariosEditor scenarios={scenarios} onChange={setScenarios} C={C} />
+            <div style={{ display: activeStudioTab === 'content' ? 'block' : 'none' }}>
+              <ScenariosEditor scenarios={scenarios} onChange={setScenarios} C={C} embedded />
+            </div>
           )}
 
           {/* -- Section: Resources --- */}
-          <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
+          <section style={{ ...tabPanelSectionStyle, display: activeStudioTab === 'resources' ? 'block' : 'none', marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${C.divider}` }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0 }}>Resources</h2>
+              <div>
+                <p style={sectionEyebrowStyle}>Learner resources</p>
+                <h3 style={{ fontSize: 17, fontWeight: 750, color: C.text, margin: 0 }}>Reference material</h3>
+                <p style={{ ...hintStyle(C), marginTop: 6 }}>Attach links or files learners can use while completing the work.</p>
+              </div>
               <button type="button" onClick={addResource}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.cardBorder}`, background: C.pill, color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 11, border: 'none', background: C.cta, color: C.ctaText, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                 <Plus style={{ width: 14, height: 14 }}/> Add Resource
               </button>
             </div>
 
             {resources.length === 0 && (
-              <p style={{ textAlign: 'center', color: C.faint, fontSize: 14, padding: '24px 0' }}>
-                No resources yet. Use the Add Resource button to attach links or files.
-              </p>
+              <div style={{ textAlign: 'center', color: C.faint, fontSize: 12.5, padding: '30px 18px', borderRadius: 15, background: C.page }}>
+                <LinkIcon style={{ width: 20, height: 20, margin: '0 auto 8px', color: C.cta }}/>
+                No resources yet. Add a link or file when learners need supporting material.
+              </div>
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {resources.map(resource => (
-                <div key={resource.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto auto', gap: 10, alignItems: 'center', padding: 14, borderRadius: 10, background: C.page, border: `1px solid ${C.divider}` }}>
+                <div key={resource.id} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, alignItems: 'center', padding: 16, borderRadius: 15, background: C.page }}>
                   <input type="text" placeholder="Resource name" value={resource.name}
                     onChange={e => updateResource(resource.id, 'name', sanitizePlainText(e.target.value))}
-                    style={{ ...inputStyle(C), background: C.page === DARK_C.page ? C.input : C.card, width: '100%' }} maxLength={200}/>
+                    style={{ ...inputStyle(C), width: '100%' }} maxLength={200}/>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                     <input type="url" placeholder={resource.resource_type === 'file' ? 'Upload a file or paste URL…' : 'https://…'} value={resource.url}
                       onChange={e => updateResource(resource.id, 'url', e.target.value)}
-                      style={{ ...inputStyle(C), background: C.page === DARK_C.page ? C.input : C.card, width: '100%', flex: 1 }}/>
+                      style={{ ...inputStyle(C), width: '100%', flex: 1 }}/>
                     {resource.resource_type === 'file' && (
                       <>
                         <input type="file" style={{ display: 'none' }} ref={el => { resourceFileRefs.current[resource.id] = el; }}
                           onChange={e => handleResourceFileUpload(resource.id, e)}/>
                         <button type="button" onClick={() => resourceFileRefs.current[resource.id]?.click()} disabled={resourceUploading[resource.id]}
-                          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '9px 12px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.pill, color: C.muted, fontSize: 12, fontWeight: 600, cursor: resourceUploading[resource.id] ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          style={{ display: 'flex', alignItems: 'center', gap: 5, minHeight: 44, padding: '9px 12px', borderRadius: 11, border: 'none', background: C.pill, color: C.muted, fontSize: 11.5, fontWeight: 700, cursor: resourceUploading[resource.id] ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                           {resourceUploading[resource.id] ? <Loader2 style={{ width: 12, height: 12 }} className="animate-spin"/> : <Upload style={{ width: 12, height: 12 }}/>}
                           {resourceUploading[resource.id] ? 'Uploading…' : 'Upload'}
                         </button>
@@ -915,13 +1010,13 @@ export default function CreateAssignmentPage() {
                   <div style={{ display: 'flex', gap: 6 }}>
                     {(['link', 'file'] as const).map(t => (
                       <button key={t} type="button" onClick={() => updateResource(resource.id, 'resource_type', t)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px', borderRadius: 7, border: `1px solid ${resource.resource_type === t ? C.cta : C.cardBorder}`, background: resource.resource_type === t ? C.cta : C.input, color: resource.resource_type === t ? C.ctaText : C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' }}>
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 11px', borderRadius: 9, border: 'none', background: resource.resource_type === t ? `${C.cta}14` : C.card, color: resource.resource_type === t ? C.cta : C.muted, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s' }}>
                         <LinkIcon style={{ width: 11, height: 11 }}/> {t}
                       </button>
                     ))}
                   </div>
                   <button type="button" onClick={() => removeResource(resource.id)}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 8, border: `1px solid ${C.cardBorder}`, background: C.input, color: C.faint, cursor: 'pointer', flexShrink: 0 }}>
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: 10, border: 'none', background: C.deleteBg, color: C.deleteText, cursor: 'pointer', flexShrink: 0 }}>
                     <Trash2 style={{ width: 14, height: 14 }}/>
                   </button>
                 </div>
@@ -930,10 +1025,11 @@ export default function CreateAssignmentPage() {
           </section>
 
           {/* -- Section: Solution files (released after grading) --- */}
-          <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
+          <section style={{ ...tabPanelSectionStyle, display: activeStudioTab === 'resources' ? 'block' : 'none' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
               <div>
-                <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0 }}>Solution files</h2>
+                <p style={sectionEyebrowStyle}>Post-grade release</p>
+                <h3 style={{ fontSize: 17, fontWeight: 750, color: C.text, margin: 0 }}>Solution files</h3>
                 <p style={{ ...hintStyle(C), marginTop: 4 }}>
                   The model answer. A student can only see and download these once their own submission has been graded.
                 </p>
@@ -943,40 +1039,41 @@ export default function CreateAssignmentPage() {
                   accept={[...ALLOWED_SOLUTION_EXTENSIONS].join(',')}
                   onChange={handleSolutionFileUpload}/>
                 <button type="button" onClick={() => solutionFileRef.current?.click()} disabled={solutionUploading}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: 'none', background: C.cta, color: C.ctaText, fontSize: 13, fontWeight: 600, cursor: solutionUploading ? 'not-allowed' : 'pointer', opacity: solutionUploading ? 0.6 : 1, whiteSpace: 'nowrap' }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 11, border: 'none', background: C.cta, color: C.ctaText, fontSize: 12, fontWeight: 700, cursor: solutionUploading ? 'not-allowed' : 'pointer', opacity: solutionUploading ? 0.6 : 1, whiteSpace: 'nowrap' }}>
                   {solutionUploading ? <Loader2 style={{ width: 14, height: 14 }} className="animate-spin"/> : <Upload style={{ width: 14, height: 14 }}/>}
                   {solutionUploading ? 'Uploading...' : 'Upload files'}
                 </button>
                 <button type="button" onClick={addSolutionLink}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.cardBorder}`, background: C.pill, color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 11, border: 'none', background: C.pill, color: C.muted, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                   <LinkIcon style={{ width: 14, height: 14 }}/> Add link
                 </button>
               </div>
             </div>
 
             {solutions.length === 0 ? (
-              <p style={{ textAlign: 'center', color: C.faint, fontSize: 14, padding: '24px 0' }}>
-                No solution files yet. Upload the worked answer (Excel, SQL, Power BI, PDF) or link a walkthrough.
-              </p>
+              <div style={{ textAlign: 'center', color: C.faint, fontSize: 12.5, padding: '30px 18px', borderRadius: 15, background: C.page }}>
+                <FileText style={{ width: 20, height: 20, margin: '0 auto 8px', color: C.cta }}/>
+                No solutions yet. Upload a worked answer or link a walkthrough for release after grading.
+              </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {solutions.map(s => (
-                  <div key={s.id} style={{ display: 'grid', gridTemplateColumns: s.kind === 'link' ? '1fr 1fr auto auto' : '1fr auto auto', gap: 10, alignItems: 'center', padding: 14, borderRadius: 10, background: C.page, border: `1px solid ${C.divider}` }}>
+                  <div key={s.id} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, alignItems: 'center', padding: 16, borderRadius: 15, background: C.page }}>
                     <input type="text" placeholder="Solution name" value={s.name}
                       onChange={e => updateSolution(s.id, 'name', sanitizePlainText(e.target.value))}
-                      style={{ ...inputStyle(C), background: C.page === DARK_C.page ? C.input : C.card, width: '100%' }} maxLength={200}/>
+                      style={{ ...inputStyle(C), width: '100%' }} maxLength={200}/>
                     {s.kind === 'link' && (
                       <input type="url" placeholder="https://" value={s.url ?? ''}
                         onChange={e => updateSolution(s.id, 'url', e.target.value)}
-                        style={{ ...inputStyle(C), background: C.page === DARK_C.page ? C.input : C.card, width: '100%' }}/>
+                        style={{ ...inputStyle(C), width: '100%' }}/>
                     )}
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 7, background: C.input, color: C.muted, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '8px 10px', borderRadius: 9, background: C.card, color: C.muted, fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
                       {s.kind === 'file'
                         ? <><FileText style={{ width: 11, height: 11 }}/> Private file</>
                         : <><LinkIcon style={{ width: 11, height: 11 }}/> Link</>}
                     </span>
                     <button type="button" onClick={() => removeSolution(s.id)}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 8, border: `1px solid ${C.cardBorder}`, background: C.input, color: C.faint, cursor: 'pointer', flexShrink: 0 }}>
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: 10, border: 'none', background: C.deleteBg, color: C.deleteText, cursor: 'pointer', flexShrink: 0 }}>
                       <Trash2 style={{ width: 14, height: 14 }}/>
                     </button>
                   </div>
@@ -986,10 +1083,12 @@ export default function CreateAssignmentPage() {
           </section>
 
           {/* -- Section: Settings --- */}
-          <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20, marginTop: 0 }}>Settings</h2>
+          <section style={{ ...tabPanelSectionStyle, display: activeStudioTab === 'settings' ? 'block' : 'none', marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${C.divider}` }}>
+            <p style={sectionEyebrowStyle}>Rules and timing</p>
+            <h3 style={{ fontSize: 17, fontWeight: 750, color: C.text, margin: 0 }}>Assignment settings</h3>
+            <p style={{ ...hintStyle(C), margin: '7px 0 18px' }}>Connect the course, set expectations, and define how success is measured.</p>
 
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ ...fieldGroupStyle, marginBottom: 12 }}>
               <label style={labelStyle(C)}>Related Course</label>
               <select value={relatedCourse} onChange={e => setRelatedCourse(e.target.value)}
                 style={{ ...inputStyle(C), appearance: 'auto' }}>
@@ -998,7 +1097,7 @@ export default function CreateAssignmentPage() {
               </select>
             </div>
 
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ ...fieldGroupStyle, marginBottom: 12 }}>
               <label style={labelStyle(C)}>Deadline <span style={{ fontSize: 12, fontWeight: 400, color: C.faint }}>(optional)</span></label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input
@@ -1009,7 +1108,7 @@ export default function CreateAssignmentPage() {
                 />
                 {deadlineDate && (
                   <button type="button" onClick={() => setDeadlineDate('')}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, border: `1px solid ${C.cardBorder}`, background: C.input, color: C.faint, cursor: 'pointer', flexShrink: 0 }}>
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: 10, border: 'none', background: C.card, color: C.faint, cursor: 'pointer', flexShrink: 0 }}>
                     <X style={{ width: 13, height: 13 }}/>
                   </button>
                 )}
@@ -1017,7 +1116,7 @@ export default function CreateAssignmentPage() {
               <p style={hintStyle(C)}>Students will see a countdown on their assignment card until this date.</p>
             </div>
 
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ ...fieldGroupStyle, marginBottom: 12 }}>
               <label style={labelStyle(C)}>Passing score</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input
@@ -1043,19 +1142,21 @@ export default function CreateAssignmentPage() {
           </section>
 
           {/* -- Target Audience --- */}
-          <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginTop: 20 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 14, marginTop: 0 }}>Target Audience</h2>
+          <section style={{ ...tabPanelSectionStyle, display: activeStudioTab === 'settings' ? 'block' : 'none' }}>
+            <p style={sectionEyebrowStyle}>Assignment access</p>
+            <h3 style={{ fontSize: 17, fontWeight: 750, color: C.text, margin: 0 }}>Target audience</h3>
+            <p style={{ ...hintStyle(C), margin: '7px 0 16px' }}>Choose whether this assignment is delivered to complete cohorts or selected groups.</p>
             {/* Mode toggle */}
-            <div style={{ display: 'flex', gap: 0, marginBottom: 16, border: `1px solid ${C.cardBorder}`, borderRadius: 8, overflow: 'hidden', width: 'fit-content' }}>
+            <div style={{ display: 'flex', gap: 4, padding: 5, marginBottom: 16, borderRadius: 12, background: C.page, width: 'fit-content' }}>
               {(['cohorts', 'groups'] as const).map(mode => (
                 <button
                   key={mode}
                   type="button"
                   onClick={() => setAudienceMode(mode)}
                   style={{
-                    padding: '7px 20px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
-                    background: audienceMode === mode ? C.cta : C.pill,
-                    color: audienceMode === mode ? C.ctaText : C.muted,
+                    padding: '8px 18px', borderRadius: 9, fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer',
+                    background: audienceMode === mode ? C.card : 'transparent',
+                    color: audienceMode === mode ? C.cta : C.muted,
                     transition: 'background 0.15s',
                     textTransform: 'capitalize',
                   }}>
@@ -1067,9 +1168,9 @@ export default function CreateAssignmentPage() {
             {audienceMode === 'cohorts' && (
               cohorts.length === 0
                 ? <p style={{ fontSize: 13, color: C.faint }}>No cohorts available.</p>
-                : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 8 }}>
                     {cohorts.map(c => (
-                      <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                      <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 48, padding: '11px 13px', borderRadius: 12, background: selectedCohortIds.includes(c.id) ? `${C.cta}0e` : C.page, cursor: 'pointer' }}>
                         <input type="checkbox" checked={selectedCohortIds.includes(c.id)} onChange={() => toggleCohort(c.id)}
                           style={{ width: 16, height: 16, accentColor: C.cta, cursor: 'pointer' }}/>
                         <span style={{ fontSize: 14, color: C.text }}>{c.name}</span>
@@ -1080,12 +1181,12 @@ export default function CreateAssignmentPage() {
 
             {audienceMode === 'groups' && (
               groups.length === 0
-                ? <p style={{ fontSize: 13, color: C.faint }}>No groups yet. Create groups from the <a href="/admin/groups" style={{ color: C.cta }}>Groups admin page</a>.</p>
-                : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                ? <p style={{ fontSize: 13, color: C.faint }}>No groups yet. Create groups from the <Link href="/admin/groups" style={{ color: C.cta }}>Groups admin page</Link>.</p>
+                : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 8 }}>
                     {groups.map(g => {
                       const cohortName = cohorts.find(c => c.id === g.cohort_id)?.name;
                       return (
-                        <label key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                        <label key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 48, padding: '11px 13px', borderRadius: 12, background: selectedGroupIds.includes(g.id) ? `${C.cta}0e` : C.page, cursor: 'pointer' }}>
                           <input type="checkbox" checked={selectedGroupIds.includes(g.id)} onChange={() => toggleGroup(g.id)}
                             style={{ width: 16, height: 16, accentColor: C.cta, cursor: 'pointer' }}/>
                           <span style={{ fontSize: 14, color: C.text }}>{g.name}</span>
@@ -1097,8 +1198,47 @@ export default function CreateAssignmentPage() {
             )}
           </section>
 
+          <section style={{ ...tabPanelSectionStyle, display: activeStudioTab === 'publish' ? 'block' : 'none' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 18 }}>
+              <div>
+                <p style={{ color: C.cta, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.14em', margin: 0 }}>Publish readiness</p>
+                <h2 style={{ fontSize: 17, fontWeight: 750, color: C.text, margin: '5px 0 0' }}>{readinessComplete === readinessChecks.length ? 'Ready to assign' : `${readinessChecks.length - readinessComplete} items need attention`}</h2>
+              </div>
+              <span style={{ padding: '7px 11px', borderRadius: 10, background: readinessComplete === readinessChecks.length ? '#22c55e18' : `${C.cta}12`, color: readinessComplete === readinessChecks.length ? '#22c55e' : C.cta, fontSize: 12, fontWeight: 800 }}>{readinessComplete}/{readinessChecks.length}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 8, marginBottom: 20 }}>
+              {readinessChecks.map(item => (
+                <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 9, minHeight: 42, borderRadius: 12, padding: '9px 11px', background: C.page }}>
+                  {item.complete
+                    ? <CheckCircle2 style={{ width: 15, height: 15, color: '#22c55e', flexShrink: 0 }}/>
+                    : <Circle style={{ width: 15, height: 15, color: C.faint, flexShrink: 0 }}/>
+                  }
+                  <span style={{ color: item.complete ? C.text : C.faint, fontSize: 12, fontWeight: 600 }}>{item.label}</span>
+                </div>
+              ))}
+            </div>
+            <label style={labelStyle(C)}>Publishing status</label>
+            <div style={{ display: 'flex', gap: 6, padding: 5, borderRadius: 12, background: C.page, width: 'fit-content' }}>
+              {(['draft', 'published'] as const).map(s => (
+                <button key={s} type="button" onClick={() => setStatus(s)} style={{ minHeight: 38, padding: '8px 16px', borderRadius: 9, border: 'none', background: status === s ? C.cta : 'transparent', color: status === s ? C.ctaText : C.muted, fontSize: 12, fontWeight: 700, cursor: 'pointer', textTransform: 'capitalize', transition: 'all .15s ease' }}>{s}</button>
+              ))}
+            </div>
+          </section>
+
+          </section>
+
         </form>
       </main>
+
+      <div style={{ position: 'fixed', right: 16, bottom: 16, zIndex: 55, display: 'flex', alignItems: 'center', gap: 8, padding: 8, maxWidth: 'calc(100vw - 32px)', borderRadius: 15, background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: isDark ? '0 16px 42px rgba(0,0,0,.45)' : '0 16px 42px rgba(15,23,42,.16)' }}>
+        <motion.button type="submit" form="assignment-form" disabled={loading} whileTap={{ scale: 0.97 }} style={{ display: 'flex', alignItems: 'center', gap: 7, minHeight: 40, padding: '9px 16px', borderRadius: 10, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', background: C.cta, color: C.ctaText, fontSize: 13, fontWeight: 750, opacity: loading ? .65 : 1 }}>
+          {loading
+            ? <Loader2 style={{ width: 15, height: 15 }} className="animate-spin"/>
+            : <Save style={{ width: 15, height: 15 }}/>
+          }
+          {loading ? 'Saving…' : editId ? 'Update assignment' : status === 'draft' ? 'Save draft' : 'Publish'}
+        </motion.button>
+      </div>
 
       {/* Preview Modal */}
       <AnimatePresence>
@@ -1107,19 +1247,25 @@ export default function CreateAssignmentPage() {
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', flexDirection: 'column', background: C.page }}
           >
-            {/* Banner */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px', background: 'rgba(14,9,221,0.08)', borderBottom: `1px solid rgba(14,9,221,0.2)`, flexShrink: 0 }}>
+            {/* Learner preview chrome -- the assignment body below uses the real student renderer. */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '12px 20px', background: C.card, borderBottom: `1px solid ${C.cardBorder}`, flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Eye style={{ width: 14, height: 14, color: C.cta }}/>
-                <span style={{ fontSize: 12, fontWeight: 600, color: C.cta }}>Instructor Preview - no data is saved</span>
+                <span style={{ position: 'relative', width: 10, height: 10, display: 'grid', placeItems: 'center' }} aria-hidden="true">
+                  <span className="animate-ping" style={{ position: 'absolute', width: 10, height: 10, borderRadius: '50%', background: C.cta, opacity: .2 }}/>
+                  <span style={{ position: 'relative', width: 6, height: 6, borderRadius: '50%', background: C.cta }}/>
+                </span>
+                <div>
+                  <p style={{ fontSize: 11.5, fontWeight: 750, color: C.text, margin: 0 }}>Student preview</p>
+                  <p style={{ fontSize: 10.5, color: C.faint, margin: '2px 0 0' }}>Rendered with the learner experience. Preview activity is not saved.</p>
+                </div>
               </div>
               <button onClick={() => setShowPreview(false)}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: `1px solid rgba(14,9,221,0.3)`, background: 'rgba(14,9,221,0.08)', color: C.cta, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10, border: 'none', background: C.pill, color: C.muted, fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>
                 <X style={{ width: 12, height: 12 }}/> Exit Preview
               </button>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', padding: '24px 16px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '28px 18px 48px' }}>
               {/* VE-type: show AssignmentExperiencePlayer */}
               {assignmentType === 'virtual_experience' && previewVeConfig && (
                 <AssignmentExperiencePlayer
@@ -1143,7 +1289,7 @@ export default function CreateAssignmentPage() {
 
               {/* Standard with scenarios: show the real plain player in preview mode */}
               {assignmentType === 'standard' && scenarios.length > 0 && (
-                <div style={{ maxWidth: 760, margin: '0 auto' }}>
+                <div style={{ maxWidth: 1180, margin: '0 auto' }}>
                   <StandardAssignmentPlayer
                     assignmentId={editId || 'preview'}
                     config={{ scenarios, introDoc, introBody }}
@@ -1160,8 +1306,8 @@ export default function CreateAssignmentPage() {
 
               {/* Non-VE types (legacy AI + empty standard): show assignment content */}
               {assignmentType !== 'virtual_experience' && !(assignmentType === 'standard' && scenarios.length > 0) && (
-                <div style={{ maxWidth: 680, margin: '0 auto' }}>
-                  <div style={{ borderRadius: 16, overflow: 'hidden', background: C.card, border: `1px solid ${C.cardBorder}`, marginBottom: 16 }}>
+                <div style={{ maxWidth: 900, margin: '0 auto' }}>
+                  <div style={{ borderRadius: 20, overflow: 'hidden', background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, marginBottom: 16 }}>
                     {coverImage && (
                       <div style={{ padding: '16px 16px 0' }}>
                         <img src={resolveCoverUrl(coverImage)} alt={title} style={{ width: '100%', objectFit: 'cover', borderRadius: 12, maxHeight: 220 }} onError={e => (e.target as HTMLImageElement).style.display = 'none'}/>
@@ -1212,8 +1358,9 @@ export default function CreateAssignmentPage() {
                   </div>
 
                   {/* Submission area placeholder */}
-                  <div style={{ borderRadius: 16, background: C.card, border: `1px solid ${C.cardBorder}`, padding: 24, opacity: 0.6 }}>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12, marginTop: 0 }}>Your Submission</p>
+                  <div style={{ borderRadius: 20, background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, padding: 24 }}>
+                    <p style={{ ...sectionEyebrowStyle, marginBottom: 6 }}>Submission workspace</p>
+                    <p style={{ fontSize: 15, fontWeight: 750, color: C.text, marginBottom: 14, marginTop: 0 }}>Your submission</p>
                     {assignmentType === 'standard' && (
                       <>
                         <div style={{ height: 80, borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.input, marginBottom: 12 }}/>

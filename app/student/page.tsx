@@ -594,7 +594,7 @@ export default function StudentDashboard() {
               <EventsSection userId={effectiveId} C={C}/>
             )}
             {activeSection === 'assignments' && user && (
-              <AssignmentsSection userId={effectiveId} studentName={viewingAs?.name ?? userName} studentEmail={effectiveEmail ?? ''} C={C}/>
+              <AssignmentsSection userId={effectiveId} C={C}/>
             )}
             {activeSection === 'calendar' && user && (
               <CalendarSection userId={effectiveId} onNavigate={(s) => goSection(s as SectionId)}/>
