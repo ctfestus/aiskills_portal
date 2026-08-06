@@ -17,15 +17,17 @@ import {
 import type { AssignmentScenario, AssignmentTask, AssignmentTaskType } from '@/lib/assignment-scenarios';
 import { TASK_TYPE_LABEL } from '@/lib/assignment-scenarios';
 
-const TASK_PALETTE: { type: AssignmentTaskType; icon: React.ReactNode }[] = [
-  { type: 'text',               icon: <PenLine style={{ width: 14, height: 14 }} /> },
-  { type: 'upload',             icon: <Upload style={{ width: 14, height: 14 }} /> },
-  { type: 'mcq',                icon: <ListChecks style={{ width: 14, height: 14 }} /> },
-  { type: 'code_review',        icon: <Code2 style={{ width: 14, height: 14 }} /> },
-  { type: 'excel_review',       icon: <FileSpreadsheet style={{ width: 14, height: 14 }} /> },
-  { type: 'dashboard_critique', icon: <LayoutDashboard style={{ width: 14, height: 14 }} /> },
-  { type: 'document_review',    icon: <FileText style={{ width: 14, height: 14 }} /> },
+const TASK_PALETTE: { type: AssignmentTaskType; icon: React.ReactNode; description: string; group: 'Learner responses' | 'AI reviews' }[] = [
+  { type: 'text', icon: <PenLine style={{ width: 18, height: 18 }} />, description: 'Collect a structured written response.', group: 'Learner responses' },
+  { type: 'upload', icon: <Upload style={{ width: 18, height: 18 }} />, description: 'Let learners submit a file for review.', group: 'Learner responses' },
+  { type: 'mcq', icon: <ListChecks style={{ width: 18, height: 18 }} />, description: 'Create an automatically marked question.', group: 'Learner responses' },
+  { type: 'code_review', icon: <Code2 style={{ width: 18, height: 18 }} />, description: 'Review SQL or code against a rubric.', group: 'AI reviews' },
+  { type: 'excel_review', icon: <FileSpreadsheet style={{ width: 18, height: 18 }} />, description: 'Assess spreadsheet logic and quality.', group: 'AI reviews' },
+  { type: 'dashboard_critique', icon: <LayoutDashboard style={{ width: 18, height: 18 }} />, description: 'Critique a dashboard screenshot.', group: 'AI reviews' },
+  { type: 'document_review', icon: <FileText style={{ width: 18, height: 18 }} />, description: 'Evaluate a document or report.', group: 'AI reviews' },
 ];
+
+const TASK_GROUPS = ['Learner responses', 'AI reviews'] as const;
 
 function newTask(type: AssignmentTaskType): AssignmentTask {
   const base: AssignmentTask = { id: crypto.randomUUID(), type, title: '' };
@@ -42,10 +44,11 @@ function moveItem<T>(arr: T[], from: number, to: number): T[] {
   return next;
 }
 
-export function ScenariosEditor({ scenarios, onChange, C }: {
+export function ScenariosEditor({ scenarios, onChange, C, embedded = false }: {
   scenarios: AssignmentScenario[];
   onChange: (scenarios: AssignmentScenario[]) => void;
   C: typeof LIGHT_C;
+  embedded?: boolean;
 }) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -87,17 +90,19 @@ export function ScenariosEditor({ scenarios, onChange, C }: {
 
   const iconBtn = (onClick: () => void, disabled: boolean, children: React.ReactNode, title: string) => (
     <button type="button" onClick={onClick} disabled={disabled} title={title}
-      style={{ width: 30, height: 30, borderRadius: 8, flexShrink: 0, border: `1px solid ${C.cardBorder}`, background: C.input, color: C.faint, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.35 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, border: 'none', background: C.pill, color: C.faint, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       {children}
     </button>
   );
 
   return (
-    <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
+    <section style={embedded
+      ? { background: 'transparent', border: 'none', boxShadow: 'none', padding: 0, margin: 0 }
+      : { background: C.card, borderRadius: 20, border: `1px solid ${C.cardBorder}`, boxShadow: isDark ? 'none' : '0 14px 38px rgba(15,23,42,0.05)', padding: 24, marginBottom: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0 }}>Scenarios & Tasks</h2>
         <button type="button" onClick={addScenario}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.cardBorder}`, background: C.pill, color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: 'none', background: C.cta, color: C.ctaText, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
           <Plus style={{ width: 14, height: 14 }} /> Add scenario
         </button>
       </div>
@@ -106,8 +111,10 @@ export function ScenariosEditor({ scenarios, onChange, C }: {
       </p>
 
       {scenarios.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '28px 0', color: C.faint, fontSize: 13 }}>
-          No scenarios yet. Add your first scenario to start building the assignment.
+        <div style={{ textAlign: 'center', padding: '34px 18px', borderRadius: 16, background: C.page, color: C.faint, fontSize: 13 }}>
+          <div style={{ width: 38, height: 38, margin: '0 auto 10px', borderRadius: 12, display: 'grid', placeItems: 'center', background: `${C.cta}12`, color: C.cta }}><Plus style={{ width: 18, height: 18 }}/></div>
+          <strong style={{ display: 'block', color: C.text, fontSize: 13, marginBottom: 4 }}>Build the first scenario</strong>
+          Add context, then combine written, upload, quiz, and AI review tasks.
         </div>
       )}
 
@@ -115,15 +122,15 @@ export function ScenariosEditor({ scenarios, onChange, C }: {
         {scenarios.map((scenario, sIdx) => {
           const open = openScenarios.has(scenario.id);
           return (
-            <div key={scenario.id} style={{ borderRadius: 12, border: `1px solid ${C.divider}`, background: C.page, overflow: 'hidden' }}>
+            <div key={scenario.id} style={{ borderRadius: 16, border: `1px solid ${C.divider}`, background: C.page, overflow: 'hidden' }}>
               {/* Scenario header */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: C.faint, minWidth: 62 }}>SCENARIO {sIdx + 1}</span>
+                <span style={{ width: 30, height: 30, borderRadius: 10, flexShrink: 0, display: 'grid', placeItems: 'center', background: `${C.cta}14`, color: C.cta, fontSize: 12, fontWeight: 800 }}>{sIdx + 1}</span>
                 <input
                   value={scenario.title}
                   onChange={e => updateScenario(scenario.id, { title: e.target.value })}
                   placeholder="Scenario title (e.g. Investigate the churn spike)"
-                  style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.cardBorder}`, background: C.card, color: C.text, fontSize: 14, fontWeight: 600, outline: 'none' }}
+                  style={{ flex: 1, padding: '9px 12px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.card, color: C.text, fontSize: 14, fontWeight: 650, outline: 'none' }}
                   maxLength={200}
                 />
                 {iconBtn(() => moveScenario(sIdx, -1), sIdx === 0, <ArrowUp style={{ width: 14, height: 14 }} />, 'Move up')}
@@ -142,6 +149,7 @@ export function ScenariosEditor({ scenarios, onChange, C }: {
                       onChange={({ doc, body }) => updateScenario(scenario.id, { doc, description: body })}
                       placeholder="Set the context for this scenario. Add images, steps, callouts, tables..."
                       isDark={isDark}
+                      accentColor={C.cta}
                     />
                   </div>
 
@@ -149,14 +157,16 @@ export function ScenariosEditor({ scenarios, onChange, C }: {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {scenario.tasks.map((task, tIdx) => {
                       const tOpen = openTasks.has(task.id);
+                      const taskMeta = TASK_PALETTE.find(item => item.type === task.type);
                       return (
-                        <div key={task.id} style={{ borderRadius: 10, border: `1px solid ${C.divider}`, background: C.card, overflow: 'hidden' }}>
+                        <div key={task.id} style={{ borderRadius: 13, border: `1px solid ${C.divider}`, background: C.card, overflow: 'hidden' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 10 }}>
-                            <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: C.lime, color: C.cta, whiteSpace: 'nowrap' }}>
-                              {TASK_TYPE_LABEL[task.type]}
+                            <span style={{ width: 34, height: 34, flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: 10, background: `${C.cta}12`, color: C.cta }}>
+                              {taskMeta?.icon}
                             </span>
-                            <span style={{ flex: 1, fontSize: 13, color: task.title ? C.text : C.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {task.title || 'Untitled task'}
+                            <span style={{ flex: 1, minWidth: 0 }}>
+                              <span style={{ display: 'block', fontSize: 10, fontWeight: 800, color: C.cta, letterSpacing: '.06em', textTransform: 'uppercase' }}>{TASK_TYPE_LABEL[task.type]}</span>
+                              <span style={{ display: 'block', marginTop: 2, fontSize: 13, fontWeight: 650, color: task.title ? C.text : C.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title || 'Untitled task'}</span>
                             </span>
                             {iconBtn(() => moveTask(scenario.id, tIdx, -1), tIdx === 0, <ArrowUp style={{ width: 13, height: 13 }} />, 'Move up')}
                             {iconBtn(() => moveTask(scenario.id, tIdx, 1), tIdx === scenario.tasks.length - 1, <ArrowDown style={{ width: 13, height: 13 }} />, 'Move down')}
@@ -175,23 +185,35 @@ export function ScenariosEditor({ scenarios, onChange, C }: {
 
                   {/* Add task */}
                   {addingFor === scenario.id ? (
-                    <div style={{ marginTop: 10, padding: 12, borderRadius: 10, border: `1px dashed ${C.cardBorder}`, background: C.card }}>
+                    <div style={{ marginTop: 10, padding: 16, borderRadius: 16, border: `1px solid ${C.cardBorder}`, background: C.card }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>Choose a task type</span>
+                        <div>
+                          <span style={{ display: 'block', fontSize: 13, fontWeight: 750, color: C.text }}>Choose a task type</span>
+                          <span style={{ display: 'block', marginTop: 2, fontSize: 11.5, color: C.faint }}>Select how learners will respond or receive feedback.</span>
+                        </div>
                         <button type="button" onClick={() => setAddingFor(null)} style={{ fontSize: 12, color: C.faint, background: 'none', border: 'none', cursor: 'pointer' }}>Cancel</button>
                       </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {TASK_PALETTE.map(({ type, icon }) => (
-                          <button key={type} type="button" onClick={() => addTask(scenario.id, type)}
-                            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', borderRadius: 9, border: `1px solid ${C.cardBorder}`, background: C.input, color: C.text, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
-                            {icon} {TASK_TYPE_LABEL[type]}
-                          </button>
-                        ))}
-                      </div>
+                      {TASK_GROUPS.map(group => (
+                        <div key={group} style={{ marginTop: 14 }}>
+                          <p style={{ margin: '0 0 8px', fontSize: 10.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: C.faint }}>{group}</p>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 8 }}>
+                            {TASK_PALETTE.filter(item => item.group === group).map(({ type, icon, description }) => (
+                              <button key={type} type="button" onClick={() => addTask(scenario.id, type)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 72, padding: '11px 12px', textAlign: 'left', borderRadius: 12, border: `1px solid ${C.divider}`, background: C.page, color: C.text, cursor: 'pointer', transition: 'border-color .15s ease, background .15s ease, transform .15s ease' }}>
+                                <span style={{ width: 38, height: 38, flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: 11, background: `${C.cta}12`, color: C.cta }}>{icon}</span>
+                                <span style={{ minWidth: 0 }}>
+                                  <strong style={{ display: 'block', fontSize: 12.5, lineHeight: 1.25 }}>{TASK_TYPE_LABEL[type]}</strong>
+                                  <span style={{ display: 'block', marginTop: 3, fontSize: 11, lineHeight: 1.35, color: C.faint }}>{description}</span>
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <button type="button" onClick={() => setAddingFor(scenario.id)}
-                      style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 9, border: `1px dashed ${C.cardBorder}`, background: 'transparent', color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%', justifyContent: 'center' }}>
+                      style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 11, border: `1px dashed ${C.cardBorder}`, background: C.card, color: C.muted, fontSize: 12, fontWeight: 700, cursor: 'pointer', width: '100%', justifyContent: 'center' }}>
                       <Plus style={{ width: 14, height: 14 }} /> Add task
                     </button>
                   )}

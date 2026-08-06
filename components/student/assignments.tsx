@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { motion } from 'motion/react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/components/ThemeProvider';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -23,7 +23,7 @@ import { GroupForum } from '@/components/student/GroupForum';
 import { Sk, EmptyState, StatusBadge } from '@/components/student/shared';
 import {
   BookOpen, ClipboardList, Users, ChevronDown, X, CheckCircle, AlertCircle, Star,
-  ExternalLink, Loader2, FileText, Plus, ArrowLeft, Upload, RefreshCw, Check, ArrowRight,
+  ExternalLink, Loader2, FileText, Plus, ArrowLeft, Upload, RefreshCw, Check, ArrowRight, Clock3, Play,
 } from 'lucide-react';
 
 // --- Assignments section ---
@@ -34,7 +34,7 @@ const DocumentReviewPlayer    = dynamic(() => import('@/components/DocumentRevie
 const AssignmentExperiencePlayer = dynamic(() => import('@/components/AssignmentExperiencePlayer'), { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
 const StandardAssignmentPlayer = dynamic(() => import('@/components/StandardAssignmentPlayer'), { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
 
-function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, onBack }: { assignment: any; userId: string; studentName: string; studentEmail: string; C: typeof LIGHT_C; onBack: () => void }) {
+export function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, onBack }: { assignment: any; userId: string; studentName: string; studentEmail: string; C: typeof LIGHT_C; onBack: () => void }) {
   type ReadyFile = { name: string; url: string; status: 'uploading' | 'done' | 'error'; error?: string };
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -453,12 +453,26 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
     // overrides .rich-content, which otherwise pins Inter via --font-sans.
     <div className={isScenarioStandard ? 'sa-scenario-font' : undefined} style={isScenarioStandard ? { fontFamily: "'Google Sans Text', 'Inter', sans-serif" } : undefined}>
       {isScenarioStandard && <style>{`.sa-scenario-font .rich-content { font-family: 'Google Sans Text', 'Inter', sans-serif; }`}</style>}
-      <button onClick={onBack} className="flex items-center gap-1.5 mb-3 text-xs font-medium"
-        style={{ color: C.muted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-        <ArrowLeft className="w-3.5 h-3.5"/> Back to assignments
-      </button>
+      <div className="flex items-center justify-between gap-4 mb-5">
+        <button onClick={onBack} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl"
+          style={{ color: C.muted, background: C.pill, border: 'none', cursor: 'pointer' }}>
+          <ArrowLeft className="w-3.5 h-3.5"/> Assignments
+        </button>
+        {!isScenarioStandard && submission && isParticipant && (
+          <StatusBadge status={submission.status}/>
+        )}
+      </div>
       {/* Scenario-based standard assignments show the title inside the player's right pane. */}
-      {!isScenarioStandard && <h1 className="text-[22px] font-bold tracking-tight mb-5" style={{ color: C.text }}>{assignment.title}</h1>}
+      {!isScenarioStandard && (
+        <div className="mb-5">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="w-2 h-2 rounded-full" style={{ background: C.green, boxShadow: `0 0 0 5px ${C.green}14` }}/>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: C.green }}>Assignment</p>
+          </div>
+          <h1 className="text-[24px] font-bold tracking-tight" style={{ color: C.text }}>{assignment.title}</h1>
+          {assignment.deadline_date && <p className="flex items-center gap-1.5 text-xs mt-2" style={{ color: C.faint }}><Clock3 className="w-3.5 h-3.5"/> Due {new Date(assignment.deadline_date).toLocaleDateString()}</p>}
+        </div>
+      )}
 
       {/* Prominent entry to the group channel so students don't miss it. */}
       {isGroupAssignment && myGroupId && (
@@ -1172,11 +1186,12 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
   );
 }
 
-export function AssignmentsSection({ userId, studentName, studentEmail, C }: { userId: string; studentName: string; studentEmail: string; C: typeof LIGHT_C }) {
+export function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
+  const router = useRouter();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<any>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -1243,12 +1258,10 @@ export function AssignmentsSection({ userId, studentName, studentEmail, C }: { u
       setLoading(false);
     };
     load();
-  }, [userId, refreshKey]);
-
-  if (selected) return <AssignmentDetail assignment={selected} userId={userId} studentName={studentName} studentEmail={studentEmail} C={C} onBack={() => { setSelected(null); setRefreshKey(k => k + 1); }}/>;
+  }, [userId]);
 
   const skCard = (
-    <div className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
+    <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.divider}` }}>
       <Sk h={140} r={0}/><div className="p-4 space-y-2"><Sk h={15} w="70%"/><Sk h={11} w="50%"/></div>
     </div>
   );
@@ -1276,13 +1289,13 @@ export function AssignmentsSection({ userId, studentName, studentEmail, C }: { u
     const passMark = passMarkOf(item.config); // this assignment's configured passing grade
 
     return (
-    <motion.button key={item.id} onClick={() => setSelected(item)}
+    <motion.button key={item.id} onClick={() => router.push(`/student/assignments/${item.id}`)}
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-      className="text-left rounded-2xl overflow-hidden group"
-      style={{ background: C.card, cursor: 'pointer' }}
+      className="text-left rounded-[20px] overflow-hidden group transition-all"
+      style={{ background: C.card, cursor: 'pointer', border: `1px solid ${C.divider}`, boxShadow: isDark ? 'none' : C.cardShadow }}
       onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
       onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
-      <div className="relative h-40 overflow-hidden" style={{ background: C.thumbBg }}>
+      <div className="relative h-44 overflow-hidden" style={{ background: C.thumbBg }}>
         <div className="absolute inset-0 flex items-center justify-center text-4xl font-black" style={{ color: C.green, opacity: 0.25 }}>{item.title?.[0]?.toUpperCase()}</div>
         {item.cover_image && <img src={resolveCoverUrl(item.cover_image)} alt={item.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" onError={e => (e.currentTarget.style.display = 'none')}/>}
         {(item.group_ids?.length > 0) && (
@@ -1314,12 +1327,15 @@ export function AssignmentsSection({ userId, studentName, studentEmail, C }: { u
           </div>
         )}
       </div>
-      <div className="px-3 py-2.5">
-        <h3 className="text-sm font-semibold leading-snug mb-1" style={{ color: C.text }}>{item.title}</h3>
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <h3 className="text-[15px] font-bold leading-snug" style={{ color: C.text }}>{item.title}</h3>
+          <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg flex-shrink-0" style={{ background: C.pill, color: C.faint }}>{(item.type || 'standard').replaceAll('_', ' ')}</span>
+        </div>
         {deadlineLabel && (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full mb-2"
             style={{ background: `${deadlineColor ?? '#6b7280'}18`, color: deadlineColor ?? '#6b7280' }}>
-            ⏰ {deadlineLabel}
+            <Clock3 className="w-3 h-3"/> {deadlineLabel}
           </span>
         )}
         <div className="flex items-center justify-between">
@@ -1330,7 +1346,8 @@ export function AssignmentsSection({ userId, studentName, studentEmail, C }: { u
             : item._sub.status === 'submitted'
             ? <span className="text-[11px] font-semibold" style={{ color: '#7c3aed' }}>Submitted</span>
             : <span className="text-[11px] font-medium" style={{ color: C.muted }}>Not Submitted</span>}
-          <span className="inline-block text-xs font-semibold px-4 py-1.5 rounded-full" style={{ background: C.green, color: '#fff' }}>
+          <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl" style={{ background: C.cta, color: C.ctaText }}>
+            {!item._sub || item._sub.status === 'draft' ? <Play className="w-3 h-3" fill="currentColor"/> : <ArrowRight className="w-3.5 h-3.5"/>}
             {!item._sub || item._sub.status === 'draft' ? 'Start' : 'View'}
           </span>
         </div>
@@ -1351,8 +1368,16 @@ export function AssignmentsSection({ userId, studentName, studentEmail, C }: { u
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-[22px] font-bold tracking-tight" style={{ color: C.text }}>Assignments</h1>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="w-2 h-2 rounded-full" style={{ background: C.green, boxShadow: `0 0 0 5px ${C.green}14` }}/>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: C.green }}>My workspace</p>
+          </div>
+          <h1 className="text-[24px] font-bold tracking-tight" style={{ color: C.text }}>Assignments</h1>
+          <p className="text-xs mt-1" style={{ color: C.faint }}>Continue your work, track deadlines, and review feedback.</p>
+        </div>
+        <span className="text-xs font-bold px-3 py-2 rounded-xl" style={{ background: C.pill, color: C.muted }}>{items.length} total</span>
       </div>
       {courseKeys.map(key => (
         <div key={key}>
