@@ -13,7 +13,7 @@ import {
   Share2,
   Video, BookOpen, Search, Zap, Settings, Upload,
   Download, Link2, FileText, Database, ArrowLeft, Lock, LockOpen,
-  Clock, Users, Globe, Repeat, Code2, RefreshCw, Music, FileCode,
+  Clock, Users, Globe, Repeat, Code2, RefreshCw, Music, FileCode, Monitor, CheckCircle2, Blocks,
 } from 'lucide-react';
 import { LinkedInIcon } from '@/components/LinkedInIcon';
 import { ThemeColor, ThemeMode } from '@/components/AnimatedField';
@@ -178,6 +178,15 @@ export default function Page() {
   const router = useRouter();
   const inputStyle = { background: C.input, border: `1px solid ${C.inputBorder}`, color: C.text };
   const labelStyle = { color: C.faint };
+  const wizardPanelStyle = {
+    background: C.card,
+    border: theme === 'dark' ? `1px solid ${C.inputBorder}` : `1px solid ${C.cardBorder}`,
+    boxShadow: theme === 'dark' ? 'none' : '0 18px 50px rgba(15, 23, 42, 0.06)',
+  };
+  const wizardSoftStyle = {
+    background: C.groupBg,
+    border: `1px solid ${C.inputBorder}`,
+  };
   const [formConfig, setFormConfig] = useState<FormConfig | null>(null);
   const [isLoadingEdit, setIsLoadingEdit] = useState(true); // stays true until useEffect resolves
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1625,35 +1634,26 @@ const [isSaving, setIsSaving] = useState(false);
   if (!formConfig) {
     return (
       <main className="min-h-screen flex flex-col" style={{ background: C.page, color: C.text }}>
-        <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-4 sm:py-5 backdrop-blur-sm" style={{ borderBottom: `1px solid ${C.navBorder}`, background: C.nav }}>
-          <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-            <img src={(theme === 'dark' ? logoDarkUrl || logoUrl : logoUrl) || undefined} alt="" className="h-7 w-auto" />
-          </Link>
-          {user ? (
-            <Link href="/dashboard" className="flex items-center gap-2 text-sm transition-colors hover:opacity-60" style={{ color: C.muted }}>
-              <LayoutDashboard className="w-4 h-4" /> Dashboard
-            </Link>
-          ) : (
-            <Link href="/auth" className="text-sm transition-colors hover:opacity-60" style={{ color: C.muted }}>Sign in</Link>
-          )}
-        </nav>
-
-        <div className={`relative z-10 flex-1 flex flex-col items-center ${(sqlWizardStep || docWizardStep || pyWizardStep) ? 'justify-start pt-8 sm:pt-12 pb-16' : 'justify-center py-20'} px-4 sm:px-6 ${(sqlWizardStep === 'outline' || docWizardStep === 'outline' || pyWizardStep === 'outline') ? 'max-w-5xl' : 'max-w-3xl'} mx-auto w-full`}>
+        <div className={`relative z-10 flex-1 flex flex-col items-center ${(sqlWizardStep || docWizardStep || pyWizardStep) ? 'justify-start pt-8 sm:pt-12 pb-24' : 'justify-center py-16 sm:py-20'} px-4 sm:px-6 ${(sqlWizardStep === 'outline' || docWizardStep === 'outline' || pyWizardStep === 'outline') ? 'max-w-6xl' : 'max-w-4xl'} mx-auto w-full`}>
 
           {/* SQL Course Wizard -- Brief step */}
           {sqlWizardStep === 'brief' && (
             <motion.div key="sql-brief" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-3xl mx-auto">
-              <button type="button" onClick={() => setSqlWizardStep(null)} className="flex items-center gap-1.5 text-sm mb-6 transition-opacity hover:opacity-60" style={{ color: C.muted }}>
-                <ArrowLeft className="w-4 h-4" /> Back
-              </button>
-              <div className="rounded-2xl p-6 sm:p-8" style={{ background: C.card, border: theme === 'dark' ? '1px solid transparent' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#3b82f618' }}>
+              <div className="flex items-center justify-between mb-5">
+                <button type="button" onClick={() => setSqlWizardStep(null)} className="flex items-center gap-2 text-sm font-medium transition-opacity hover:opacity-60" style={{ color: C.muted }}>
+                  <ArrowLeft className="w-4 h-4" /> Course types
+                </button>
+                <span className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: '#3b82f6' }}>Course Studio</span>
+              </div>
+              <div className="rounded-[28px] p-6 sm:p-9" style={wizardPanelStyle}>
+              <div className="flex items-start gap-4 mb-8">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0" style={{ background: '#3b82f618' }}>
                   <Database className="w-5 h-5" style={{ color: '#3b82f6' }} />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold" style={{ color: C.text }}>SQL Course with AI</h2>
-                  <p className="text-sm" style={{ color: C.muted }}>Describe your course and we will generate a full outline for review.</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] mb-1.5" style={{ color: '#3b82f6' }}>Build with AI</p>
+                  <h2 className="text-2xl font-semibold tracking-tight" style={{ color: C.text }}>Create a SQL course</h2>
+                  <p className="text-sm mt-1 max-w-xl" style={{ color: C.muted }}>Set the learning direction. You can review and refine every module before the course is created.</p>
                 </div>
               </div>
               <div className="flex flex-col gap-4">
@@ -1683,7 +1683,7 @@ const [isSaving, setIsSaving] = useState(false);
                   <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Specific Focus <span style={{ color: C.faint }}>(optional)</span></label>
                   <AiTextarea value={sqlBrief.promptText} onValueChange={value => setSqlBrief(p => ({ ...p, promptText: value }))} placeholder="Any specific topics, datasets, or skills to focus on..." rows={3} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
                 </div>
-                <button type="button" onClick={handleGenerateSqlOutline} disabled={!!aiLoadingLabel || !sqlBrief.title.trim()} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
+                <button type="button" onClick={handleGenerateSqlOutline} disabled={!!aiLoadingLabel || !sqlBrief.title.trim()} className="flex items-center justify-center gap-2 w-full py-3.5 mt-2 rounded-xl text-sm font-semibold transition-all hover:opacity-90 disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
                   <Sparkles className="w-4 h-4" /> Generate Outline
                 </button>
               </div>
@@ -1694,15 +1694,16 @@ const [isSaving, setIsSaving] = useState(false);
           {/* SQL Course Wizard -- Outline review step */}
           {sqlWizardStep === 'outline' && sqlOutline && (
             <motion.div key="sql-outline" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full pb-12">
-              <div className="flex items-center justify-between mb-6">
-                <button type="button" onClick={() => setSqlWizardStep('brief')} className="flex items-center gap-1.5 text-sm transition-opacity hover:opacity-60" style={{ color: C.muted }}>
-                  <ArrowLeft className="w-4 h-4" /> Back
+              <div className="rounded-[24px] p-5 sm:p-6 mb-6 flex flex-col sm:flex-row sm:items-center gap-4" style={wizardPanelStyle}>
+                <button type="button" onClick={() => setSqlWizardStep('brief')} className="w-10 h-10 rounded-xl flex items-center justify-center transition-opacity hover:opacity-60 shrink-0" style={wizardSoftStyle} title="Back to course brief">
+                  <ArrowLeft className="w-4 h-4" style={{ color: C.muted }} />
                 </button>
-                <div className="text-center">
-                  <h2 className="text-base font-semibold" style={{ color: C.text }}>Review Outline</h2>
-                  <p className="text-xs" style={{ color: C.faint }}>Edit inline, then generate the full course.</p>
+                <div className="flex-1">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] mb-1" style={{ color: '#3b82f6' }}>Outline ready · Step 2 of 2</p>
+                  <h2 className="text-xl font-semibold tracking-tight" style={{ color: C.text }}>Review your SQL course</h2>
+                  <p className="text-sm" style={{ color: C.muted }}>Edit titles, lesson types, and the shared dataset before generating.</p>
                 </div>
-                <button type="button" onClick={handleGenerateSqlFullCourse} disabled={!!aiLoadingLabel} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
+                <button type="button" onClick={handleGenerateSqlFullCourse} disabled={!!aiLoadingLabel} className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
                   <Sparkles className="w-3.5 h-3.5" /> Generate Full Course
                 </button>
               </div>
@@ -1711,7 +1712,7 @@ const [isSaving, setIsSaving] = useState(false);
                 {/* Modules -- 2/3 width */}
                 <div className="lg:col-span-2 flex flex-col gap-3">
                   {(sqlOutline.modules ?? []).map((mod: any, modIdx: number) => (
-                    <div key={mod.id || modIdx} className="rounded-xl p-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                    <div key={mod.id || modIdx} className="rounded-[20px] p-5" style={wizardPanelStyle}>
                       <div className="flex items-start gap-2 mb-1">
                         <span className="text-xs font-bold mt-2 flex-shrink-0" style={{ color: C.faint }}>M{modIdx + 1}</span>
                         <div className="flex-1 min-w-0">
@@ -1753,7 +1754,7 @@ const [isSaving, setIsSaving] = useState(false);
 
                 {/* Shared Dataset -- 1/3 width */}
                 <div className="flex flex-col gap-3">
-                  <div className="rounded-xl p-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                  <div className="rounded-[20px] p-5" style={wizardPanelStyle}>
                     <div className="flex items-center gap-2 mb-2">
                       <Database className="w-4 h-4" style={{ color: '#3b82f6' }} />
                       <h3 className="text-sm font-semibold" style={{ color: C.text }}>Shared Dataset</h3>
@@ -1792,23 +1793,27 @@ const [isSaving, setIsSaving] = useState(false);
           {/* Document -> Course Wizard -- Input step */}
           {docWizardStep === 'input' && (
             <motion.div key="doc-input" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-3xl mx-auto">
-              <button type="button" onClick={() => setDocWizardStep(null)} className="flex items-center gap-1.5 text-sm mb-6 transition-opacity hover:opacity-60" style={{ color: C.muted }}>
-                <ArrowLeft className="w-4 h-4" /> Back
-              </button>
-              <div className="rounded-2xl p-6 sm:p-8" style={{ background: C.card, border: theme === 'dark' ? '1px solid transparent' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${brandAccent}18` }}>
+              <div className="flex items-center justify-between mb-5">
+                <button type="button" onClick={() => setDocWizardStep(null)} className="flex items-center gap-2 text-sm font-medium transition-opacity hover:opacity-60" style={{ color: C.muted }}>
+                  <ArrowLeft className="w-4 h-4" /> Course types
+                </button>
+                <span className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: brandAccent }}>Course Studio</span>
+              </div>
+              <div className="rounded-[28px] p-6 sm:p-9" style={wizardPanelStyle}>
+              <div className="flex items-start gap-4 mb-8">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0" style={{ background: `${brandAccent}18` }}>
                   <FileText className="w-5 h-5" style={{ color: brandAccent }} />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold" style={{ color: C.text }}>Course from a Document</h2>
-                  <p className="text-sm" style={{ color: C.muted }}>Turn a PDF, slide deck, guide, or page into a full course with lessons and quizzes.</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] mb-1.5" style={{ color: brandAccent }}>Transform source material</p>
+                  <h2 className="text-2xl font-semibold tracking-tight" style={{ color: C.text }}>Create from a document</h2>
+                  <p className="text-sm mt-1 max-w-xl" style={{ color: C.muted }}>Turn a file, page, or pasted source into a structured course with lessons and practice.</p>
                 </div>
               </div>
 
               <div className="flex flex-col gap-4">
                 {/* Source method tabs */}
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-1.5 p-1.5 rounded-2xl" style={wizardSoftStyle}>
                   {([
                     { key: 'file', label: 'Upload', icon: Upload },
                     { key: 'text', label: 'Paste text', icon: FileText },
@@ -1817,7 +1822,7 @@ const [isSaving, setIsSaving] = useState(false);
                     const Icon = opt.icon;
                     const active = docSourceMethod === opt.key;
                     return (
-                      <button key={opt.key} type="button" onClick={() => setDocSourceMethod(opt.key)} className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all" style={active ? { background: ctaBg, color: ctaFg, border: ctaBorder } : { background: C.pill, color: C.muted }}>
+                      <button key={opt.key} type="button" onClick={() => setDocSourceMethod(opt.key)} className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all" style={active ? { background: C.card, color: C.text, boxShadow: theme === 'dark' ? 'none' : '0 4px 12px rgba(15,23,42,.08)' } : { background: 'transparent', color: C.muted }}>
                         <Icon className="w-3.5 h-3.5" /> {opt.label}
                       </button>
                     );
@@ -1825,8 +1830,8 @@ const [isSaving, setIsSaving] = useState(false);
                 </div>
 
                 {docSourceMethod === 'file' && (
-                  <label className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl cursor-pointer transition-colors text-center" style={{ background: C.groupBg, border: `1.5px dashed ${C.inputBorder}` }}>
-                    <Upload className="w-6 h-6" style={{ color: C.faint }} />
+                  <label className="flex flex-col items-center justify-center gap-2.5 py-10 rounded-2xl cursor-pointer transition-colors text-center" style={{ background: C.groupBg, border: `1.5px dashed ${docFile ? brandAccent : C.inputBorder}` }}>
+                    <span className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: `${brandAccent}14` }}><Upload className="w-5 h-5" style={{ color: brandAccent }} /></span>
                     <span className="text-sm font-medium" style={{ color: C.text }}>{docFile ? docFile.name : 'Choose a file'}</span>
                     <span className="text-xs" style={{ color: C.faint }}>PDF, DOCX, DOC, TXT, PPTX, PPT (max 20 MB)</span>
                     <input type="file" accept=".pdf,.docx,.doc,.txt,.pptx,.ppt" className="hidden" onChange={e => setDocFile(e.target.files?.[0] ?? null)} />
@@ -1958,7 +1963,7 @@ const [isSaving, setIsSaving] = useState(false);
                   )}
                 </div>
 
-                <button type="button" onClick={handleGenerateDocOutline} disabled={!!aiLoadingLabel} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
+                <button type="button" onClick={handleGenerateDocOutline} disabled={!!aiLoadingLabel} className="flex items-center justify-center gap-2 w-full py-3.5 mt-2 rounded-xl text-sm font-semibold transition-all hover:opacity-90 disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
                   <Sparkles className="w-4 h-4" /> Generate Outline
                 </button>
               </div>
@@ -1968,23 +1973,24 @@ const [isSaving, setIsSaving] = useState(false);
 
           {/* Document -> Course Wizard -- Outline review step */}
           {docWizardStep === 'outline' && docOutline && (
-            <motion.div key="doc-outline" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-3xl mx-auto pb-12">
-              <div className="flex items-center justify-between mb-6">
-                <button type="button" onClick={() => setDocWizardStep('input')} className="flex items-center gap-1.5 text-sm transition-opacity hover:opacity-60" style={{ color: C.muted }}>
-                  <ArrowLeft className="w-4 h-4" /> Back
+            <motion.div key="doc-outline" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-5xl mx-auto pb-12">
+              <div className="rounded-[24px] p-5 sm:p-6 mb-6 flex flex-col sm:flex-row sm:items-center gap-4" style={wizardPanelStyle}>
+                <button type="button" onClick={() => setDocWizardStep('input')} className="w-10 h-10 rounded-xl flex items-center justify-center transition-opacity hover:opacity-60 shrink-0" style={wizardSoftStyle} title="Back to source settings">
+                  <ArrowLeft className="w-4 h-4" style={{ color: C.muted }} />
                 </button>
-                <div className="text-center">
-                  <h2 className="text-base font-semibold" style={{ color: C.text }}>Review Outline</h2>
-                  <p className="text-xs" style={{ color: C.faint }}>Edit inline, then generate the full course.</p>
+                <div className="flex-1">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] mb-1" style={{ color: brandAccent }}>Outline ready · Step 2 of 2</p>
+                  <h2 className="text-xl font-semibold tracking-tight" style={{ color: C.text }}>Review your document course</h2>
+                  <p className="text-sm" style={{ color: C.muted }}>Edit module titles, lesson names, and activity types before generating.</p>
                 </div>
-                <button type="button" onClick={handleGenerateDocFullCourse} disabled={!!aiLoadingLabel} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
+                <button type="button" onClick={handleGenerateDocFullCourse} disabled={!!aiLoadingLabel} className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
                   <Sparkles className="w-3.5 h-3.5" /> Generate Full Course
                 </button>
               </div>
 
               <div className="flex flex-col gap-3">
                 {(docOutline.modules ?? []).map((mod: any, modIdx: number) => (
-                  <div key={mod.id || modIdx} className="rounded-xl p-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                  <div key={mod.id || modIdx} className="rounded-[20px] p-5" style={wizardPanelStyle}>
                     <div className="flex items-start gap-2 mb-1">
                       <span className="text-xs font-bold mt-2 flex-shrink-0" style={{ color: C.faint }}>M{modIdx + 1}</span>
                       <div className="flex-1 min-w-0">
@@ -2031,17 +2037,21 @@ const [isSaving, setIsSaving] = useState(false);
           {/* Python Course Wizard -- Brief step */}
           {pyWizardStep === 'brief' && (
             <motion.div key="py-brief" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-3xl mx-auto">
-              <button type="button" onClick={() => setPyWizardStep(null)} className="flex items-center gap-1.5 text-sm mb-6 transition-opacity hover:opacity-60" style={{ color: C.muted }}>
-                <ArrowLeft className="w-4 h-4" /> Back
-              </button>
-              <div className="rounded-2xl p-6 sm:p-8" style={{ background: C.card, border: theme === 'dark' ? '1px solid transparent' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#f59e0b18' }}>
+              <div className="flex items-center justify-between mb-5">
+                <button type="button" onClick={() => setPyWizardStep(null)} className="flex items-center gap-2 text-sm font-medium transition-opacity hover:opacity-60" style={{ color: C.muted }}>
+                  <ArrowLeft className="w-4 h-4" /> Course types
+                </button>
+                <span className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: '#f59e0b' }}>Course Studio</span>
+              </div>
+              <div className="rounded-[28px] p-6 sm:p-9" style={wizardPanelStyle}>
+              <div className="flex items-start gap-4 mb-8">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0" style={{ background: '#f59e0b18' }}>
                   <Code2 className="w-5 h-5" style={{ color: '#f59e0b' }} />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold" style={{ color: C.text }}>Python Course with AI</h2>
-                  <p className="text-sm" style={{ color: C.muted }}>Describe your course and we will generate a full outline for review.</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] mb-1.5" style={{ color: '#f59e0b' }}>Build with AI</p>
+                  <h2 className="text-2xl font-semibold tracking-tight" style={{ color: C.text }}>Create a Python course</h2>
+                  <p className="text-sm mt-1 max-w-xl" style={{ color: C.muted }}>Set the learning direction. You can review and refine every module before the course is created.</p>
                 </div>
               </div>
               <div className="flex flex-col gap-4">
@@ -2077,7 +2087,7 @@ const [isSaving, setIsSaving] = useState(false);
                   <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Specific Focus <span style={{ color: C.faint }}>(optional)</span></label>
                   <AiTextarea value={pyBrief.promptText} onValueChange={value => setPyBrief(p => ({ ...p, promptText: value }))} placeholder="Any specific libraries, datasets, or skills to focus on..." rows={3} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
                 </div>
-                <button type="button" onClick={handleGeneratePythonOutline} disabled={!!aiLoadingLabel || !pyBrief.title.trim()} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
+                <button type="button" onClick={handleGeneratePythonOutline} disabled={!!aiLoadingLabel || !pyBrief.title.trim()} className="flex items-center justify-center gap-2 w-full py-3.5 mt-2 rounded-xl text-sm font-semibold transition-all hover:opacity-90 disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
                   <Sparkles className="w-4 h-4" /> Generate Outline
                 </button>
               </div>
@@ -2088,15 +2098,16 @@ const [isSaving, setIsSaving] = useState(false);
           {/* Python Course Wizard -- Outline review step */}
           {pyWizardStep === 'outline' && pyOutline && (
             <motion.div key="py-outline" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full pb-12">
-              <div className="flex items-center justify-between mb-6">
-                <button type="button" onClick={() => setPyWizardStep('brief')} className="flex items-center gap-1.5 text-sm transition-opacity hover:opacity-60" style={{ color: C.muted }}>
-                  <ArrowLeft className="w-4 h-4" /> Back
+              <div className="rounded-[24px] p-5 sm:p-6 mb-6 flex flex-col sm:flex-row sm:items-center gap-4" style={wizardPanelStyle}>
+                <button type="button" onClick={() => setPyWizardStep('brief')} className="w-10 h-10 rounded-xl flex items-center justify-center transition-opacity hover:opacity-60 shrink-0" style={wizardSoftStyle} title="Back to course brief">
+                  <ArrowLeft className="w-4 h-4" style={{ color: C.muted }} />
                 </button>
-                <div className="text-center">
-                  <h2 className="text-base font-semibold" style={{ color: C.text }}>Review Outline</h2>
-                  <p className="text-xs" style={{ color: C.faint }}>Edit inline, then generate the full course.</p>
+                <div className="flex-1">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] mb-1" style={{ color: '#f59e0b' }}>Outline ready · Step 2 of 2</p>
+                  <h2 className="text-xl font-semibold tracking-tight" style={{ color: C.text }}>Review your Python course</h2>
+                  <p className="text-sm" style={{ color: C.muted }}>Edit module and lesson titles, then confirm the dataset plan.</p>
                 </div>
-                <button type="button" onClick={handleGeneratePythonFullCourse} disabled={!!aiLoadingLabel} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
+                <button type="button" onClick={handleGeneratePythonFullCourse} disabled={!!aiLoadingLabel} className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
                   <Sparkles className="w-3.5 h-3.5" /> Generate Full Course
                 </button>
               </div>
@@ -2105,7 +2116,7 @@ const [isSaving, setIsSaving] = useState(false);
                 {/* Modules -- 2/3 width */}
                 <div className="lg:col-span-2 flex flex-col gap-3">
                   {(pyOutline.modules ?? []).map((mod: any, modIdx: number) => (
-                    <div key={mod.id || modIdx} className="rounded-xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                    <div key={mod.id || modIdx} className="rounded-[20px] overflow-hidden" style={wizardPanelStyle}>
                       <div className="flex items-center gap-2 px-3.5 py-2.5" style={{ borderBottom: `1px solid ${C.divider}` }}>
                         <button type="button"
                           onClick={() => {
@@ -2148,7 +2159,7 @@ const [isSaving, setIsSaving] = useState(false);
 
                 {/* Dataset plan -- 1/3 width */}
                 <div className="flex flex-col gap-3">
-                  <div className="rounded-xl p-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                  <div className="rounded-[20px] p-5" style={wizardPanelStyle}>
                     <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: '#f59e0b' }}>Dataset Plan</p>
                     <p className="text-xs mb-3" style={{ color: C.muted }}>{pyOutline.datasetPlan?.description}</p>
                     {(pyOutline.datasetPlan?.datasets ?? []).map((ds: any, i: number) => (
@@ -2167,7 +2178,7 @@ const [isSaving, setIsSaving] = useState(false);
                       <p className="text-[11px]" style={{ color: C.muted }}>Prepare CSV files matching these schemas and upload them to each exercise in the course editor.</p>
                     </div>
                   </div>
-                  <div className="rounded-xl p-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                  <div className="rounded-[20px] p-5" style={wizardPanelStyle}>
                     <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.muted }}>Outcomes</p>
                     <ul className="text-xs space-y-1.5" style={{ color: C.text }}>
                       {(pyOutline.learningOutcomes ?? []).map((o: string, i: number) => (
@@ -2183,63 +2194,67 @@ const [isSaving, setIsSaving] = useState(false);
           {/* Normal landing page */}
           {!sqlWizardStep && !docWizardStep && !pyWizardStep && (
             <>
-              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="text-center mb-8">
-                <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight" style={{ color: C.text }}>What would you like to create?</h1>
-                <p className="text-sm mt-2" style={{ color: C.muted }}>Pick a template or start from scratch.</p>
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="w-full mb-9">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-30" style={{ background: brandAccent }} />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full" style={{ background: brandAccent }} />
+                  </span>
+                  <span className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: brandAccent }}>Course Studio</span>
+                </div>
+                <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight" style={{ color: C.text }}>How would you like to begin?</h1>
+                <p className="text-sm sm:text-base mt-2 max-w-2xl" style={{ color: C.muted }}>Start with a blank experience, transform your source material, or let AI build a specialist course you can refine.</p>
               </motion.div>
 
               <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="w-full">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {TEMPLATES.filter(t => userRole !== 'staff' || t.config.eventDetails?.isEvent).map((t, i) => {
                     const Icon = t.icon;
                     return (
-                      <motion.button key={t.key} type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 +i * 0.07 }} onClick={() => handleSelectTemplate(t)} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-                        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${t.color}18` }}>
+                      <motion.button key={t.key} type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 +i * 0.07 }} onClick={() => handleSelectTemplate(t)} className="group relative flex items-start gap-4 p-5 sm:p-6 rounded-[22px] transition-all text-left hover:-translate-y-0.5" style={wizardPanelStyle}>
+                        <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: `${t.color}18` }}>
                           <Icon className="w-4.5 h-4.5" style={{ color: t.color, width: 18, height: 18 }} />
                         </div>
-                        <div>
-                          <p className="text-sm font-semibold leading-tight" style={{ color: C.text }}>{t.label}</p>
-                          <p className="text-xs mt-0.5 leading-snug" style={{ color: C.faint }}>{t.description}</p>
+                        <div className="flex-1 min-w-0 pr-7">
+                          <p className="text-base font-semibold leading-tight" style={{ color: C.text }}>{t.label}</p>
+                          <p className="text-sm mt-1 leading-relaxed" style={{ color: C.muted }}>{t.description}</p>
                         </div>
-                        <span className="absolute bottom-3 right-3 text-[10px] font-medium transition-colors" style={{ color: C.faint }}>Use</span>
+                        <ChevronRight className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 transition-transform group-hover:translate-x-0.5" style={{ color: C.faint }} />
                       </motion.button>
                     );
                   })}
                   {/* SQL Course with AI */}
-                  {userRole !== 'staff' && <motion.button key="sql-course-ai" type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 +TEMPLATES.length * 0.07 }} onClick={() => setSqlWizardStep('brief')} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#3b82f618' }}>
+                  {userRole !== 'staff' && <motion.button key="sql-course-ai" type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 +TEMPLATES.length * 0.07 }} onClick={() => setSqlWizardStep('brief')} className="group relative flex items-start gap-4 p-5 sm:p-6 rounded-[22px] transition-all text-left hover:-translate-y-0.5" style={wizardPanelStyle}>
+                    <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: '#3b82f618' }}>
                       <Database className="w-4.5 h-4.5" style={{ color: '#3b82f6', width: 18, height: 18 }} />
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold leading-tight" style={{ color: C.text }}>SQL Course AI</p>
-                      <p className="text-xs mt-0.5 leading-snug" style={{ color: C.faint }}>Generate a full SQL course with exercises, schema, and solutions.</p>
+                    <div className="flex-1 min-w-0 pr-7">
+                      <p className="text-base font-semibold leading-tight" style={{ color: C.text }}>SQL Course with AI</p>
+                      <p className="text-sm mt-1 leading-relaxed" style={{ color: C.muted }}>Generate applied exercises, a shared schema, and guided solutions.</p>
                     </div>
-                    <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#3b82f618', color: '#3b82f6' }}>AI</span>
-                    <span className="absolute bottom-3 right-3 text-[10px] font-medium transition-colors" style={{ color: C.faint }}>Use</span>
+                    <ChevronRight className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 transition-transform group-hover:translate-x-0.5" style={{ color: C.faint }} />
                   </motion.button>}
                   {/* Python Course with AI */}
-                  {userRole !== 'staff' && <motion.button key="py-course-ai" type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 +(TEMPLATES.length + 1) * 0.07 }} onClick={() => setPyWizardStep('brief')} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#f59e0b18' }}>
+                  {userRole !== 'staff' && <motion.button key="py-course-ai" type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 +(TEMPLATES.length + 1) * 0.07 }} onClick={() => setPyWizardStep('brief')} className="group relative flex items-start gap-4 p-5 sm:p-6 rounded-[22px] transition-all text-left hover:-translate-y-0.5" style={wizardPanelStyle}>
+                    <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: '#f59e0b18' }}>
                       <Code2 className="w-4.5 h-4.5" style={{ color: '#f59e0b', width: 18, height: 18 }} />
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold leading-tight" style={{ color: C.text }}>Python Course AI</p>
-                      <p className="text-xs mt-0.5 leading-snug" style={{ color: C.faint }}>Generate a data analysis course with pandas, matplotlib, and Python exercises.</p>
+                    <div className="flex-1 min-w-0 pr-7">
+                      <p className="text-base font-semibold leading-tight" style={{ color: C.text }}>Python Course with AI</p>
+                      <p className="text-sm mt-1 leading-relaxed" style={{ color: C.muted }}>Build a data course with datasets, Python practice, and knowledge checks.</p>
                     </div>
-                    <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#f59e0b18', color: '#f59e0b' }}>AI</span>
-                    <span className="absolute bottom-3 right-3 text-[10px] font-medium transition-colors" style={{ color: C.faint }}>Use</span>
+                    <ChevronRight className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 transition-transform group-hover:translate-x-0.5" style={{ color: C.faint }} />
                   </motion.button>}
                   {/* Course from a Document */}
-                  {userRole !== 'staff' && <motion.button key="doc-course-ai" type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 +(TEMPLATES.length + 2) * 0.07 }} onClick={() => setDocWizardStep('input')} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${brandAccent}18` }}>
+                  {userRole !== 'staff' && <motion.button key="doc-course-ai" type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 +(TEMPLATES.length + 2) * 0.07 }} onClick={() => setDocWizardStep('input')} className="group relative flex items-start gap-4 p-5 sm:p-6 rounded-[22px] transition-all text-left hover:-translate-y-0.5" style={wizardPanelStyle}>
+                    <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: `${brandAccent}18` }}>
                       <FileText className="w-4.5 h-4.5" style={{ color: brandAccent, width: 18, height: 18 }} />
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold leading-tight" style={{ color: C.text }}>Document to Course</p>
-                      <p className="text-xs mt-0.5 leading-snug" style={{ color: C.faint }}>Turn a PDF, deck, guide, or page into lessons and quizzes.</p>
+                    <div className="flex-1 min-w-0 pr-7">
+                      <p className="text-base font-semibold leading-tight" style={{ color: C.text }}>Create from a Document</p>
+                      <p className="text-sm mt-1 leading-relaxed" style={{ color: C.muted }}>Transform a PDF, deck, guide, web page, or pasted text into a course.</p>
                     </div>
-                    <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${brandAccent}18`, color: brandAccent }}>AI</span>
-                    <span className="absolute bottom-3 right-3 text-[10px] font-medium transition-colors" style={{ color: C.faint }}>Use</span>
+                    <ChevronRight className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 transition-transform group-hover:translate-x-0.5" style={{ color: C.faint }} />
                   </motion.button>}
                 </div>
               </motion.div>
@@ -2268,11 +2283,35 @@ const [isSaving, setIsSaving] = useState(false);
     solutionPenalty: 30,
     milestones: [],
   };
+  const editorSections = ([
+    { id: 'info', label: formConfig.isCourse ? 'Basic Info' : 'Form Info' },
+    { id: 'cover', label: formConfig.isCourse ? 'Cover & Media' : 'Cover Image' },
+    ...(!formConfig.isCourse && !formConfig.eventDetails?.isEvent ? [{ id: 'fields', label: 'Form Fields' }] : []),
+    ...(formConfig.isCourse ? [{ id: 'curriculum', label: 'Lessons' }] : []),
+    ...(formConfig.eventDetails?.isEvent ? [{ id: 'fields', label: 'Registration Fields' }, { id: 'event_details', label: 'Event Details' }, { id: 'visibility', label: 'Visibility' }] : []),
+    ...(formConfig.isCourse ? [{ id: 'course_settings', label: 'Learning Rules' }] : []),
+    { id: 'appearance', label: 'Appearance' },
+    ...(formConfig.isCourse ? [{ id: 'points', label: 'Points & Rewards' }] : []),
+    ...((formConfig.isCourse || formConfig.eventDetails?.isEvent) ? [{ id: 'cohorts', label: 'Access' }] : []),
+    { id: 'share', label: 'Share URL' },
+    { id: 'submission', label: 'Completion' },
+  ] as { id: string; label: string }[]);
+  const editorSectionIds = editorSections.map(section => section.id);
+  const courseStudioModes = [
+    { id: 'build', label: 'Build', Icon: Blocks, sections: ['info'] },
+    { id: 'content', label: 'Content', Icon: Video, sections: ['curriculum'] },
+    { id: 'design', label: 'Design', Icon: Monitor, sections: ['cover', 'appearance'] },
+    { id: 'settings', label: 'Settings', Icon: Settings, sections: ['course_settings', 'points', 'cohorts'] },
+    { id: 'publish', label: 'Publish', Icon: CheckCircle2, sections: ['share', 'submission'] },
+  ] as const;
+  const activeStudioMode = courseStudioModes.find(mode => mode.sections.includes(activeSection as never)) ?? courseStudioModes[0];
+  const studioPanelClass = 'rounded-2xl p-4 sm:p-5 space-y-5';
+  const studioPanelStyle = { background: C.card, border: `1px solid ${C.cardBorder}` };
 
   return (
     <main className="min-h-screen flex flex-col" style={{ background: C.page, colorScheme: theme === 'dark' ? 'dark' : 'light' }}>
       {/* -- Editor header: Logo + Dashboard link + Save -- */}
-      <header className="sticky top-0 z-30 backdrop-blur-md" style={{ background: C.nav, borderBottom: `1px solid ${C.navBorder}` }}>
+      {!formConfig.isCourse && <header className="sticky top-0 z-30 backdrop-blur-md" style={{ background: C.nav, borderBottom: `1px solid ${C.navBorder}` }}>
         <div className="flex items-center justify-between px-4 sm:px-6 py-3">
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-70 transition-opacity">
@@ -2339,7 +2378,21 @@ const [isSaving, setIsSaving] = useState(false);
             </button>
           </div>
         </div>
-      </header>
+      </header>}
+
+      {formConfig.isCourse && (
+        <div className="fixed bottom-4 left-4 right-4 z-[90] flex flex-wrap items-center justify-end gap-2 rounded-xl p-2 sm:left-auto sm:right-6 sm:bottom-6" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: theme === 'dark' ? '0 14px 38px rgba(0,0,0,0.48)' : '0 14px 38px rgba(15,23,42,0.16)' }}>
+          {sqlOutline && <button type="button" onClick={() => { setFormConfig(null); setSqlWizardStep('outline'); }} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold" style={{ background: C.pill, color: C.muted }}><ArrowLeft className="h-3.5 w-3.5" /> Edit outline</button>}
+          {docOutline && <button type="button" onClick={() => { setFormConfig(null); setDocWizardStep('outline'); }} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold" style={{ background: C.pill, color: C.muted }}><ArrowLeft className="h-3.5 w-3.5" /> Edit outline</button>}
+          <button type="button" onClick={() => handleShare('draft')} disabled={isSaving} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-60" style={{ background: C.pill, color: C.text }}>
+            {savingAs === 'draft' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Save draft
+          </button>
+          <button type="button" onClick={() => handleShare('published')} disabled={isSaving} className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-60" style={{ background: accentColor, color: C.ctaText }}>
+            {savingAs === 'published' ? <Loader2 className="h-4 w-4 animate-spin" /> : copied ? <Check className="h-4 w-4" /> : null}
+            {copied && savingAs !== 'published' ? 'Saved!' : savedFormId && formStatus === 'published' ? 'Save' : 'Publish'}
+          </button>
+        </div>
+      )}
 
       <div className="relative z-10 flex flex-col flex-1 overflow-hidden">
         {/* -- Content Area -- */}
@@ -2362,31 +2415,36 @@ const [isSaving, setIsSaving] = useState(false);
           )}
           <div className="max-w-5xl mx-auto px-4 py-8">
           <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: theme === 'dark' ? '1px solid transparent' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
+          {formConfig.isCourse && (
+            <div style={{ background: C.card, borderBottom: `1px solid ${C.cardBorder}` }}>
+              <div className="flex flex-wrap items-center gap-3 px-4 py-4 sm:px-6">
+                <div className="mr-auto min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2.5 w-2.5 items-center justify-center" aria-hidden="true"><span className="absolute h-2.5 w-2.5 animate-ping rounded-full opacity-20" style={{ background: accentColor }} /><span className="relative h-1.5 w-1.5 rounded-full" style={{ background: accentColor }} /></span>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: accentColor }}>Course Studio</p>
+                  </div>
+                  <p className="mt-1 truncate text-base font-semibold leading-tight sm:text-lg" style={{ color: C.text }}>{formConfig.title || 'Untitled course'}</p>
+                </div>
+                <span className="text-[11px]" style={{ color: C.faint }}>{savedFormId ? (formStatus === 'published' ? 'Published course' : 'Draft course') : 'New course'}</span>
+              </div>
+              <nav className="flex items-center gap-1 overflow-x-auto px-4 pb-3 sm:px-6" aria-label="Course studio modes" style={{ scrollbarWidth: 'none' }}>
+                {courseStudioModes.map(mode => {
+                  const active = mode.id === activeStudioMode.id;
+                  return <button key={mode.id} type="button" onClick={() => goToSection(mode.sections[0], editorSectionIds)} className="flex min-h-9 items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold transition-colors" style={{ background: active ? `${accentColor}14` : 'transparent', color: active ? accentColor : C.faint }}><mode.Icon className="h-3.5 w-3.5" /> {mode.label}</button>;
+                })}
+              </nav>
+            </div>
+          )}
           {(() => {
-            const navSections = ([
-              { id: 'info', label: 'Basic Info' },
-              { id: 'cover', label: 'Cover Image' },
-              ...(!formConfig.isCourse && !formConfig.eventDetails?.isEvent ? [{ id: 'fields', label: 'Form Fields' }] : []),
-              ...(formConfig.isCourse ? [{ id: 'curriculum', label: 'Questions & Lessons' }] : []),
-              ...(formConfig.eventDetails?.isEvent ? [{ id: 'fields', label: 'Registration Fields' }] : []),
-              ...(formConfig.eventDetails?.isEvent ? [
-                { id: 'event_details', label: 'Event Details' },
-                { id: 'visibility', label: 'Visibility' },
-              ] : []),
-              ...(formConfig.isCourse ? [{ id: 'course_settings', label: 'Course Settings' }] : []),
-              { id: 'appearance', label: 'Appearance' },
-              ...(formConfig.isCourse ? [{ id: 'points', label: 'Points & Rewards' }] : []),
-              ...((formConfig.isCourse || formConfig.eventDetails?.isEvent) ? [{ id: 'cohorts', label: 'Cohorts' }] : []),
-              { id: 'share', label: 'Share URL' },
-              { id: 'submission', label: 'After Submission' },
-            ] as { id: string; label: string }[]);
-            const ids = navSections.map(s => s.id);
-            const i = ids.indexOf(activeSection);
+            const navSections = editorSections;
+            const ids = formConfig.isCourse ? courseStudioModes.map(mode => mode.sections[0]) : editorSectionIds;
+            const i = formConfig.isCourse ? courseStudioModes.findIndex(mode => mode.id === activeStudioMode.id) : ids.indexOf(activeSection);
+            const currentLabel = formConfig.isCourse ? activeStudioMode.label : navSections[editorSectionIds.indexOf(activeSection)]?.label;
             return (
               <div className="flex items-center justify-between gap-4 px-6 sm:px-8 pt-6 pb-5" style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
                 <div className="min-w-0">
-                  <h2 className="text-lg sm:text-xl font-bold leading-tight truncate" style={{ color: C.text }}>{navSections[i]?.label}</h2>
-                  <p className="text-[11px] mt-1 font-medium tracking-wide uppercase" style={{ color: C.faint }}>Step {i + 1} of {ids.length}</p>
+                  <h2 className="text-lg sm:text-xl font-bold leading-tight truncate" style={{ color: C.text }}>{currentLabel}</h2>
+                  <p className="text-[11px] mt-1 font-medium tracking-wide uppercase" style={{ color: C.faint }}>{formConfig.isCourse ? `${activeStudioMode.label} workspace` : `Step ${i + 1} of ${ids.length}`}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button type="button" disabled={i <= 0} onClick={() => goToSection(ids[i - 1], ids)} aria-label="Previous"
@@ -2407,12 +2465,13 @@ const [isSaving, setIsSaving] = useState(false);
           <motion.div key={activeSection} custom={secDir}
             initial={{ opacity: 0, x: secDir * 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: secDir * -28 }}
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            className="px-6 sm:px-8 py-7 space-y-5">
+            className="flex flex-col gap-5 px-6 py-7 sm:px-8">
 
             {activeSection === 'info' && (
-              <div className="space-y-5">
+              <div className={formConfig.isCourse ? studioPanelClass : 'space-y-5'} style={formConfig.isCourse ? studioPanelStyle : undefined}>
+              {formConfig.isCourse && <div><p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: accentColor }}>Course identity</p><p className="mt-1 text-xs" style={{ color: C.faint }}>Give learners a clear promise before they begin.</p></div>}
               <div>
-                <label className={labelCls} style={labelStyle}>Form Title</label>
+                <label className={labelCls} style={labelStyle}>{formConfig.isCourse ? 'Course title' : 'Form Title'}</label>
                 <input type="text" value={formConfig.title} onChange={e => updateConfig({ title: e.target.value })} className={inputCls} style={inputStyle} />
               </div>
               <div>
@@ -2708,8 +2767,9 @@ const [isSaving, setIsSaving] = useState(false);
               </div>
             )}
 
-            {activeSection === 'cohorts' && (formConfig.isCourse || formConfig.eventDetails?.isEvent) && (
-              <div className="space-y-5">
+            {((formConfig.isCourse && activeStudioMode.id === 'settings') || (activeSection === 'cohorts' && formConfig.eventDetails?.isEvent)) && (
+              <div className={formConfig.isCourse ? studioPanelClass : 'space-y-5'} style={formConfig.isCourse ? { ...studioPanelStyle, order: 2 } : undefined}>
+                {formConfig.isCourse && <div><p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: accentColor }}>Learner access</p><p className="mt-1 text-xs" style={{ color: C.faint }}>Choose who can access this course and optionally set a deadline.</p></div>}
                 <div className="space-y-2">
                   {cohorts.length === 0 && (
                     <p className="text-xs py-2" style={{ color: C.faint }}>No cohorts yet. Create one in the dashboard.</p>
@@ -2752,20 +2812,22 @@ const [isSaving, setIsSaving] = useState(false);
               </div>
             )}
 
-            {activeSection === 'share' && (
-              <div className="space-y-5">
+            {((formConfig.isCourse && activeStudioMode.id === 'publish') || (!formConfig.isCourse && activeSection === 'share')) && (
+              <div className={formConfig.isCourse ? studioPanelClass : 'space-y-5'} style={formConfig.isCourse ? { ...studioPanelStyle, order: 0 } : undefined}>
+              {formConfig.isCourse && <div><p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: accentColor }}>Course link</p><p className="mt-1 text-xs" style={{ color: C.faint }}>Create a short, recognizable URL for sharing.</p></div>}
               <div>
                 <label className={labelCls} style={labelStyle}>Custom slug (optional)</label>
-                <div className="flex items-center rounded-lg overflow-hidden" style={{ background: C.groupBg, border: `1px solid ${C.inputBorder}` }}>
-                  <span className="px-3 py-2 text-xs whitespace-nowrap" style={{ color: C.faint, borderRight: `1px solid ${C.inputBorder}` }}>/</span>
-                  <input type="text" value={customSlug} onChange={e => setCustomSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} placeholder="my-form" className="w-full bg-transparent px-3 py-2 text-sm outline-none" style={{ color: C.text }} />
+                <div className="flex min-h-12 items-center overflow-hidden rounded-xl" style={{ background: C.groupBg, border: `1px solid ${C.inputBorder}` }}>
+                  <span className="flex self-stretch items-center px-3 text-xs whitespace-nowrap" style={{ color: C.faint, borderRight: `1px solid ${C.inputBorder}` }}>/</span>
+                  <input type="text" value={customSlug} onChange={e => setCustomSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} placeholder={formConfig.isCourse ? 'my-course' : 'my-form'} className="w-full bg-transparent px-3 py-3 text-sm font-medium outline-none" style={{ color: C.text }} />
                 </div>
               </div>
               </div>
             )}
 
-            {activeSection === 'cover' && (
-              <div className="space-y-5">
+            {(activeSection === 'cover' || (formConfig.isCourse && activeStudioMode.id === 'design')) && (
+              <div className={formConfig.isCourse ? studioPanelClass : 'space-y-5'} style={formConfig.isCourse ? studioPanelStyle : undefined}>
+              {formConfig.isCourse && <div><p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: accentColor }}>Cover &amp; media</p><p className="mt-1 text-xs" style={{ color: C.faint }}>Choose the visual learners see before opening the course.</p></div>}
               {formConfig.coverImage ? (
                 <div className="relative w-full h-28 rounded-xl overflow-hidden group" style={{ border: `1px solid ${C.cardBorder}` }}>
                   <img src={resolveCoverUrl(formConfig.coverImage)} alt="Cover" className="w-full h-full object-cover" onError={e => (e.target as HTMLImageElement).style.display = 'none'} />
@@ -2798,21 +2860,16 @@ const [isSaving, setIsSaving] = useState(false);
               </div>
             )}
 
-            {activeSection === 'appearance' && (
-              <div className="space-y-5">
+            {(activeSection === 'appearance' || (formConfig.isCourse && activeStudioMode.id === 'design')) && (
+              <div className={formConfig.isCourse ? studioPanelClass : 'space-y-5'} style={formConfig.isCourse ? studioPanelStyle : undefined}>
+              {formConfig.isCourse && <div><p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: accentColor }}>Appearance</p><p className="mt-1 text-xs" style={{ color: C.faint }}>Set the course theme, typography, and accent color.</p></div>}
               <div>
                 <label className={labelCls} style={labelStyle}>Mode</label>
-                <div className="flex gap-1.5 p-1 rounded-lg" style={{ background: C.groupBg, border: `1px solid ${C.inputBorder}` }}>
-                  <button onClick={() => updateConfig({ mode: 'light' })} className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1.5" style={{ background: formConfig.mode === 'light' ? C.segmentActive : 'transparent', color: formConfig.mode === 'light' ? C.segmentActiveText : C.faint, boxShadow: formConfig.mode === 'light' ? '0 1px 3px rgba(0,0,0,0.1)' : undefined }}>
-                    <Sun className="w-3.5 h-3.5" /> Light
-                  </button>
-                  <button onClick={() => updateConfig({ mode: 'dark' })} className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1.5" style={{ background: formConfig.mode === 'dark' ? C.segmentActive : 'transparent', color: formConfig.mode === 'dark' ? C.segmentActiveText : C.faint, boxShadow: formConfig.mode === 'dark' ? '0 1px 3px rgba(0,0,0,0.1)' : undefined }}>
-                    <Moon className="w-3.5 h-3.5" /> Dark
-                  </button>
-                  <button onClick={() => updateConfig({ mode: 'auto' })} className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all flex flex-col items-center justify-center" style={{ background: formConfig.mode === 'auto' ? C.segmentActive : 'transparent', color: formConfig.mode === 'auto' ? C.segmentActiveText : C.faint, boxShadow: formConfig.mode === 'auto' ? '0 1px 3px rgba(0,0,0,0.1)' : undefined }}>
-                    <span>Auto</span>
-                    <span className="text-[9px] opacity-60 leading-none">Matches app theme</span>
-                  </button>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {([{ value: 'light', label: 'Light', description: 'Bright canvas', Icon: Sun }, { value: 'dark', label: 'Dark', description: 'Low-light canvas', Icon: Moon }, { value: 'auto', label: 'Automatic', description: 'Match learner device', Icon: LayoutDashboard }] as const).map(({ value, label, description, Icon }) => {
+                    const active = formConfig.mode === value;
+                    return <button key={value} type="button" onClick={() => updateConfig({ mode: value })} className="flex min-h-20 items-start gap-3 rounded-xl p-3 text-left transition-all" style={{ background: active ? `${accentColor}10` : C.groupBg, border: `1px solid ${active ? `${accentColor}55` : C.inputBorder}`, color: active ? accentColor : C.muted }}><span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg" style={{ background: active ? `${accentColor}18` : C.pill }}><Icon className="h-4 w-4" /></span><span><span className="block text-xs font-bold" style={{ color: active ? accentColor : C.text }}>{label}</span><span className="mt-1 block text-[10px]" style={{ color: C.faint }}>{description}</span></span></button>;
+                  })}
                 </div>
               </div>
               <div>
@@ -2864,15 +2921,16 @@ const [isSaving, setIsSaving] = useState(false);
                   <div className="flex flex-col items-center gap-1.5 group">
                     <div
                       title="Custom color"
-                      className={`relative w-7 h-7 rounded-full cursor-pointer overflow-hidden transition-transform group-hover:scale-110 border-2 ${formConfig.customAccent ? 'scale-110' : ''}`}
+                      className={`relative grid h-7 w-7 cursor-pointer place-items-center rounded-full transition-transform group-hover:scale-110 ${formConfig.customAccent ? 'scale-110' : ''}`}
                       style={{
-                        background: formConfig.customAccent ?? 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)',
+                        background: formConfig.customAccent ?? 'conic-gradient(from 90deg, #f43f5e, #f59e0b, #a3e635, #10b981, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #f43f5e)',
                         boxShadow: formConfig.customAccent ? `0 0 0 2.5px ${C.page}, 0 0 0 4.5px ${formConfig.customAccent}` : undefined,
-                        borderColor: formConfig.customAccent ? 'transparent' : C.inputBorder,
                       }}
                     >
+                      {!formConfig.customAccent && <span className="pointer-events-none grid h-[18px] w-[18px] place-items-center rounded-full" style={{ background: C.card, color: C.faint }}><Plus className="h-2.5 w-2.5" /></span>}
                       <input
                         type="color"
+                        aria-label="Choose a custom accent color"
                         value={formConfig.customAccent ?? accentColor}
                         onChange={e => updateConfig({ customAccent: e.target.value })}
                         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', border: 'none', padding: 0 }}
@@ -2886,8 +2944,9 @@ const [isSaving, setIsSaving] = useState(false);
             )}
 
             {/* Course settings section */}
-            {activeSection === 'course_settings' && formConfig.isCourse && (
-              <div className="space-y-5">
+            {activeStudioMode.id === 'settings' && formConfig.isCourse && (
+              <div className={studioPanelClass} style={{ ...studioPanelStyle, order: 0 }}>
+                <div><p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: accentColor }}>Course rules</p><p className="mt-1 text-xs" style={{ color: C.faint }}>Define assessment behavior, timing, attempts, and feedback.</p></div>
                   {/* Category */}
                   <div>
                     <label className={labelCls} style={labelStyle}>Category</label>
@@ -2899,17 +2958,17 @@ const [isSaving, setIsSaving] = useState(false);
                       className={inputCls}
                       style={inputStyle}
                     />
-                    <div className="flex flex-wrap gap-1.5 mt-2">
+                    <div className="mt-2 flex w-fit max-w-full flex-wrap gap-1 rounded-xl p-1" style={{ background: C.groupBg }}>
                       {COURSE_CATEGORIES.map(cat => (
                         <button
                           key={cat}
                           type="button"
                           onClick={() => updateConfig({ category: formConfig.category === cat ? null : cat })}
-                          className="px-2.5 py-1 rounded-md text-[11px] font-medium transition-all"
+                          className="min-h-8 rounded-lg px-3 py-1 text-[11px] font-semibold transition-all"
                           style={{
-                            background: formConfig.category === cat ? accentColor : C.input,
+                            background: formConfig.category === cat ? accentColor : 'transparent',
                             color: formConfig.category === cat ? '#fff' : C.muted,
-                            border: `1px solid ${formConfig.category === cat ? accentColor : C.inputBorder}`,
+                            boxShadow: formConfig.category === cat ? '0 1px 3px rgba(15,23,42,0.12)' : undefined,
                           }}
                         >
                           {cat}
@@ -2977,9 +3036,9 @@ const [isSaving, setIsSaving] = useState(false);
                   </div>
 
                   {/* Show answers setting */}
-                  <div className="p-3 rounded-xl space-y-2" style={{ background: C.groupBg, border: `1px solid ${C.inputBorder}` }}>
+                  <div className="space-y-3 border-t pt-5" style={{ borderColor: C.divider }}>
                     <label className={labelCls} style={labelStyle}>Show correct answers</label>
-                    <div className="flex gap-1.5 p-1 rounded-lg" style={{ background: C.pill, border: `1px solid ${C.inputBorder}` }}>
+                    <div className="flex w-fit max-w-full flex-wrap gap-1 rounded-xl p-1" style={{ background: C.groupBg }}>
                       {([
                         { value: 'per_question', label: 'Per question' },
                         { value: 'after_quiz', label: 'After course' },
@@ -2989,8 +3048,8 @@ const [isSaving, setIsSaving] = useState(false);
                           key={value}
                           type="button"
                           onClick={() => updateConfig({ showAnswers: value })}
-                          className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all"
-                          style={{ background: (formConfig.showAnswers ?? 'per_question') === value ? C.segmentActive : 'transparent', color: (formConfig.showAnswers ?? 'per_question') === value ? C.segmentActiveText : C.faint, boxShadow: (formConfig.showAnswers ?? 'per_question') === value ? '0 1px 3px rgba(0,0,0,0.08)' : undefined }}
+                          className="min-h-9 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all"
+                          style={{ background: (formConfig.showAnswers ?? 'per_question') === value ? accentColor : 'transparent', color: (formConfig.showAnswers ?? 'per_question') === value ? '#fff' : C.muted }}
                         >
                           {label}
                         </button>
@@ -3004,9 +3063,9 @@ const [isSaving, setIsSaving] = useState(false);
                   </div>
 
                   {/* Lesson timing */}
-                  <div className="p-3 rounded-xl space-y-2" style={{ background: C.groupBg, border: `1px solid ${C.inputBorder}` }}>
+                  <div className="space-y-3 border-t pt-5" style={{ borderColor: C.divider }}>
                     <label className={labelCls} style={labelStyle}>Lesson timing</label>
-                    <div className="flex gap-1.5 p-1 rounded-lg" style={{ background: C.pill, border: `1px solid ${C.inputBorder}` }}>
+                    <div className="flex w-fit max-w-full flex-wrap gap-1 rounded-xl p-1" style={{ background: C.groupBg }}>
                       {([
                         { value: 'before', label: 'Before question' },
                         { value: 'after', label: 'After answer' },
@@ -3015,8 +3074,8 @@ const [isSaving, setIsSaving] = useState(false);
                           key={value}
                           type="button"
                           onClick={() => updateConfig({ lessonTiming: value })}
-                          className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all"
-                          style={{ background: (formConfig.lessonTiming ?? 'after') === value ? C.segmentActive : 'transparent', color: (formConfig.lessonTiming ?? 'after') === value ? C.segmentActiveText : C.faint, boxShadow: (formConfig.lessonTiming ?? 'after') === value ? '0 1px 3px rgba(0,0,0,0.08)' : undefined }}
+                          className="min-h-9 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all"
+                          style={{ background: (formConfig.lessonTiming ?? 'after') === value ? accentColor : 'transparent', color: (formConfig.lessonTiming ?? 'after') === value ? '#fff' : C.muted }}
                         >
                           {label}
                         </button>
@@ -3030,19 +3089,19 @@ const [isSaving, setIsSaving] = useState(false);
                   </div>
 
                   {/* Pass mark */}
-                  <div className="p-3 rounded-xl space-y-2" style={{ background: C.groupBg, border: `1px solid ${C.inputBorder}` }}>
+                  <div className="space-y-3 border-t pt-5" style={{ borderColor: C.divider }}>
                     <div className="flex items-center justify-between">
                       <label className={`${labelCls} mb-0`} style={labelStyle}>Pass mark</label>
                       <span className="text-xs font-semibold" style={{ color: accentColor }}>{formConfig.passmark ?? 50}%</span>
                     </div>
-                    <div className="flex gap-1.5 flex-wrap">
+                    <div className="flex w-fit max-w-full flex-wrap gap-1 rounded-xl p-1" style={{ background: C.groupBg }}>
                       {[50, 60, 70, 80].map(pct => (
                         <button
                           key={pct}
                           type="button"
                           onClick={() => updateConfig({ passmark: pct })}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                          style={(formConfig.passmark ?? 50) === pct ? { background: accentColor, color: 'white' } : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.muted }}
+                          className="min-h-9 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all"
+                          style={(formConfig.passmark ?? 50) === pct ? { background: accentColor, color: 'white' } : { background: 'transparent', color: C.muted }}
                         >
                           {pct}%
                         </button>
@@ -3057,28 +3116,36 @@ const [isSaving, setIsSaving] = useState(false);
                           const v = parseInt(e.target.value);
                           if (!isNaN(v) && v >= 1 && v <= 100) updateConfig({ passmark: v });
                         }}
-                        className={`${inputCls} w-20 py-1.5`}
-                        style={inputStyle}
+                        onFocus={e => {
+                          e.currentTarget.style.borderColor = accentColor;
+                          e.currentTarget.style.boxShadow = `0 0 0 3px ${accentColor}18`;
+                        }}
+                        onBlur={e => {
+                          e.currentTarget.style.borderColor = C.inputBorder;
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
+                        className="min-h-9 w-24 rounded-lg border px-3 py-1.5 text-xs font-semibold outline-none transition-all placeholder:font-medium"
+                        style={{ background: theme === 'dark' ? C.input : '#ffffff', borderColor: C.inputBorder, color: C.text }}
                       />
                     </div>
                   </div>
 
                   {/* Timer */}
-                  <div className="p-3 rounded-xl space-y-2" style={{ background: C.groupBg, border: `1px solid ${C.inputBorder}` }}>
+                  <div className="space-y-3 border-t pt-5" style={{ borderColor: C.divider }}>
                     <div className="flex items-center justify-between">
                       <label className={`${labelCls} mb-0`} style={labelStyle}>Time limit</label>
                       <span className="text-xs font-semibold" style={{ color: C.muted }}>
                         {formConfig.courseTimer ? `${formConfig.courseTimer} min` : 'None'}
                       </span>
                     </div>
-                    <div className="flex gap-1.5 flex-wrap">
+                    <div className="flex w-fit max-w-full flex-wrap gap-1 rounded-xl p-1" style={{ background: C.groupBg }}>
                       {[0, 5, 10, 15, 20, 30, 45, 60].map(t => (
                         <button
                           key={t}
                           type="button"
                           onClick={() => updateConfig({ courseTimer: t || undefined })}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                          style={(formConfig.courseTimer ?? 0) === t ? { background: accentColor, color: 'white' } : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.muted }}
+                          className="min-h-9 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all"
+                          style={(formConfig.courseTimer ?? 0) === t ? { background: accentColor, color: 'white' } : { background: 'transparent', color: C.muted }}
                         >
                           {t === 0 ? 'None' : `${t}m`}
                         </button>
@@ -3087,21 +3154,21 @@ const [isSaving, setIsSaving] = useState(false);
                   </div>
 
                   {/* Max attempts */}
-                  <div className="p-3 rounded-xl space-y-2" style={{ background: C.groupBg, border: `1px solid ${C.inputBorder}` }}>
+                  <div className="space-y-3 border-t pt-5" style={{ borderColor: C.divider }}>
                     <div className="flex items-center justify-between">
                       <label className={`${labelCls} mb-0`} style={labelStyle}>Max attempts</label>
                       <span className="text-xs font-semibold" style={{ color: C.muted }}>
                         {formConfig.maxAttempts ? formConfig.maxAttempts : 'Unlimited'}
                       </span>
                     </div>
-                    <div className="flex gap-1.5 flex-wrap">
+                    <div className="flex w-fit max-w-full flex-wrap gap-1 rounded-xl p-1" style={{ background: C.groupBg }}>
                       {[0, 1, 2, 3, 5].map(n => (
                         <button
                           key={n}
                           type="button"
                           onClick={() => updateConfig({ maxAttempts: n || undefined })}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                          style={(formConfig.maxAttempts ?? 0) === n ? { background: accentColor, color: 'white' } : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.muted }}
+                          className="min-h-9 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all"
+                          style={(formConfig.maxAttempts ?? 0) === n ? { background: accentColor, color: 'white' } : { background: 'transparent', color: C.muted }}
                         >
                           {n === 0 ? '∞' : n}
                         </button>
@@ -3114,7 +3181,8 @@ const [isSaving, setIsSaving] = useState(false);
 
             {/* Curriculum / Fields section */}
             {(activeSection === 'curriculum' && formConfig.isCourse) && (
-              <div className="space-y-5">
+              <div className={studioPanelClass} style={studioPanelStyle}>
+                <div><p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: accentColor }}>Course curriculum</p><p className="mt-1 text-xs" style={{ color: C.faint }}>Shape the learning journey, lessons, and practice activities.</p></div>
                 <div className="space-y-3">
                   <div className="p-3 rounded-xl space-y-3" style={{ background: C.card }}>
                     <div className="flex items-start justify-between gap-3">
@@ -4604,11 +4672,12 @@ const [isSaving, setIsSaving] = useState(false);
               </div>
             )}
 
-            {activeSection === 'points' && formConfig.isCourse && (
-              <div className="space-y-5">
+            {activeStudioMode.id === 'settings' && formConfig.isCourse && (
+              <div className={studioPanelClass} style={{ ...studioPanelStyle, order: 1 }}>
+              <div><p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: accentColor }}>Points &amp; rewards</p><p className="mt-1 text-xs" style={{ color: C.faint }}>Recognize meaningful progress with XP, streaks, and milestones.</p></div>
               <div className="space-y-3">
                 {/* Enable toggle */}
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between rounded-xl p-4" style={{ background: formConfig.pointsSystem?.enabled ? `${accentColor}0e` : C.groupBg, border: `1px solid ${formConfig.pointsSystem?.enabled ? `${accentColor}40` : C.inputBorder}` }}>
                   <div>
                     <p className={labelCls} style={{ ...labelStyle, marginBottom: 0 }}>Enable points system</p>
                     <p className="text-[10px] mt-0.5" style={{ color: C.faint }}>Gamify your course with XP, streaks & rewards</p>
@@ -4623,24 +4692,24 @@ const [isSaving, setIsSaving] = useState(false);
                 {formConfig.pointsSystem?.enabled && (
                   <>
                     {/* Base points */}
-                    <div className="p-3 rounded-xl space-y-2" style={{ background: C.groupBg, border: `1px solid ${C.inputBorder}` }}>
+                    <div className="space-y-3 border-t pt-5" style={{ borderColor: C.divider }}>
                       <div className="flex items-center justify-between">
                         <label className={`${labelCls} mb-0`} style={labelStyle}>Base points per question</label>
                         <span className="text-xs font-semibold" style={{ color: accentColor }}>{formConfig.pointsSystem?.basePoints ?? 50} pts</span>
                       </div>
-                      <div className="flex gap-1.5 flex-wrap">
+                      <div className="flex w-fit max-w-full flex-wrap gap-1 rounded-xl p-1" style={{ background: C.groupBg }}>
                         {[50, 100, 200, 500].map(n => (
                           <button key={n} type="button"
                             onClick={() => updateConfig({ pointsSystem: { ...defaultPoints, ...formConfig.pointsSystem, basePoints: n } })}
-                            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                            style={(formConfig.pointsSystem?.basePoints ?? 50) === n ? { background: accentColor, color: 'white' } : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.muted }}
+                            className="min-h-9 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all"
+                            style={(formConfig.pointsSystem?.basePoints ?? 50) === n ? { background: accentColor, color: 'white' } : { background: 'transparent', color: C.muted }}
                           >{n}</button>
                         ))}
                       </div>
                     </div>
 
                     {/* Time bonus */}
-                    <div className="p-3 rounded-xl space-y-2" style={{ background: C.groupBg, border: `1px solid ${C.inputBorder}` }}>
+                    <div className="space-y-3 border-t pt-5" style={{ borderColor: C.divider }}>
                       <div className="flex items-center justify-between">
                         <label className={`${labelCls} mb-0`} style={labelStyle}>Time bonus</label>
                         <SwitchToggle
@@ -4674,7 +4743,7 @@ const [isSaving, setIsSaving] = useState(false);
                     </div>
 
                     {/* Streak bonus */}
-                    <div className="p-3 rounded-xl space-y-2" style={{ background: C.groupBg, border: `1px solid ${C.inputBorder}` }}>
+                    <div className="space-y-3 border-t pt-5" style={{ borderColor: C.divider }}>
                       <div className="flex items-center justify-between">
                         <label className={`${labelCls} mb-0`} style={labelStyle}>Hot streak bonus</label>
                         <SwitchToggle
@@ -4706,34 +4775,34 @@ const [isSaving, setIsSaving] = useState(false);
                     </div>
 
                     {/* Hint penalty */}
-                    <div className="p-3 rounded-xl space-y-2" style={{ background: C.groupBg, border: `1px solid ${C.inputBorder}` }}>
+                    <div className="space-y-3 border-t pt-5" style={{ borderColor: C.divider }}>
                       <div className="flex items-center justify-between">
                         <label className={`${labelCls} mb-0`} style={labelStyle}>Hint cost (points)</label>
                         <span className="text-xs font-semibold text-rose-500">-{formConfig.pointsSystem?.hintPenalty ?? 20} pts</span>
                       </div>
-                      <div className="flex gap-1.5 flex-wrap">
+                      <div className="flex w-fit max-w-full flex-wrap gap-1 rounded-xl p-1" style={{ background: C.groupBg }}>
                         {[10, 20, 50, 100].map(n => (
                           <button key={n} type="button"
                             onClick={() => updateConfig({ pointsSystem: { ...defaultPoints, ...formConfig.pointsSystem, hintPenalty: n } })}
-                            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                            style={(formConfig.pointsSystem?.hintPenalty ?? 20) === n ? { background: accentColor, color: 'white' } : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.muted }}
+                            className="min-h-9 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all"
+                            style={(formConfig.pointsSystem?.hintPenalty ?? 20) === n ? { background: accentColor, color: 'white' } : { background: 'transparent', color: C.muted }}
                           >{n}</button>
                         ))}
                       </div>
                     </div>
 
                     {/* Solution penalty */}
-                    <div className="p-3 rounded-xl space-y-2" style={{ background: C.groupBg, border: `1px solid ${C.inputBorder}` }}>
+                    <div className="space-y-3 border-t pt-5" style={{ borderColor: C.divider }}>
                       <div className="flex items-center justify-between">
                         <label className={`${labelCls} mb-0`} style={labelStyle}>View solution cost (XP)</label>
                         <span className="text-xs font-semibold text-rose-500">-{formConfig.pointsSystem?.solutionPenalty ?? 30} XP</span>
                       </div>
-                      <div className="flex gap-1.5 flex-wrap">
+                      <div className="flex w-fit max-w-full flex-wrap gap-1 rounded-xl p-1" style={{ background: C.groupBg }}>
                         {[10, 20, 30, 50].map(n => (
                           <button key={n} type="button"
                             onClick={() => updateConfig({ pointsSystem: { ...defaultPoints, ...formConfig.pointsSystem, solutionPenalty: n } })}
-                            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                            style={(formConfig.pointsSystem?.solutionPenalty ?? 30) === n ? { background: accentColor, color: 'white' } : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.muted }}
+                            className="min-h-9 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all"
+                            style={(formConfig.pointsSystem?.solutionPenalty ?? 30) === n ? { background: accentColor, color: 'white' } : { background: 'transparent', color: C.muted }}
                           >{n}</button>
                         ))}
                       </div>
@@ -4808,28 +4877,30 @@ const [isSaving, setIsSaving] = useState(false);
               </div>
             )}
 
-            {activeSection === 'submission' && (
-              <div className="space-y-5">
+            {((formConfig.isCourse && activeStudioMode.id === 'publish') || (!formConfig.isCourse && activeSection === 'submission')) && (
+              <div className={formConfig.isCourse ? studioPanelClass : 'space-y-5'} style={formConfig.isCourse ? { ...studioPanelStyle, order: 1 } : undefined}>
+              {formConfig.isCourse && <div><p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: accentColor }}>Completion experience</p><p className="mt-1 text-xs" style={{ color: C.faint }}>Choose what learners see and where they go after finishing.</p></div>}
               <div className="space-y-3">
                 {/* Type selector */}
                 <div>
                   <label className={labelCls} style={labelStyle}>What happens after submission</label>
-                  <div className="grid grid-cols-2 gap-1.5">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     {([
-                      { value: 'default', label: 'Thank you' },
-                      { value: 'redirect', label: 'Redirect URL' },
-                      { value: 'button', label: 'CTA Button' },
-                      { value: 'events', label: 'Show Events' },
-                      { value: 'notice', label: 'Notice' },
-                    ] as const).map(({ value, label }) => (
+                      { value: 'default', label: 'Thank you', description: 'Show the standard completion screen', Icon: Check },
+                      { value: 'redirect', label: 'Redirect URL', description: 'Send learners to another page', Icon: Link2 },
+                      { value: 'button', label: 'CTA Button', description: 'Offer one clear next action', Icon: Share2 },
+                      { value: 'events', label: 'Show Events', description: 'Recommend related experiences', Icon: Globe },
+                      { value: 'notice', label: 'Notice', description: 'Display a custom final message', Icon: FileText },
+                    ] as const).map(({ value, label, description, Icon }) => (
                       <button
                         key={value}
                         type="button"
                         onClick={() => updateConfig({ postSubmission: { ...formConfig.postSubmission, type: value } as any })}
-                        className="py-2 rounded-lg text-xs font-medium transition-all"
-                        style={(formConfig.postSubmission?.type ?? 'default') === value ? { background: accentColor, color: 'white' } : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.muted }}
+                        className="flex min-h-20 items-start gap-3 rounded-xl p-3 text-left transition-all"
+                        style={(formConfig.postSubmission?.type ?? 'default') === value ? { background: `${accentColor}10`, color: accentColor, border: `1px solid ${accentColor}55` } : { background: C.groupBg, border: `1px solid ${C.inputBorder}`, color: C.muted }}
                       >
-                        {label}
+                        <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg" style={{ background: (formConfig.postSubmission?.type ?? 'default') === value ? `${accentColor}18` : C.pill }}><Icon className="h-4 w-4" /></span>
+                        <span><span className="block text-xs font-bold" style={{ color: (formConfig.postSubmission?.type ?? 'default') === value ? accentColor : C.text }}>{label}</span><span className="mt-1 block text-[10px] leading-snug" style={{ color: C.faint }}>{description}</span></span>
                       </button>
                     ))}
                   </div>

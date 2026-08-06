@@ -76,6 +76,15 @@ const TYPE_META = {
   virtual_experience:  { label: 'Virtual Experience',  Icon: Award,       color: '#6366f1', badge: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' },
 };
 
+const COURSE_THEME_ACCENTS: Record<string, string> = {
+  forest: '#00bf63',
+  lime: '#ADEE66',
+  emerald: '#10b981',
+  rose: '#f43f5e',
+  amber: '#f59e0b',
+  ocean: '#3E93FF',
+};
+
 // -- Helpers ---
 function useCopy(timeout = 2000) {
   const [copied, setCopied] = useState(false);
@@ -98,7 +107,7 @@ function ResponsesTab({
 }) {
   const { theme } = useTheme();
   const isDark = theme !== 'light';
-  const card = isDark ? 'bg-transparent border-zinc-800/50' : 'bg-transparent border-[rgba(0,0,0,0.07)]';
+  const card = isDark ? 'bg-zinc-900/35 border-zinc-800/60' : 'bg-white border-[rgba(0,0,0,0.07)]';
   const cardHeader = isDark ? 'border-zinc-800' : 'border-[rgba(0,0,0,0.07)]';
   const dividerCls = isDark ? 'divide-zinc-800/50' : 'divide-[rgba(0,0,0,0.05)]';
   const textPrim = isDark ? 'text-white' : 'text-[#111]';
@@ -108,6 +117,7 @@ function ResponsesTab({
   const tableRow = isDark ? 'hover:bg-zinc-800/20' : 'hover:bg-[#f5f6f7]';
   const isCourse = form.config?.isCourse;
   const isEvent = form.config?.eventDetails?.isEvent;
+  const courseAccent = form.config?.customAccent || COURSE_THEME_ACCENTS[form.config?.theme] || '#00bf63';
   const [selectedResponse, setSelectedResponse] = useState<any | null>(null);
   const [eventAttendance, setEventAttendance] = useState<any[]>([]);
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
@@ -261,6 +271,16 @@ function ResponsesTab({
 
     return (
       <div className="space-y-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: courseAccent }}>Course insights</p>
+            <h2 className={`mt-1 text-xl font-bold sm:text-2xl ${textPrim}`}>Learning performance</h2>
+            <p className={`mt-1 max-w-2xl text-sm leading-relaxed ${textMut}`}>Track participation, scores, question performance, and learner progress in one place.</p>
+          </div>
+          <button onClick={onExport} className={`flex min-h-10 items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-opacity hover:opacity-70 ${textSub}`} style={{ background: isDark ? 'rgba(255,255,255,0.05)' : '#f5f6f7' }}>
+            <Download className="h-3.5 w-3.5" /> Export CSV
+          </button>
+        </div>
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
@@ -269,9 +289,10 @@ function ResponsesTab({
             { label: 'Pass Rate',  value: completedAttempts.length ? `${passRate}%` : '--',      Icon: TrendingUp,  color: '#10b981' },
             { label: 'Top Score',  value: completedAttempts.length ? `${topScore}%` : '--',      Icon: Trophy,      color: '#f59e0b' },
           ].map(({ label, value, Icon, color }) => (
-            <div key={label} className={`border rounded-2xl p-5 ${card}`}>
+            <div key={label} className={`relative overflow-hidden border rounded-2xl p-5 ${card}`}>
+              <span className="absolute inset-x-0 top-0 h-0.5" style={{ background: color }} />
               <div className="flex items-center gap-2 mb-3">
-                <Icon className="w-4 h-4" style={{ color }} />
+                <span className="grid h-8 w-8 place-items-center rounded-lg" style={{ background: `${color}14` }}><Icon className="w-4 h-4" style={{ color }} /></span>
                 <span className={`text-xs font-medium uppercase tracking-wide ${textMut}`}>{label}</span>
               </div>
               <p className={`text-3xl font-bold ${textPrim}`}>{value}</p>
@@ -284,9 +305,7 @@ function ResponsesTab({
           <div className={`border rounded-3xl overflow-hidden ${card}`}>
             <div className={`px-6 py-4 border-b flex items-center justify-between ${cardHeader}`}>
               <h3 className={`text-base font-semibold ${textPrim}`}>Question Breakdown</h3>
-              <button onClick={onExport} className={`flex items-center gap-1.5 text-xs transition-colors hover:opacity-60 ${textMut}`}>
-                <Download className="w-3.5 h-3.5" /> Export CSV
-              </button>
+              <span className={`text-[11px] font-medium ${textMut}`}>{questionStats.length} items</span>
             </div>
             <div className={`divide-y ${dividerCls}`}>
               {questionStats.map((q: any, i: number) => (
@@ -1034,6 +1053,7 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
   const isVE      = cfg.isVirtualExperience === true;
   const { theme } = useTheme();
   const isDark = theme !== 'light';
+  const courseAccent = cfg.customAccent || COURSE_THEME_ACCENTS[cfg.theme] || '#00bf63';
 
   // Segment counts for VEs (fetched on mount); courses derive from props
   const [veAttempts, setVeAttempts] = useState<any[]>([]);
@@ -1301,7 +1321,9 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
   ] as { value: typeof quickType; label: string }[];
 
   // -- Shared style tokens --
-  const card = 'overflow-hidden';
+  const card = isDark
+    ? 'overflow-hidden rounded-2xl border border-zinc-800/60 bg-zinc-900/35'
+    : 'overflow-hidden rounded-2xl border border-[rgba(0,0,0,0.07)] bg-white';
 
   const cardHeader = isDark
     ? 'px-6 py-4 border-b border-zinc-800 flex items-center gap-3'
@@ -1330,17 +1352,21 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
         ? 'flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm bg-rose-500/10 border border-rose-500/20 text-rose-400'
         : 'flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm bg-red-50 border border-red-200 text-red-600');
 
-  const iconColor = isDark ? 'text-emerald-400' : 'text-emerald-600';
-  const sectionIconBg = isDark ? 'p-2 rounded-lg bg-emerald-500/10' : 'p-2 rounded-lg bg-emerald-50';
+  const sectionIconBg = 'p-2 rounded-lg';
 
   return (
     <div className="w-full space-y-4 py-2">
+      <div className="pb-2">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: courseAccent }}>Communication</p>
+        <h2 className={isDark ? 'mt-1 text-xl font-bold text-white sm:text-2xl' : 'mt-1 text-xl font-bold text-gray-900 sm:text-2xl'}>Email studio</h2>
+        <p className={isDark ? 'mt-1 max-w-2xl text-sm leading-relaxed text-zinc-500' : 'mt-1 max-w-2xl text-sm leading-relaxed text-gray-400'}>Compose updates, target learners by progress, and test every message before sending.</p>
+      </div>
 
       {/* -- Blast Email -- */}
       <div className={card}>
         <div className={cardHeader}>
-          <div className={sectionIconBg}>
-            <Mail className={`w-4 h-4 ${iconColor}`} />
+          <div className={sectionIconBg} style={{ background: `${courseAccent}14` }}>
+            <Mail className="w-4 h-4" style={{ color: courseAccent }} />
           </div>
           <div>
             <p className={cardTitle}>Broadcast Email</p>
@@ -1362,15 +1388,12 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
                   <button
                     key={c.id}
                     onClick={() => { setSelectedCohortId(c.id); setBlastResult(null); }}
-                    className={`py-1.5 px-3 rounded-xl text-xs font-medium border transition-all ${
-                      selectedCohortId === c.id
-                        ? isDark
-                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
-                          : 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                        : isDark
-                          ? 'border-zinc-700/60 text-zinc-500 hover:border-zinc-600 hover:text-zinc-400'
-                          : 'border-[rgba(0,0,0,0.07)] text-[#888] hover:border-[rgba(0,0,0,0.14)] hover:text-[#555] bg-white'
-                    }`}
+                    className="rounded-xl border px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-75"
+                    style={{
+                      borderColor: selectedCohortId === c.id ? `${courseAccent}55` : isDark ? 'rgba(63,63,70,0.6)' : 'rgba(0,0,0,0.07)',
+                      background: selectedCohortId === c.id ? `${courseAccent}12` : 'transparent',
+                      color: selectedCohortId === c.id ? courseAccent : isDark ? '#71717a' : '#888',
+                    }}
                   >
                     {c.name}
                   </button>
@@ -1395,15 +1418,12 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
                     <button
                       key={seg.value}
                       onClick={() => { setBlastSegment(seg.value); setBlastResult(null); }}
-                      className={`py-2.5 px-2 rounded-xl text-xs font-medium border transition-all flex flex-col items-center gap-0.5 ${
-                        active
-                          ? isDark
-                            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
-                            : 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                          : isDark
-                            ? 'border-zinc-700/60 text-zinc-500 hover:border-zinc-600 hover:text-zinc-400'
-                            : 'border-[rgba(0,0,0,0.07)] text-[#888] hover:border-[rgba(0,0,0,0.14)] hover:text-[#555] bg-white'
-                      }`}
+                      className="flex flex-col items-center gap-0.5 rounded-xl border px-2 py-2.5 text-xs font-semibold transition-opacity hover:opacity-75"
+                      style={{
+                        borderColor: active ? `${courseAccent}55` : isDark ? 'rgba(63,63,70,0.6)' : 'rgba(0,0,0,0.07)',
+                        background: active ? `${courseAccent}12` : 'transparent',
+                        color: active ? courseAccent : isDark ? '#71717a' : '#888',
+                      }}
                     >
                       {count !== undefined && (
                         <span className={`text-base font-bold leading-none ${active ? '' : isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
@@ -1419,8 +1439,8 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
           )}
           <div className={isDark ? 'rounded-xl border border-zinc-800 bg-zinc-950/50 p-4 space-y-3' : 'rounded-xl border border-[rgba(0,0,0,0.07)] bg-[#f5f6f7] p-4 space-y-3'}>
             <div className="flex items-start gap-3">
-              <div className={sectionIconBg}>
-                <Sparkles className={`w-4 h-4 ${iconColor}`} />
+              <div className={sectionIconBg} style={{ background: `${courseAccent}14` }}>
+                <Sparkles className="w-4 h-4" style={{ color: courseAccent }} />
               </div>
               <div className="min-w-0">
                 <p className={cardTitle}>AI Draft</p>
@@ -1471,7 +1491,7 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
               onClick={handleGenerateBroadcastEmail}
               disabled={blastAiLoading}
               className={primaryBtn}
-              style={{ background: '#059669' }}
+              style={{ background: courseAccent }}
             >
               {blastAiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Sparkles className="w-4 h-4" /> Generate Broadcast Email</>}
             </button>
@@ -1510,7 +1530,7 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
             onClick={handleBlast}
             disabled={blasting || !blastSubject.trim() || !blastBody.trim()}
             className={primaryBtn}
-            style={{ background: '#059669' }}
+            style={{ background: courseAccent }}
           >
             {blasting
               ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -1528,8 +1548,8 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
       {isEvent && (
         <div className={card}>
           <div className={cardHeader}>
-            <div className={sectionIconBg}>
-              <Bell className={`w-4 h-4 ${iconColor}`} />
+            <div className={sectionIconBg} style={{ background: `${courseAccent}14` }}>
+              <Bell className="w-4 h-4" style={{ color: courseAccent }} />
             </div>
             <div>
               <p className={cardTitle}>Event Reminder</p>
@@ -1566,7 +1586,7 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
               onClick={handleReminder}
               disabled={reminding}
               className={primaryBtn}
-              style={{ background: '#059669' }}
+              style={{ background: courseAccent }}
             >
               {reminding ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4" /> Send {reminderType === '1hr' ? '1-Hour' : '24-Hour'} Reminder</>}
             </button>
@@ -1577,8 +1597,8 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
       {/* -- Send Now (Quick Send) -- */}
       <div className={card}>
         <div className={cardHeader}>
-          <div className={sectionIconBg}>
-            <Send className={`w-4 h-4 ${iconColor}`} />
+          <div className={sectionIconBg} style={{ background: `${courseAccent}14` }}>
+            <Send className="w-4 h-4" style={{ color: courseAccent }} />
           </div>
           <div>
             <p className={cardTitle}>Test Send</p>
@@ -1634,7 +1654,7 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
             onClick={handleQuickSend}
             disabled={quickSending || !quickTo.trim()}
             className={primaryBtn}
-            style={{ background: '#059669' }}
+            style={{ background: courseAccent }}
           >
             {quickSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4" /> Send Email</>}
           </button>
@@ -1653,6 +1673,7 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
 function LeaderboardTab({ form, courseProgress }: { form: any; courseProgress: any[] }) {
   const { theme } = useTheme();
   const isDark = theme !== 'light';
+  const courseAccent = form.config?.customAccent || COURSE_THEME_ACCENTS[form.config?.theme] || '#00bf63';
 
   const passmark = form.config?.passmark ?? 50;
   const totalQ   = form.config?.questions?.length ?? 1;
@@ -1673,21 +1694,34 @@ function LeaderboardTab({ form, courseProgress }: { form: any; courseProgress: a
     return { color: isDark ? '#52525b' : '#a1a1aa', glow: 'none' };
   };
 
-  const bg   = 'bg-transparent';
+  const bg   = isDark ? 'bg-zinc-900/35' : 'bg-white';
   const bdr  = isDark ? 'border-zinc-800/60' : 'border-zinc-200';
   const txt  = isDark ? 'text-white'         : 'text-zinc-900';
   const muted = isDark ? 'text-zinc-500'     : 'text-zinc-400';
 
   if (rows.length === 0) return (
-    <div className={`rounded-2xl border p-16 text-center ${bg} ${bdr}`}>
-      <Trophy className="w-9 h-9 mx-auto mb-3 opacity-20 text-amber-400" />
-      <p className={`font-semibold ${txt}`}>No completions yet</p>
-      <p className={`text-sm mt-1 ${muted}`}>The leaderboard will populate once students complete the course.</p>
+    <div className="space-y-6">
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: courseAccent }}>Achievement</p>
+        <h2 className={`mt-1 text-xl font-bold sm:text-2xl ${txt}`}>Course leaderboard</h2>
+        <p className={`mt-1 max-w-2xl text-sm leading-relaxed ${muted}`}>Celebrate completed attempts and compare scores and earned XP.</p>
+      </div>
+      <div className={`rounded-2xl border p-16 text-center ${bg} ${bdr}`}>
+        <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl" style={{ background: `${courseAccent}12`, color: courseAccent }}><Trophy className="h-5 w-5" /></span>
+        <p className={`mt-4 font-semibold ${txt}`}>No completions yet</p>
+        <p className={`text-sm mt-1 ${muted}`}>The leaderboard will populate once students complete the course.</p>
+      </div>
     </div>
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: courseAccent }}>Achievement</p>
+        <h2 className={`mt-1 text-xl font-bold sm:text-2xl ${txt}`}>Course leaderboard</h2>
+        <p className={`mt-1 max-w-2xl text-sm leading-relaxed ${muted}`}>Celebrate completed attempts and compare scores and earned XP.</p>
+      </div>
 
       {/* -- Stats bar -- */}
       <div className="grid grid-cols-3 gap-3">
@@ -1696,7 +1730,8 @@ function LeaderboardTab({ form, courseProgress }: { form: any; courseProgress: a
           { label: 'Avg Score', value: `${avgPct}%`, color: '#10b981' },
           { label: 'Pass Rate', value: rows.length ? `${Math.round((passCount / rows.length) * 100)}%` : '--', color: '#f59e0b' },
         ].map(({ label, value, color }) => (
-          <div key={label} className={`rounded-2xl border px-5 py-4 ${bg} ${bdr}`}>
+          <div key={label} className={`relative overflow-hidden rounded-2xl border px-5 py-4 ${bg} ${bdr}`}>
+            <span className="absolute inset-x-0 top-0 h-0.5" style={{ background: color }} />
             <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color }}>{label}</p>
             <p className={`text-2xl font-black mt-1 ${txt}`}>{value}</p>
           </div>
@@ -1798,6 +1833,9 @@ function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUr
   const [currentStatus, setCurrentStatus] = useState<'draft' | 'published'>(form?.status ?? 'published');
   const { theme } = useTheme();
   const isLight = theme === 'light';
+  const isCourse = form.config?.isCourse === true;
+  const contentLabel = isCourse ? 'course' : 'form';
+  const courseAccent = form.config?.customAccent || COURSE_THEME_ACCENTS[form.config?.theme] || '#00bf63';
   const textPrim  = isLight ? '#111'              : '#fff';
   const textMut   = isLight ? '#555'              : '#71717a';
   const divider   = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(63,63,70,0.6)';
@@ -1806,6 +1844,7 @@ function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUr
   const btnBg     = isLight ? '#f3f4f6'           : '#27272a';
   const btnBord   = isLight ? 'rgba(0,0,0,0.10)'  : '#3f3f46';
   const codeBg    = isLight ? '#f3f4f6'           : '#18181b';
+  const panelStyle = { background: isLight ? '#ffffff' : 'rgba(24,24,27,0.48)', border: `1px solid ${divider}` };
 
   const embedCode = `<iframe
   src="${formUrl}"
@@ -1819,7 +1858,7 @@ function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUr
 ></iframe>`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(formUrl)}&margin=12&color=ffffff&bgcolor=18181b&qzone=1`;
 
-  const shareText = encodeURIComponent(`Check out this form: ${form.title}`);
+  const shareText = encodeURIComponent(`Check out this ${contentLabel}: ${form.title}`);
   const shareUrl = encodeURIComponent(formUrl);
 
   const socialLinks = [
@@ -1888,9 +1927,14 @@ function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUr
   };
 
   return (
-    <div className="w-full" style={{ color: textPrim }}>
+    <div className="w-full space-y-4" style={{ color: textPrim }}>
+      <div className="pb-2">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: courseAccent }}>Course tools</p>
+        <h2 className="mt-1 text-xl font-bold sm:text-2xl" style={{ color: textPrim }}>Manage &amp; distribute</h2>
+        <p className="mt-1 max-w-2xl text-sm leading-relaxed" style={{ color: textMut }}>Control publishing, duplicate the course, and access every sharing format.</p>
+      </div>
       {/* Publish status */}
-      <div className="py-6 flex items-center justify-between gap-4" style={{ borderBottom: `1px solid ${divider}` }}>
+      <div className="flex items-center justify-between gap-4 rounded-2xl p-5 sm:p-6" style={panelStyle}>
         <div className="flex items-center gap-3">
           {currentStatus === 'published'
             ? <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
@@ -1926,12 +1970,12 @@ function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUr
       )}
 
       {/* Clone */}
-      <div className="py-6 flex items-center justify-between gap-4" style={{ borderBottom: `1px solid ${divider}` }}>
+      <div className="flex items-center justify-between gap-4 rounded-2xl p-5 sm:p-6" style={panelStyle}>
         <div className="flex items-center gap-3">
           <GitFork className="w-5 h-5 text-violet-400 flex-shrink-0" />
           <div>
-            <p className="text-base font-semibold" style={{ color: textPrim }}>Clone Form</p>
-            <p className="text-sm mt-0.5" style={{ color: textMut }}>Duplicate this form as a new draft</p>
+            <p className="text-base font-semibold" style={{ color: textPrim }}>Clone {isCourse ? 'Course' : 'Form'}</p>
+            <p className="text-sm mt-0.5" style={{ color: textMut }}>Duplicate this {contentLabel} as a new draft</p>
           </div>
         </div>
         <button
@@ -1945,7 +1989,7 @@ function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUr
       </div>
 
       {/* Share link */}
-      <div className="py-6 space-y-3" style={{ borderBottom: `1px solid ${divider}` }}>
+      <div className="space-y-3 rounded-2xl p-5 sm:p-6" style={panelStyle}>
         <div className="flex items-center gap-3 mb-3">
           <Share2 className="w-5 h-5 text-blue-400 flex-shrink-0" />
           <div>
@@ -1966,7 +2010,7 @@ function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUr
       </div>
 
       {/* Social share */}
-      <div className="py-6 space-y-3" style={{ borderBottom: `1px solid ${divider}` }}>
+      <div className="space-y-3 rounded-2xl p-5 sm:p-6" style={panelStyle}>
         <div className="flex items-center gap-3">
           <Share2 className="w-5 h-5 text-pink-400 flex-shrink-0" />
           <div>
@@ -1992,7 +2036,7 @@ function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUr
       </div>
 
       {/* HTML Embed */}
-      <div className="py-6 space-y-3" style={{ borderBottom: `1px solid ${divider}` }}>
+      <div className="space-y-3 rounded-2xl p-5 sm:p-6" style={panelStyle}>
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Code2 className="w-5 h-5 text-amber-400 flex-shrink-0" />
@@ -2016,12 +2060,12 @@ function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUr
       </div>
 
       {/* QR Code */}
-      <div className="py-6 space-y-3" style={{ borderBottom: `1px solid ${divider}` }}>
+      <div className="space-y-3 rounded-2xl p-5 sm:p-6" style={panelStyle}>
         <div className="flex items-center gap-3">
           <QrCode className="w-5 h-5 text-emerald-400 flex-shrink-0" />
           <div>
             <p className="text-base font-semibold" style={{ color: textPrim }}>QR Code</p>
-            <p className="text-sm mt-0.5" style={{ color: textMut }}>Scan to open the form</p>
+            <p className="text-sm mt-0.5" style={{ color: textMut }}>Scan to open the {contentLabel}</p>
           </div>
         </div>
         <div className="flex items-start gap-5">
@@ -2036,7 +2080,7 @@ function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUr
       </div>
 
       {/* Open live */}
-      <div className="py-6 flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 rounded-2xl p-5 sm:p-6" style={panelStyle}>
         <div className="flex items-center gap-3">
           <ExternalLink className="w-5 h-5 flex-shrink-0" style={{ color: textMut }} />
           <div>
@@ -2635,7 +2679,7 @@ export default function FormDetailPage() {
 
   const type = getFormType(form.config);
   const meta = TYPE_META[type];
-  const tabAccent = form.config?.customAccent || green;
+  const tabAccent = form.config?.customAccent || COURSE_THEME_ACCENTS[form.config?.theme] || green;
 
   const lightBadge: Record<string, string> = {
     course: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -2645,8 +2689,8 @@ export default function FormDetailPage() {
 
   return (
     <main className="min-h-screen font-sans" style={{ background: bg, color: textPrim }}>
-      {/* -- Top header -- */}
-      <header className="sticky top-0 z-20 backdrop-blur-md" style={{ background: navBg }}>
+      {/* The course editor provides its own focused studio header and actions. */}
+      {type !== 'course' && <header className="sticky top-0 z-20 backdrop-blur-md" style={{ background: navBg }}>
         <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-2 sm:gap-4">
           <Link href="/dashboard" className="transition-colors flex-shrink-0 hover:opacity-60" style={{ color: hdrTextMut }}>
             <ArrowLeft className="w-5 h-5" />
@@ -2683,7 +2727,7 @@ export default function FormDetailPage() {
           </div>
         </div>
 
-      </header>
+      </header>}
 
       {/* -- Top tab navigation with a full-width content workspace -- */}
       <div className="px-3 sm:px-6 pt-5 pb-10">
@@ -2693,12 +2737,12 @@ export default function FormDetailPage() {
           return (
             <div className="max-w-6xl mx-auto flex flex-col gap-4">
               {/* Top: tabs stay reachable and scroll horizontally on narrow screens. */}
-              <div className="sticky top-12 sm:top-14 z-10 -mx-1 px-1 py-1.5" style={{ background: bg }}>
+              <div className={`${type === 'course' ? 'sticky top-0' : 'sticky top-12 sm:top-14'} z-10 -mx-1 px-1 py-1.5`} style={{ background: bg }}>
               <nav className="flex items-center gap-1 overflow-x-auto rounded-xl p-1" aria-label="Content dashboard sections" style={{ scrollbarWidth: 'none', background: isLight ? 'rgba(255,255,255,0.68)' : 'rgba(255,255,255,0.035)', backdropFilter: 'blur(14px)' }}>
                 {visibleTabs.map(tab => {
                   const isActive = activeTab === tab.id;
-                  const hoverBg  = isLight ? 'rgba(0,0,0,0.045)' : 'rgba(255,255,255,0.055)';
-                  const activeBg = `color-mix(in oklab, ${tabAccent} ${isLight ? '9%' : '13%'}, transparent)`;
+                  const hoverBg = isLight ? 'rgba(0,0,0,0.045)' : 'rgba(255,255,255,0.055)';
+                  const activeBg = `color-mix(in oklab, ${tabAccent} ${isLight ? '10%' : '14%'}, transparent)`;
                   return (
                     <button
                       key={tab.id}
@@ -2706,13 +2750,13 @@ export default function FormDetailPage() {
                       onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = hoverBg; }}
                       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                       aria-current={isActive ? 'page' : undefined}
-                      className="flex min-h-10 items-center gap-2 px-3.5 py-2 text-sm transition-colors whitespace-nowrap text-left rounded-lg"
-                      style={{ color: isActive ? (isLight ? `color-mix(in oklab, ${tabAccent} 76%, #000)` : `color-mix(in oklab, ${tabAccent} 68%, #fff)`) : hdrTextMut, fontWeight: isActive ? 700 : 550, background: isActive ? activeBg : 'transparent', boxShadow: isActive ? `inset 0 -2px 0 ${tabAccent}` : 'none' }}
+                      className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3.5 py-2 text-left text-sm transition-colors"
+                      style={{ color: isActive ? tabAccent : hdrTextMut, fontWeight: isActive ? 700 : 550, background: isActive ? activeBg : 'transparent' }}
                     >
-                      <tab.Icon className="w-4 h-4 flex-shrink-0" />
+                      <tab.Icon className="h-4 w-4 flex-shrink-0" />
                       <span>{tabLabel(tab)}</span>
                       {tab.id === 'responses' && totalCount > 0 && (
-                        <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold" style={{ background: isActive ? `color-mix(in oklab, ${tabAccent} 18%, transparent)` : (isLight ? 'rgba(0,0,0,0.06)' : '#3f3f46'), color: isActive ? 'inherit' : hdrTextMut }}>
+                        <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-bold" style={{ background: isActive ? `color-mix(in oklab, ${tabAccent} 18%, transparent)` : (isLight ? 'rgba(0,0,0,0.06)' : '#3f3f46'), color: isActive ? tabAccent : hdrTextMut }}>
                           {totalCount}
                         </span>
                       )}
