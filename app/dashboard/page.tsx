@@ -296,7 +296,7 @@ export default function DashboardPage() {
             transition={{ duration: 0.2 }}
           >
             {/* Section header */}
-            <div className="flex flex-wrap items-start sm:items-center justify-between gap-3 mb-6 sm:mb-8">
+            <div className={`flex flex-wrap items-start sm:items-center justify-between gap-3 mb-6 sm:mb-8 ${activeSection === 'learning_paths' ? 'hidden' : ''}`}>
               <div>
                 <h1 className="text-2xl font-bold tracking-tight" style={{ color: C.text }}>{activeItem.label}</h1>
                 {(activeSection === 'courses' || activeSection === 'events') && (

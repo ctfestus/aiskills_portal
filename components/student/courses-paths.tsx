@@ -1,6 +1,6 @@
 'use client';
 
-// Courses + Learning Paths sections, extracted verbatim from app/student/page.tsx.
+// Courses and learning-path journeys shared by the learner dashboard.
 // Only the two section components are exported; the rest are file-internal.
 
 import { useEffect, useState, useMemo, useRef } from 'react';
@@ -371,10 +371,12 @@ function PathRow({ path, C }: { path: any; C: typeof LIGHT_C }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const totalItems     = (path.item_ids ?? []).length;
   const completedIds: string[] = path.progress?.completed_item_ids ?? [];
-  const completedCount = completedIds.length;
+  const completedCount = (path.item_ids ?? []).filter((id: string) => completedIds.includes(id)).length;
   const allDone        = completedCount === totalItems && totalItems > 0;
   const pathCertId     = path.progress?.cert_id ?? null;
   const items: any[]   = path.items ?? [];
+  const progressPct    = totalItems > 0 ? Math.round((completedCount / totalItems) * 100) : 0;
+  const currentIndex   = items.findIndex((item: any) => !completedIds.includes(item.id));
 
   const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
 
@@ -397,12 +399,26 @@ function PathRow({ path, C }: { path: any; C: typeof LIGHT_C }) {
   useEffect(() => () => cancelClose(), []);
 
   return (
-    <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
-      {/* Header: title + nav arrows */}
-      <div className="flex items-start justify-between gap-4 mb-1">
-        <div className="min-w-0">
+    <section className="rounded-[22px] overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+      <div className="p-5 sm:p-7">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
           <h3 className="text-xl sm:text-2xl font-bold leading-tight" style={{ color: C.text }}>{path.title}</h3>
-          {allDone && <span className="inline-block mt-1.5 text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#f0fdf4', color: '#16a34a' }}>Completed</span>}
+          {path.description && <p className="text-sm mt-2 max-w-3xl leading-relaxed" style={{ color: C.muted }}>{path.description}</p>}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-4 text-xs" style={{ color: C.faint }}>
+            <span>{completedCount} of {totalItems} milestones complete</span>
+            {currentIndex >= 0 && !allDone && (
+              <motion.span key={items[currentIndex]?.id ?? currentIndex}
+                initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                className="flex items-center gap-1.5 min-w-0 max-w-full">
+                <motion.span aria-hidden="true" className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#22c55e' }}
+                  animate={{ scale: [0.85, 1.15, 0.85], opacity: [0.65, 1, 0.65] }} transition={{ duration: 1.8, repeat: Infinity }}/>
+                <span className="flex-shrink-0">Currently learning:</span>
+                <strong className="font-semibold truncate max-w-[min(56vw,420px)]" style={{ color: C.muted }}>{items[currentIndex]?.title ?? 'Current milestone'}</strong>
+              </motion.span>
+            )}
+            {allDone && <span className="font-bold" style={{ color: '#16a34a' }}>Completed</span>}
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {pathCertId && (
@@ -425,10 +441,41 @@ function PathRow({ path, C }: { path: any; C: typeof LIGHT_C }) {
         </div>
       </div>
 
-      {path.description && <p className="text-sm mt-2 mb-4" style={{ color: C.muted }}>{path.description}</p>}
+      <div className="mt-5">
+        <div className="flex items-center justify-between text-[11px] mb-2">
+          <span style={{ color: C.faint }}>Overall progress</span>
+          <span className="font-bold" style={{ color: allDone ? '#16a34a' : C.text }}>{progressPct}%</span>
+        </div>
+        <div className="flex items-center">
+          <div className="flex-1 h-1.5 rounded-l-full overflow-hidden" style={{ background: C.pill }}>
+            <motion.div initial={{ width: 0 }} animate={{ width: `${progressPct}%` }} transition={{ duration: 0.55, ease: [0.16,1,0.3,1] }} className="h-full rounded-l-full rounded-r-full" style={{ background: '#22c55e' }}/>
+          </div>
+          <span aria-hidden="true" className="w-3 sm:w-4 h-1.5 flex-shrink-0" style={{ background: allDone ? '#22c55e' : C.pill }}/>
+          <motion.div title={allDone ? 'Completion reward unlocked' : 'Complete the path to unlock your reward'}
+            aria-label={allDone ? 'Completion reward unlocked' : 'Completion reward'}
+            animate={allDone ? { scale: [1, 1.06, 1] } : { scale: 1 }}
+            transition={allDone ? { duration: 1.8, repeat: Infinity, repeatDelay: 1.4 } : undefined}
+            className="relative w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0">
+              <span className="absolute inset-0 rounded-xl" style={{ background: C.card, boxShadow: 'inset 0 0 0 1.5px rgba(34,197,94,0.34), 0 5px 14px rgba(22,163,74,0.10)' }}/>
+              <span aria-hidden="true" className="absolute inset-1.5 rounded-lg" style={{ background: 'rgba(34,197,94,0.08)' }}/>
+              <span className="absolute inset-0 z-10 grid place-items-center">
+                {path.badge_image_url
+                  ? <img src={path.badge_image_url} alt="Learning path reward" className="w-7 h-7 object-contain"/>
+                  : <Award className="w-5 h-5" style={{ color: '#16a34a' }}/>
+                }
+              </span>
+              {!allDone && (
+                <motion.span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
+                  style={{ background: '#22c55e', boxShadow: `0 0 0 2px ${C.card}` }}
+                  animate={{ scale: [0.8, 1.2, 0.8], opacity: [0.65, 1, 0.65] }}
+                  transition={{ duration: 1.8, repeat: Infinity }}/>
+              )}
+          </motion.div>
+        </div>
+      </div>
 
       {/* Carousel */}
-      <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-1 mt-4 snap-x"
+      <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-1 mt-5 snap-x"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
         {items.map((item: any, idx: number) => {
           const done      = completedIds.includes(item.id);
@@ -469,7 +516,8 @@ function PathRow({ path, C }: { path: any; C: typeof LIGHT_C }) {
           );
 
           return (
-            <div key={item.id} className="flex-shrink-0 w-[220px] snap-start"
+            <div key={item.id} className="flex-shrink-0 w-[230px] snap-start rounded-2xl p-3 transition-all"
+              style={{ background: isCurrent ? 'rgba(34,197,94,0.07)' : C.pill, boxShadow: isCurrent ? 'inset 0 0 0 2px #22c55e' : 'none', opacity: isLocked ? 0.72 : 1 }}
               onMouseEnter={(e) => openHover({ item, isVE, isCert, done, isCurrent, isLocked, href }, e.currentTarget)}
               onMouseLeave={scheduleClose}>
               {isLocked
@@ -478,6 +526,7 @@ function PathRow({ path, C }: { path: any; C: typeof LIGHT_C }) {
             </div>
           );
         })}
+      </div>
       </div>
 
       {/* Hover preview -- grows out of the hovered card */}
