@@ -2525,12 +2525,13 @@ export default function FormDetailPage() {
         formData = { ...veRow, content_type: 'virtual_experience', config: {
           isVirtualExperience: true, title: veRow.title, description: veRow.description,
           modules: veRow.modules ?? [], industry: veRow.industry, difficulty: veRow.difficulty,
-          role: veRow.role, company: veRow.company, duration: veRow.duration, tools: veRow.tools,
+          role: veRow.role, company: veRow.company, duration: veRow.duration, tools: veRow.tools, toolLogos: veRow.tool_logos ?? {},
           tagline: veRow.tagline, background: veRow.background, learnOutcomes: veRow.learn_outcomes,
           managerName: veRow.manager_name, managerTitle: veRow.manager_title,
           guideId: veRow.guide_id, guideSnapshot: veRow.guide_snapshot, dataset: veRow.dataset,
           coverImage: veRow.cover_image, deadline_days: veRow.deadline_days,
           theme: veRow.theme, mode: veRow.mode, font: veRow.font, customAccent: veRow.custom_accent,
+          isShortCourse: !!veRow.is_short_course, badgeImageUrl: veRow.badge_image_url,
         }};
       }
       if (!user) { window.location.href = '/auth'; return; }

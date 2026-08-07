@@ -201,9 +201,9 @@ export function PersonAvatar({ name, size, color, presence, avatarUrl, title, co
   const profileText = isDark ? '#f4f5f7' : '#172033';
   const profileMuted = isDark ? '#aeb4bf' : '#5f6b7a';
   const profileLine = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.10)';
-  const showProfile = (e: React.MouseEvent<HTMLDivElement>) => {
+  const showProfile = (target: HTMLElement) => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
-    const rect = e.currentTarget.getBoundingClientRect();
+    const rect = target.getBoundingClientRect();
     const cardWidth = 280;
     const roomOnRight = rect.right + 8 + cardWidth <= window.innerWidth - 12;
     const roomOnLeft = rect.left - 8 - cardWidth >= 12;
@@ -219,7 +219,18 @@ export function PersonAvatar({ name, size, color, presence, avatarUrl, title, co
     if (closeTimer.current) clearTimeout(closeTimer.current);
   };
   return (
-    <div onMouseEnter={showProfile} onMouseLeave={scheduleClose} style={{ position: 'relative', width: size, height: size, flexShrink: 0, cursor: 'default' }}>
+    <div
+      tabIndex={0}
+      role="button"
+      aria-label={`View ${name}'s profile`}
+      aria-expanded={profileOpen}
+      onMouseEnter={e => showProfile(e.currentTarget)}
+      onMouseLeave={scheduleClose}
+      onFocus={e => showProfile(e.currentTarget)}
+      onBlur={scheduleClose}
+      onClick={e => profileOpen ? setProfileOpen(false) : showProfile(e.currentTarget)}
+      onKeyDown={e => { if (e.key === 'Escape') setProfileOpen(false); if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); profileOpen ? setProfileOpen(false) : showProfile(e.currentTarget); } }}
+      style={{ position: 'relative', width: size, height: size, flexShrink: 0, cursor: 'pointer', outlineOffset: 3 }}>
       <div style={{ width: size, height: size, borderRadius: '50%', overflow: 'hidden', position: 'relative', background: color }}>
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: Math.floor(size * 0.33), fontWeight: 800, color: '#fff' }}>
           {initialsOf(name)}
@@ -235,7 +246,7 @@ export function PersonAvatar({ name, size, color, presence, avatarUrl, title, co
         <span style={{
           position: 'absolute', right: -1, bottom: -1, width: dotSize, height: dotSize, borderRadius: '50%',
           background: presence === 'active' ? '#2BAC76' : '#E8A427',
-          border: '2px solid #fff', boxSizing: 'border-box',
+          border: `2px solid ${isDark ? '#1a1b20' : '#fff'}`, boxSizing: 'border-box',
         }} />
       )}
       {profileOpen && typeof document !== 'undefined' && createPortal(

@@ -9,12 +9,13 @@ import { ImageLibrary } from '@/components/ImageLibrary';
 import type { LessonDoc } from '@/lib/lesson-doc';
 import { safeEmbedUrl, isHtmlEmbedUrl } from '@/lib/safe-embed-url';
 import { clampLinkedInSharePoints, DEFAULT_LINKEDIN_SHARE_POINTS, MAX_LINKEDIN_SHARE_POINTS } from '@/lib/course-schema';
+import { validateVirtualExperienceForPublish } from '@/lib/virtual-experience-validation';
 import { useTheme } from '@/components/ThemeProvider';
 import {
   ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight, ChevronLeft,
   Plus, Trash2, X, Check, Upload, Pencil, Star, Clock, Download,
   Link as LinkIcon, FileText, FileCode, Database, PenLine, Table, GripVertical, Video, Search, Eye, Images, Paperclip, Mail,
-  Blocks, Building2, MessageSquareText, Workflow, Palette, CheckCircle2,
+  Blocks, Building2, MessageSquareText, Workflow, Palette, CheckCircle2, AlertTriangle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { RichTextEditor } from '@/components/RichTextEditor';
@@ -133,7 +134,7 @@ interface Requirement {
   id: string;
   label: string;
   description: string;
-  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review' | 'linkedin_share';
+  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review' | 'document_review' | 'linkedin_share';
   options?: string[];
   optionFeedback?: string[];
   correctAnswer?: string;
@@ -142,6 +143,7 @@ interface Requirement {
   schema?: string;
   context?: string;
   minScore?: number;
+  documentReviewMode?: 'ai_only' | 'manual' | 'hybrid';
   aiReview?: boolean;
   emailFrame?: boolean;
   emailBody?: string;
@@ -400,6 +402,7 @@ function VirtualExperienceCreatePageInner() {
   const [uploadingCover, setUploadingCover] = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [saveError,   setSaveError]   = useState('');
+  const [saveWarning, setSaveWarning] = useState('');
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
   const [editingField, setEditingField] = useState<string | null>(null);
 
@@ -429,6 +432,7 @@ function VirtualExperienceCreatePageInner() {
   const [bunnyError,         setBunnyError]         = useState('');
   const [sessionToken,       setSessionToken]       = useState('');
   const [experienceGuides, setExperienceGuides] = useState<any[]>([]);
+  const [guidesLoading, setGuidesLoading] = useState(false);
   const [showGuideForm, setShowGuideForm] = useState(false);
   const [showGuideManager, setShowGuideManager] = useState(false);
   const [editingGuideId, setEditingGuideId] = useState<string | null>(null);
@@ -438,6 +442,21 @@ function VirtualExperienceCreatePageInner() {
   const [guideDraft, setGuideDraft] = useState(emptyGuideDraft);
   const guidePhotoRef = useRef<HTMLInputElement>(null);
 
+  const loadExperienceGuides = useCallback(async (token: string) => {
+    setGuidesLoading(true);
+    setGuideError('');
+    try {
+      const response = await fetch('/api/experience-guides', { headers: { Authorization: `Bearer ${token}` } });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Could not load experience guides.');
+      setExperienceGuides([...(payload.guides ?? []), ...(payload.instructors ?? [])]);
+    } catch (error: any) {
+      setGuideError(error?.message || 'Could not load experience guides.');
+    } finally {
+      setGuidesLoading(false);
+    }
+  }, []);
+
   // Load cohorts + existing project if editing
   useEffect(() => {
     const init = async () => {
@@ -445,11 +464,7 @@ function VirtualExperienceCreatePageInner() {
       if (!session) { router.push('/auth'); return; }
       setSessionToken(session.access_token);
 
-      const guideRes = await fetch('/api/experience-guides', { headers: { Authorization: `Bearer ${session.access_token}` } });
-      if (guideRes.ok) {
-        const guideJson = await guideRes.json();
-        setExperienceGuides([...(guideJson.guides ?? []), ...(guideJson.instructors ?? [])]);
-      }
+      await loadExperienceGuides(session.access_token);
 
       const { data: cohortData } = await supabase.from('cohorts').select('id, name').order('name');
       setCohorts(cohortData ?? []);
@@ -493,7 +508,7 @@ function VirtualExperienceCreatePageInner() {
       }
     };
     init();
-  }, [editId, router]);
+  }, [editId, router, loadExperienceGuides]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -1101,12 +1116,20 @@ function VirtualExperienceCreatePageInner() {
 
   const handleSave = async (status: 'draft' | 'published') => {
     if (!config || !title.trim()) { setSaveError('Title is required'); return; }
+    if (status === 'published') {
+      const readinessIssues = validateVirtualExperienceForPublish(config);
+      if (readinessIssues.length) {
+        setSaveError(readinessIssues[0].message);
+        setActiveSection(readinessIssues[0].section);
+        return;
+      }
+    }
     if (status === 'published' && config.guideSnapshot?.sourceType === 'external' && config.guideSnapshot.consentStatus !== 'confirmed') {
       setSaveError('Confirm permission to use the selected professional’s name and photo before publishing.');
       setActiveSection('brief');
       return;
     }
-    setSaving(true); setSaveError(''); setSaveSuccess(false);
+    setSaving(true); setSaveError(''); setSaveWarning(''); setSaveSuccess(false);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
@@ -1131,7 +1154,10 @@ function VirtualExperienceCreatePageInner() {
       });
 
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to save');
+      if (!res.ok) {
+        if (Array.isArray(json.issues) && json.issues[0]?.section) setActiveSection(json.issues[0].section);
+        throw new Error(json.error || 'Failed to save');
+      }
 
       // Stay in the editor so the user can keep editing. Remember the new id (and reflect it in
       // the URL without a reload) so repeat saves update this record instead of creating new ones.
@@ -1140,6 +1166,7 @@ function VirtualExperienceCreatePageInner() {
         window.history.replaceState(null, '', `/create/guided-project?id=${json.id}`);
       }
       if (json.slug) setVeSlug(json.slug);
+      if (json.registrationWarning) setSaveWarning(json.registrationWarning);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2500);
     } catch (e: any) {
@@ -1228,6 +1255,18 @@ function VirtualExperienceCreatePageInner() {
       </header>
 
       <div className={`px-4 sm:px-6 pb-4 ${step === 2 ? 'pt-0' : 'pt-3'}`}>
+        {step === 2 && (saveError || saveWarning) && (
+          <div className="max-w-6xl mx-auto pt-3">
+            <div className="px-4 py-3 rounded-xl text-[13px] flex items-start gap-2"
+              role="status"
+              style={saveError
+                ? { background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }
+                : { background: 'rgba(245,158,11,0.09)', color: '#d97706', border: '1px solid rgba(245,158,11,0.22)' }}>
+              <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <span>{saveError || saveWarning}</span>
+            </div>
+          </div>
+        )}
 
         {/* STEP 1: Configure */}
         {step === 1 && (
@@ -1824,8 +1863,8 @@ function VirtualExperienceCreatePageInner() {
                           </button>
                         </div>
                       </div>
-                      <select value={config.guideId || ''} onChange={e => selectExperienceGuide(e.target.value)} style={{ ...inp, fontSize: 13 }}>
-                        <option value="">Default generated manager</option>
+                      <select disabled={guidesLoading} value={config.guideId || ''} onChange={e => selectExperienceGuide(e.target.value)} style={{ ...inp, fontSize: 13, opacity: guidesLoading ? 0.7 : 1 }}>
+                        <option value="">{guidesLoading ? 'Loading profiles...' : 'Default generated manager'}</option>
                         {experienceGuides.some(g => g.source_type === 'external' && (g.status !== 'archived' || g.id === config.guideId)) && <optgroup label="External professionals">
                           {experienceGuides.filter(g => g.source_type === 'external' && (g.status !== 'archived' || g.id === config.guideId)).map(g => <option key={g.id} value={g.id}>{g.full_name}{g.professional_title ? ` — ${g.professional_title}` : ''}{g.status === 'archived' ? ' (Archived)' : ''}</option>)}
                         </optgroup>}
@@ -1833,6 +1872,10 @@ function VirtualExperienceCreatePageInner() {
                           {experienceGuides.filter(g => g.source_type === 'instructor').map(g => <option key={g.id} value={g.id}>{g.full_name}</option>)}
                         </optgroup>}
                       </select>
+                      {guideError && !showGuideForm && <div role="alert" className="mt-2 flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-[12px]" style={{ background: 'rgba(239,68,68,0.08)', color: '#dc2626' }}>
+                        <span>{guideError}</span>
+                        <button type="button" disabled={guidesLoading || !sessionToken} onClick={() => loadExperienceGuides(sessionToken)} className="font-bold underline underline-offset-2">Retry</button>
+                      </div>}
                     </div>
 
                     {showGuideManager && <div className="sm:col-span-2 rounded-2xl overflow-hidden" style={{ border: `1px solid ${C.divider}` }}>
@@ -2124,6 +2167,7 @@ function VirtualExperienceCreatePageInner() {
                                             dashboard_critique: { bg: 'rgba(16,185,129,0.12)',   color: '#10b981',   label: 'AI Dashboard Critique' },
                                             code_review:        { bg: 'rgba(99,102,241,0.12)',   color: '#6366f1',   label: 'AI Code Review' },
                                             excel_review:       { bg: 'rgba(34,197,94,0.12)',    color: '#22c55e',   label: 'AI Excel Review' },
+                                            document_review:    { bg: 'rgba(14,165,233,0.12)',   color: '#0ea5e9',   label: 'AI Document Review' },
                                           };
                                           const tc = TYPE_COLORS[req.type] || TYPE_COLORS.mcq;
                                           return (
@@ -2169,6 +2213,7 @@ function VirtualExperienceCreatePageInner() {
                                                   <option value="dashboard_critique">AI Dashboard Critique</option>
                                                   <option value="code_review">AI Code Review</option>
                                                   <option value="excel_review">AI Excel Review</option>
+                                                  <option value="document_review">AI Document Review</option>
                                                 </select>
                                                 {!['briefing','scenario_update','decision','debrief'].includes(req.type) && (
                                                   <button
@@ -2578,6 +2623,29 @@ function VirtualExperienceCreatePageInner() {
                                                     inp={inp}
                                                     sessionToken={sessionToken}
                                                   />
+                                                </div>
+                                              )}
+                                              {req.type === 'document_review' && (
+                                                <div className="space-y-3">
+                                                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: C.card, color: C.muted }}>
+                                                    <FileText className="w-3 h-3 flex-shrink-0" />Students upload a PDF, Word document, or text file for rubric-based review.
+                                                  </div>
+                                                  <div>
+                                                    <p className="text-[11px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: C.muted }}>Document context</p>
+                                                    <textarea value={req.context ?? ''} onChange={e => updateReq(mod.id, les.id, req.id, { context: e.target.value })} rows={3}
+                                                      placeholder="Describe the intended audience, purpose, and any important requirements."
+                                                      className="w-full resize-none outline-none text-[12px] px-3 py-2.5 rounded-lg" style={{ background: C.card, color: C.text, border: `1px solid ${C.cardBorder}` }} />
+                                                  </div>
+                                                  <div className="flex flex-wrap items-center gap-3">
+                                                    <select value={req.documentReviewMode ?? 'ai_only'} onChange={e => updateReq(mod.id, les.id, req.id, { documentReviewMode: e.target.value as Requirement['documentReviewMode'] })} style={{ ...inp, width: 'auto', fontSize: 12 }}>
+                                                      <option value="ai_only">AI review</option><option value="manual">Instructor review</option><option value="hybrid">AI + instructor review</option>
+                                                    </select>
+                                                    <label className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: C.muted }}>Pass score</label>
+                                                    <input type="number" min={0} max={100} value={req.minScore ?? ''} onChange={e => updateReq(mod.id, les.id, req.id, { minScore: e.target.value === '' ? undefined : Number(e.target.value) })}
+                                                      placeholder="70" className="w-20 outline-none text-[12px] px-2 py-1.5 rounded-lg" style={{ background: C.card, color: C.text, border: `1px solid ${C.cardBorder}` }} />
+                                                    <span className="text-[11px]" style={{ color: C.muted }}>out of 100</span>
+                                                  </div>
+                                                  <RubricBuilder criteria={req.rubric ?? []} onChange={rubric => updateReq(mod.id, les.id, req.id, { rubric })} C={C} inp={inp} sessionToken={sessionToken} />
                                                 </div>
                                               )}
                                             </div>

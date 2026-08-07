@@ -20,7 +20,9 @@ import type { LessonDoc } from '@/lib/lesson-doc';
 import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
 import CodeReviewPlayer from '@/components/CodeReviewPlayer';
 import ExcelReviewPlayer from '@/components/ExcelReviewPlayer';
+import DocumentReviewPlayer from '@/components/DocumentReviewPlayer';
 import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRecord';
+import { safeVeUploadName, validateVeSubmissionFile, VE_SUBMISSION_ACCEPT } from '@/lib/ve-upload';
 import {
   Person, AttachmentCard, ArrivalIndicator, arrivalKindFor, companyDomain, personEmail, firstNameOf,
   workStamp, startTypingSound, anchorZone, quoteSnippet, colleaguesFor, hashStr,
@@ -40,7 +42,7 @@ interface Requirement {
   id: string;
   label: string;
   description: string;
-  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review' | 'linkedin_share';
+  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review' | 'document_review' | 'linkedin_share';
   sharePrompt?: string;   // linkedin_share: suggested post text the student can copy
   // linkedin_share: only an explicit `true` gates the lesson. Absent/false = optional, never blocks.
   shareRequired?: boolean;
@@ -57,6 +59,7 @@ interface Requirement {
   schema?: string;
   context?: string;
   minScore?: number;
+  documentReviewMode?: 'ai_only' | 'manual' | 'hybrid';
   aiReview?: boolean;
   emailFrame?: boolean;
   emailBody?: string;
@@ -173,6 +176,7 @@ export default function AssignmentExperiencePlayer({
   const [activeLesson,  setActiveLesson]  = useState(modules[0]?.lessons[0]?.id ?? '');
   const [saving,        setSaving]        = useState(false);
   const [uploadingReq,  setUploadingReq]  = useState<string | null>(null);
+  const [uploadErrors,   setUploadErrors]   = useState<Record<string, string>>({});
   // linkedin_share deliverables: draft URL per requirement, plus claim state.
   const [shareDrafts,   setShareDrafts]   = useState<Record<string, string>>({});
   const [shareSaving,   setShareSaving]   = useState<string | null>(null);
@@ -348,13 +352,18 @@ export default function AssignmentExperiencePlayer({
 
   // File upload for upload requirements
   async function handleFileUpload(reqId: string, file: File, noComplete?: boolean) {
+    const validationError = validateVeSubmissionFile(file);
+    if (validationError) { setUploadErrors(prev => ({ ...prev, [reqId]: validationError })); return; }
+    setUploadErrors(prev => ({ ...prev, [reqId]: '' }));
     setUploadingReq(reqId);
     try {
-      const path = `ve-submissions/${formId}/${userId}/${reqId}/${Date.now()}-${file.name}`;
+      const path = `ve-submissions/${formId}/${userId}/${reqId}/${Date.now()}-${safeVeUploadName(file.name)}`;
       const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
       if (error) throw error;
       const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
       updateProgress(reqId, { fileUrl: publicUrl, ...(noComplete ? {} : { completed: true }) });
+    } catch (error: any) {
+      setUploadErrors(prev => ({ ...prev, [reqId]: error?.message || 'Upload failed. Check your connection and try again.' }));
     } finally { setUploadingReq(null); }
   }
 
@@ -1245,8 +1254,9 @@ export default function AssignmentExperiencePlayer({
                                           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 10, border: `1.5px dashed ${fileUrl ? `${accent}80` : fieldBorder}`, background: fileUrl ? `${accent}08` : fieldBg, boxShadow: fieldShadow, cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, color: fileUrl ? accent : muted }}>
                                             {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
                                             {uploading ? 'Uploading...' : (fileUrl ? 'Replace file' : 'Attach file')}
-                                            <input type="file" className="hidden" disabled={uploading} onChange={async e => { const file = e.target.files?.[0]; if (!file) return; await handleFileUpload(req.id, file, true); e.target.value = ''; }} />
+                                            <input type="file" accept={VE_SUBMISSION_ACCEPT} className="hidden" disabled={uploading} onChange={async e => { const file = e.target.files?.[0]; if (!file) return; await handleFileUpload(req.id, file, true); e.target.value = ''; }} />
                                           </label>
+                                          {uploadErrors[req.id] && <p role="alert" style={{ margin: '8px 0 0', color: '#ef4444', fontSize: 12 }}>{uploadErrors[req.id]}</p>}
                                           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                             <input value={linkUrl} onChange={e => updateProgress(req.id, { linkUrl: e.target.value })}
                                               placeholder="Or paste a link..." style={{ flex: 1, padding: '9px 12px', borderRadius: 10, border: `1.5px solid ${fieldBorder}`, background: fieldBg, boxShadow: fieldShadow, color: text, fontSize: 13, outline: 'none' }} />
@@ -1283,10 +1293,10 @@ export default function AssignmentExperiencePlayer({
                           }
 
                           // AI review types: full email thread
-                          if (req.type === 'dashboard_critique' || req.type === 'code_review' || req.type === 'excel_review') {
+                          if (req.type === 'dashboard_critique' || req.type === 'code_review' || req.type === 'excel_review' || req.type === 'document_review') {
                             const saved = prog;
                             const savedReport = parseReviewNotes(saved?.notes)?.report;
-                            const typeLabel = req.type === 'dashboard_critique' ? 'dashboard' : req.type === 'code_review' ? 'code' : 'Excel file';
+                            const typeLabel = req.type === 'dashboard_critique' ? 'dashboard' : req.type === 'code_review' ? 'code' : req.type === 'excel_review' ? 'Excel file' : 'document';
                             const startReview = () => {
                               setEfTyping(prev => ({ ...prev, [req.id]: true }));
                               anchorZone(req.id);
@@ -1308,7 +1318,7 @@ export default function AssignmentExperiencePlayer({
                                 {!isDone && !efTyping[req.id] && !efReviewing[req.id] && (
                                   <div style={{ padding: '14px 22px 18px' }}>
                                     <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: isDark ? '#6b7075' : '#9aa0a6', margin: '0 0 10px' }}>
-                                      {req.type === 'dashboard_critique' ? 'Attach your dashboard for review' : req.type === 'code_review' ? 'Paste or upload your code' : 'Upload your Excel file'}
+                                      {req.type === 'dashboard_critique' ? 'Attach your dashboard for review' : req.type === 'code_review' ? 'Paste or upload your code' : req.type === 'excel_review' ? 'Upload your Excel file' : 'Upload your document'}
                                     </p>
                                     {req.type === 'dashboard_critique' && (
                                       <DashboardCritiquePlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={false}
@@ -1327,6 +1337,11 @@ export default function AssignmentExperiencePlayer({
                                         savedResult={undefined} context={req.context} rubric={req.rubric} minScore={req.minScore}
                                         onReviewStart={startReview} onReviewError={onReviewError}
                                         onComplete={(result, passed) => { finishReview(); updateProgress(req.id, { completed: passed, notes: buildReviewNotes('excel_review', result, saved?.notes) }); }} />
+                                    )}
+                                    {req.type === 'document_review' && (
+                                      <DocumentReviewPlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={false}
+                                        context={req.context} rubric={req.rubric} minScore={req.minScore} documentReviewMode={req.documentReviewMode}
+                                        onComplete={(result, passed) => updateProgress(req.id, { completed: passed, notes: buildReviewNotes('document_review', result, saved?.notes) })} />
                                     )}
                                   </div>
                                 )}
@@ -1379,6 +1394,10 @@ export default function AssignmentExperiencePlayer({
                                         {req.type === 'excel_review' && (() => { const r = isFullReport('excel_review', savedReport) ? savedReport : undefined; return (
                                           <ExcelReviewPlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={true}
                                             savedResult={r as any} context={req.context} rubric={req.rubric} minScore={req.minScore} onComplete={() => {}} />
+                                        ); })()}
+                                        {req.type === 'document_review' && (() => { const r = isFullReport('document_review', savedReport) ? savedReport : undefined; return (
+                                          <DocumentReviewPlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={true}
+                                            savedResult={r as any} context={req.context} rubric={req.rubric} minScore={req.minScore} documentReviewMode={req.documentReviewMode} onComplete={() => {}} />
                                         ); })()}
                                       </div>
                                       <p style={{ margin: '18px 0 0' }}>Let me know if anything is unclear.</p>
@@ -1690,8 +1709,9 @@ export default function AssignmentExperiencePlayer({
                                   {uploading ? 'Uploading...' : fileUrl ? (readOnly ? 'Uploaded' : 'Uploaded. Click to replace.') : readOnly ? 'No file uploaded' : 'Click to upload your file'}
                                 </p>
                                 {fileUrl && <a href={fileUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[11px] underline" style={{ color: accent }}>View file</a>}
-                                <input type="file" className="hidden" disabled={readOnly} onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(req.id, f); }}/>
+                                <input type="file" accept={VE_SUBMISSION_ACCEPT} className="hidden" disabled={readOnly} onChange={async e => { const f = e.target.files?.[0]; if (f) await handleFileUpload(req.id, f); e.target.value = ''; }}/>
                               </label>
+                              {uploadErrors[req.id] && <p role="alert" className="text-[12px] flex items-center gap-1.5" style={{ color: '#ef4444' }}><AlertTriangle className="w-3.5 h-3.5" />{uploadErrors[req.id]}</p>}
                               <div className="ve-field-shell flex items-center gap-2 px-3 py-2.5 rounded-xl"
                                 style={{ border: `1.5px solid ${linkUrl ? `${accent}80` : fieldBorder}`, background: fieldBg, boxShadow: fieldShadow }}>
                                 <LinkIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: faint }}/>
@@ -1818,6 +1838,19 @@ export default function AssignmentExperiencePlayer({
                                   updateProgress(req.id, { completed: passed, notes: buildReviewNotes('excel_review', result, saved?.notes) });
                                 }}
                               />
+                            </div>
+                          );
+                        }
+
+                        if (req.type === 'document_review') {
+                          const saved = progress[req.id];
+                          const savedReport = parseReviewNotes(saved?.notes)?.report;
+                          return (
+                            <div key={req.id} className="space-y-3">
+                              <div className="flex items-start gap-2"><span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5" style={{ background: `${accent}12`, color: accent }}>AI Document Review</span><div className="flex-1"><p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>{req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}</div></div>
+                              <DocumentReviewPlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={isDone || readOnly}
+                                savedResult={isFullReport('document_review', savedReport) ? savedReport as any : undefined} context={req.context} rubric={req.rubric} minScore={req.minScore} documentReviewMode={req.documentReviewMode}
+                                onComplete={(result, passed) => updateProgress(req.id, { completed: passed, notes: buildReviewNotes('document_review', result, saved?.notes) })} />
                             </div>
                           );
                         }

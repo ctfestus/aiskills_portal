@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminClient } from '@/lib/admin-client';
 import { requireRole, isAuthError } from '@/lib/api-auth';
 import { sendAssignmentNotifications } from '@/lib/send-assignment-notification';
+import { validateVirtualExperienceForPublish } from '@/lib/virtual-experience-validation';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,8 +36,73 @@ export async function POST(req: NextRequest) {
   const formStatus = bodyStatus === 'draft' ? 'draft' : 'published';
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
   if (!config)        return NextResponse.json({ error: 'Config is required' }, { status: 400 });
-  if (formStatus === 'published' && config.guideSnapshot?.sourceType === 'external' && config.guideSnapshot?.consentStatus !== 'confirmed') {
-    return NextResponse.json({ error: 'Permission must be confirmed before publishing a professional profile.' }, { status: 400 });
+
+  if (formStatus === 'published') {
+    const readinessIssues = validateVirtualExperienceForPublish(config);
+    if (readinessIssues.length) {
+      return NextResponse.json({ error: readinessIssues[0].message, issues: readinessIssues }, { status: 400 });
+    }
+  }
+
+  // Guide identity and consent are server-owned facts. Never persist a browser-supplied
+  // snapshot directly: resolve the selected record, verify access, and build the public
+  // snapshot from canonical data so names, photos and consent cannot be forged.
+  let verifiedGuideId: string | null = null;
+  let verifiedGuideSnapshot: Record<string, unknown> | null = null;
+  const requestedGuideId = typeof config.guideId === 'string' ? config.guideId.trim() : '';
+  if (requestedGuideId.startsWith('instructor:')) {
+    const linkedUserId = requestedGuideId.slice('instructor:'.length);
+    const { data: instructor } = await supabase
+      .from('students')
+      .select('id, full_name, avatar_url, bio, social_links, work_experience, skills, role')
+      .eq('id', linkedUserId)
+      .maybeSingle();
+    if (!instructor || !['instructor', 'admin'].includes(instructor.role) || !instructor.full_name) {
+      return NextResponse.json({ error: 'The selected instructor profile is no longer available.' }, { status: 400 });
+    }
+    const work = Array.isArray(instructor.work_experience) ? instructor.work_experience : [];
+    const currentWork = work.find((item: any) => item?.current) ?? work[0];
+    const social = instructor.social_links && typeof instructor.social_links === 'object' ? instructor.social_links : {};
+    verifiedGuideSnapshot = {
+      fullName: instructor.full_name,
+      professionalTitle: currentWork?.title || 'Instructor',
+      company: currentWork?.company || undefined,
+      profilePhotoUrl: instructor.avatar_url || undefined,
+      linkedUserId: instructor.id,
+      sourceType: 'instructor',
+      consentStatus: 'not_required',
+      bio: instructor.bio || undefined,
+      linkedinUrl: social.linkedin || undefined,
+      expertise: Array.isArray(instructor.skills) ? instructor.skills.filter((item: unknown) => typeof item === 'string').slice(0, 20) : [],
+    };
+  } else if (requestedGuideId) {
+    const { data: guide } = await supabase
+      .from('experience_guides')
+      .select('id, full_name, profile_photo_url, professional_title, company, bio, linkedin_url, expertise, consent_status, source_type, status')
+      .eq('id', requestedGuideId)
+      .eq('owner_id', user.id)
+      .maybeSingle();
+    if (!guide || guide.source_type !== 'external') {
+      return NextResponse.json({ error: 'The selected professional profile was not found.' }, { status: 400 });
+    }
+    if (formStatus === 'published' && guide.status !== 'active') {
+      return NextResponse.json({ error: 'Reactivate the selected professional profile before publishing.' }, { status: 400 });
+    }
+    if (formStatus === 'published' && guide.consent_status !== 'confirmed') {
+      return NextResponse.json({ error: 'Permission must be confirmed before publishing a professional profile.' }, { status: 400 });
+    }
+    verifiedGuideId = guide.id;
+    verifiedGuideSnapshot = {
+      fullName: guide.full_name,
+      professionalTitle: guide.professional_title || undefined,
+      company: guide.company || undefined,
+      profilePhotoUrl: guide.profile_photo_url || undefined,
+      sourceType: 'external',
+      consentStatus: guide.consent_status,
+      bio: guide.bio || undefined,
+      linkedinUrl: guide.linkedin_url || undefined,
+      expertise: Array.isArray(guide.expertise) ? guide.expertise : [],
+    };
   }
 
   const newCohortIds: string[] = Array.isArray(cohort_ids) ? cohort_ids : [];
@@ -70,8 +136,8 @@ export async function POST(req: NextRequest) {
     learn_outcomes: config.learnOutcomes ?? [],
     manager_name:   config.managerName   ?? null,
     manager_title:  config.managerTitle  ?? 'Manager',
-    guide_id:       config.guideId && !String(config.guideId).startsWith('instructor:') ? config.guideId : null,
-    guide_snapshot: config.guideSnapshot ?? null,
+    guide_id:       verifiedGuideId,
+    guide_snapshot: verifiedGuideSnapshot,
     is_short_course: is_short_course ?? false,
     badge_image_url: config.badgeImageUrl ?? null,
     dataset:        null, // set below after optional GitHub upload
@@ -131,6 +197,8 @@ export async function POST(req: NextRequest) {
       .eq('user_id', user.id)
       .single();
 
+    if (!existing) return NextResponse.json({ error: 'Virtual experience not found.' }, { status: 404 });
+
     const { error } = await supabase
       .from('virtual_experiences')
       .update(payload)
@@ -169,7 +237,8 @@ export async function POST(req: NextRequest) {
       if (delErr) console.error('[guided-project-save] draft cohort_assignments cleanup error:', delErr);
     }
 
-    if (formStatus === 'published' && notifyCohortIds.length && existing?.slug) {
+    let registrationWarning: string | undefined;
+    if (formStatus === 'published' && notifyCohortIds.length && existing.slug) {
       try {
         await sendAssignmentNotifications({
           cohortIds:   notifyCohortIds,
@@ -179,7 +248,7 @@ export async function POST(req: NextRequest) {
         });
       } catch (err) {
         console.error('[guided-project-save] notification error (edit):', err);
-        return NextResponse.json({ error: 'Saved but notification emails failed to send.' }, { status: 500 });
+        registrationWarning = 'The experience was saved, but some notification emails could not be sent.';
       }
     }
 
@@ -191,7 +260,7 @@ export async function POST(req: NextRequest) {
       }).catch(() => {});
     }
 
-    return NextResponse.json({ id: editId });
+    return NextResponse.json({ id: editId, slug: existing.slug, registrationWarning });
   }
 
   // Generate slug for new VE
@@ -213,6 +282,7 @@ export async function POST(req: NextRequest) {
     await upsertCohortAssignments(supabase, data.id, newCohortIds);
   }
 
+  let registrationWarning: string | undefined;
   if (formStatus === 'published' && newCohortIds.length) {
     try {
       await sendAssignmentNotifications({
@@ -223,7 +293,7 @@ export async function POST(req: NextRequest) {
       });
     } catch (err) {
       console.error('[guided-project-save] notification error (create):', err);
-      return NextResponse.json({ error: 'Saved but notification emails failed to send.' }, { status: 500 });
+      registrationWarning = 'The experience was saved, but some notification emails could not be sent.';
     }
   }
 
@@ -235,5 +305,5 @@ export async function POST(req: NextRequest) {
     }).catch(() => {});
   }
 
-  return NextResponse.json({ id: data.id, slug: data.slug });
+  return NextResponse.json({ id: data.id, slug: data.slug, registrationWarning });
 }
