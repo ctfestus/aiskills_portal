@@ -1,16 +1,17 @@
 'use client';
 
-// Extracted verbatim from app/dashboard/page.tsx -- no behavior or styling changes.
+// Learning-path management workspace shared by the instructor dashboard.
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, Images, Loader2, Plus, Upload, X, Zap } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp, BookOpen, Check, CheckCircle2, ChevronLeft, ChevronRight, Circle, Images, Layers3, Loader2, Plus, Radar, Rocket, Search, Settings2, Trash2, Upload, Users, X, Zap } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { ImageLibrary } from '@/components/ImageLibrary';
-import { LIGHT_C, cardStyle } from '@/lib/theme';
+import { DARK_C, LIGHT_C, cardStyle } from '@/lib/theme';
 
 export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] }) {
+  const isDark = C.page === DARK_C.page;
   const [paths, setPaths]           = useState<any[]>([]);
   const [cohorts, setCohorts]       = useState<any[]>([]);
   const [certOptions, setCertOptions] = useState<any[]>([]);
@@ -23,12 +24,17 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
   const [showCoverLibrary, setShowCoverLibrary] = useState(false);
   const [uploadingBadge, setUploadingBadge] = useState(false);
   const [generatingDesc, setGeneratingDesc] = useState(false);
-  const [lpSection, setLpSection] = useState<'details' | 'content'>('details');
+  const [lpSection, setLpSection] = useState<'overview' | 'content' | 'audience' | 'publish'>('overview');
+  const [contentSearch, setContentSearch] = useState('');
+  const [contentFilter, setContentFilter] = useState<'all' | 'course' | 'virtual_experience' | 'certification'>('all');
   const coverInputRef = useRef<HTMLInputElement>(null);
   const badgeInputRef = useRef<HTMLInputElement>(null);
   const editingBaseline = useRef<string | null>(null);
-  const lpScrollRef = useRef<HTMLDivElement>(null);
-  const lpScrollBy = (dir: number) => lpScrollRef.current?.scrollBy({ left: dir * 340, behavior: 'smooth' });
+  const pathCarouselRef = useRef<HTMLDivElement>(null);
+
+  const scrollPathCarousel = (direction: -1 | 1) => {
+    pathCarouselRef.current?.scrollBy({ left: direction * 360, behavior: 'smooth' });
+  };
 
   const publishedForms = forms.filter(f => f.status === 'published');
   const courseOptions  = publishedForms.filter(f => f.content_type === 'course' || f.config?.isCourse);
@@ -106,16 +112,17 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
     setGeneratingDesc(false);
   };
 
-  const save = async () => {
-    if (!editing?.title?.trim()) { setSaveMsg({ ok: false, text: 'Title is required.' }); return; }
+  const save = async (statusOverride?: 'draft' | 'published') => {
+    const editingToSave = statusOverride ? { ...editing, status: statusOverride } : editing;
+    if (!editingToSave?.title?.trim()) { setSaveMsg({ ok: false, text: 'Title is required.' }); return; }
     setSaving(true);
     setSaveMsg(null);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const headers = { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) };
-      const action = editing.id ? 'update' : 'create';
-      const res = await fetch('/api/learning-paths', { method: 'POST', headers, body: JSON.stringify({ action, ...editing }) });
+      const action = editingToSave.id ? 'update' : 'create';
+      const res = await fetch('/api/learning-paths', { method: 'POST', headers, body: JSON.stringify({ action, ...editingToSave }) });
       const json = await res.json();
 
       if (!res.ok) {
@@ -123,7 +130,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
         return;
       }
 
-      const savedEditing = { ...editing, id: json.id ?? editing.id };
+      const savedEditing = { ...editingToSave, id: json.id ?? editingToSave.id };
       setEditing(savedEditing);
       editingBaseline.current = JSON.stringify(savedEditing);
 
@@ -159,7 +166,10 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
   };
 
   const openEditor = (path: any) => {
-    setLpSection('details');
+    setLpSection('overview');
+    setContentSearch('');
+    setContentFilter('all');
+    setSaveMsg(null);
     editingBaseline.current = JSON.stringify(path);
     setEditing(path);
   };
@@ -209,57 +219,74 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
   if (editing !== null) {
     const selectedIds: string[]    = editing.item_ids ?? [];
     const selectedCohorts: string[] = editing.cohort_ids ?? [];
+    const matchesContent = (item: any) => {
+      const isVE = item.content_type === 'virtual_experience' || item.content_type === 'guided_project' || item.config?.isVirtualExperience || item.config?.isGuidedProject;
+      const type = item.content_type === 'certification' ? 'certification' : isVE ? 'virtual_experience' : 'course';
+      return (contentFilter === 'all' || contentFilter === type) && (item.title ?? '').toLowerCase().includes(contentSearch.trim().toLowerCase());
+    };
     return (
-      <div className="space-y-5">
-        <div className="flex items-center gap-3">
-          <button onClick={closeEditor} className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-xl transition-opacity hover:opacity-70" style={{ background: C.pill, color: C.muted }}>
-            <ArrowLeft className="w-4 h-4"/> Back
-          </button>
-          <h2 className="text-lg font-bold" style={{ color: C.text }}>{editing.id ? 'Edit Learning Path' : 'New Learning Path'}</h2>
+      <div className="space-y-5 pb-24">
+        <div className="fixed z-50 bottom-5 left-4 right-4 sm:left-auto sm:right-6 flex items-center justify-end gap-2">
+            <button onClick={() => save('draft')} disabled={saving}
+              className="flex-1 sm:flex-none justify-center flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold disabled:opacity-60"
+              style={{ background: C.card, color: C.text, border: `1px solid ${C.cardBorder}`, boxShadow: isDark ? '0 10px 28px rgba(0,0,0,0.35)' : '0 12px 32px rgba(15,23,42,0.14)' }}>
+              {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Check className="w-4 h-4"/>}
+              Save draft
+            </button>
+            <button onClick={() => save('published')} disabled={saving}
+              className="flex-1 sm:flex-none justify-center flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold disabled:opacity-60"
+              style={{ background: C.cta, color: C.ctaText, boxShadow: isDark ? 'none' : `0 10px 26px ${C.cta}30` }}>
+              <Rocket className="w-4 h-4"/> Publish
+            </button>
         </div>
 
-        {/* -- Carousel: Details (Basic info + Cohorts) / Content (Courses & VEs) -- */}
+        {/* Standalone step navigation and editor workspace. */}
         {(() => {
           const LP_SECTIONS = [
-            { id: 'details', label: 'Basic Information & Cohorts' },
-            { id: 'content', label: 'Add Courses, Virtual Experiences & Certifications' },
+            { id: 'overview', label: 'Overview', Icon: Radar },
+            { id: 'content', label: 'Content', Icon: Layers3 },
+            { id: 'audience', label: 'Audience', Icon: Users },
+            { id: 'publish', label: 'Publish', Icon: Rocket },
           ] as const;
-          const si = LP_SECTIONS.findIndex(s => s.id === lpSection);
           return (
-          <div className="rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
-            <div className="flex items-center justify-between gap-4 px-5 sm:px-6 pt-5 pb-4" style={{ borderBottom: `1px solid ${C.divider}` }}>
-              <div className="min-w-0">
-                <h3 className="text-base font-bold leading-tight truncate" style={{ color: C.text }}>{LP_SECTIONS[si]?.label}</h3>
-                <p className="text-[11px] mt-1 font-medium tracking-wide uppercase" style={{ color: C.faint }}>Step {si + 1} of {LP_SECTIONS.length}</p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button type="button" disabled={si <= 0} onClick={() => setLpSection(LP_SECTIONS[si - 1].id)} aria-label="Previous"
-                  className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70 disabled:opacity-30" style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
-                  <ChevronLeft className="w-4 h-4"/>
-                </button>
-                <button type="button" disabled={si >= LP_SECTIONS.length - 1} onClick={() => setLpSection(LP_SECTIONS[si + 1].id)} aria-label="Next"
-                  className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70 disabled:opacity-30" style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
-                  <ChevronRight className="w-4 h-4"/>
-                </button>
-              </div>
+          <div className="space-y-5">
+            <div className="flex items-stretch gap-3 min-w-0">
+              <button onClick={closeEditor} aria-label="Back to learning paths"
+                className="w-12 flex-shrink-0 rounded-2xl grid place-items-center transition-opacity hover:opacity-70"
+                style={{ background: C.card, color: C.muted }}>
+                <ArrowLeft className="w-4 h-4"/>
+              </button>
+            <div className="flex-1 min-w-0 flex gap-1 px-4 py-3 overflow-x-auto rounded-2xl" style={{ ...cardStyle(C) }}>
+              {LP_SECTIONS.map(({ id, label, Icon }) => {
+                const active = lpSection === id;
+                return (
+                  <button key={id} onClick={() => setLpSection(id)} aria-current={active ? 'page' : undefined}
+                    className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-colors"
+                    style={{ background: active ? `${C.green}12` : 'transparent', color: active ? C.green : C.faint }}>
+                    <Icon className="w-4 h-4"/>{label}
+                  </button>
+                );
+              })}
             </div>
+            </div>
+            <div className="rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
             <AnimatePresence mode="wait">
             <motion.div key={lpSection} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }} className="p-5 sm:p-6">
 
-            {lpSection === 'details' && (
+            {lpSection === 'overview' && (
             <div className="space-y-6">
 
         {/* Basic info */}
-        <div className="space-y-4">
+        <div className="space-y-6 max-w-5xl">
           <div>
-            <label className="text-xs font-medium mb-1.5 block" style={{ color: C.muted }}>Title *</label>
+            <label className="text-xs font-bold mb-2 block" style={{ color: C.muted }}>Path title *</label>
             <input value={editing.title ?? ''} onChange={e => setEditing((p: any) => ({ ...p, title: e.target.value }))} placeholder="e.g. AI Fundamentals Track" className={inputCls} style={inputStyle}/>
           </div>
 
           {/* Description + AI generate */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-medium" style={{ color: C.muted }}>Description</label>
+              <label className="text-xs font-bold" style={{ color: C.muted }}>Path description</label>
               <button onClick={generateDescription} disabled={generatingDesc}
                 className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-opacity hover:opacity-80 disabled:opacity-50"
                 style={{ background: `${C.green}18`, color: C.green }}>
@@ -271,13 +298,13 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
           </div>
 
           {/* Cover image upload */}
-          <div>
-            <label className="text-xs font-medium mb-1.5 block" style={{ color: C.muted }}>Cover Image</label>
+          <div className="rounded-2xl p-4 sm:p-5" style={{ background: C.pill }}>
+            <div className="mb-4"><label className="text-sm font-bold block" style={{ color: C.text }}>Cover image</label><p className="text-xs mt-1" style={{ color: C.faint }}>Choose a clear visual that represents the full journey.</p></div>
             <input ref={coverInputRef} type="file" accept="image/*" className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) uploadCover(f); e.target.value = ''; }}/>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               {editing.cover_image && (
-                <img src={editing.cover_image} alt="" className="w-20 h-14 rounded-lg object-cover flex-shrink-0" style={{ border: `1px solid ${C.cardBorder}` }}/>
+                <img src={editing.cover_image} alt="Learning path cover" className="w-full sm:w-44 aspect-video rounded-xl object-cover flex-shrink-0"/>
               )}
               <button onClick={() => coverInputRef.current?.click()} disabled={uploadingCover}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
@@ -307,17 +334,17 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
           </div>
 
           {/* Completion Badge */}
-          <div>
-            <label className="text-xs font-medium mb-1.5 block" style={{ color: C.muted }}>Completion Badge</label>
+          <div className="rounded-2xl p-4 sm:p-5" style={{ background: C.pill }}>
+            <label className="text-sm font-bold mb-1 block" style={{ color: C.text }}>Completion badge</label>
             <p className="text-[11px] mb-2 leading-relaxed" style={{ color: C.faint }}>
               Students earn this badge when they complete all items in the path, alongside their certificate.
             </p>
             <input ref={badgeInputRef} type="file" accept="image/*" className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) uploadBadge(f); e.target.value = ''; }}/>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3 mt-4">
               {editing.badge_image_url && (
-                <img src={editing.badge_image_url} alt="Badge" className="w-14 h-14 rounded-lg object-contain flex-shrink-0"
-                  style={{ border: `1px solid ${C.cardBorder}`, background: C.pill }}/>
+                <img src={editing.badge_image_url} alt="Completion badge" className="w-16 h-16 rounded-2xl object-contain flex-shrink-0 p-1"
+                  style={{ background: C.card }}/>
               )}
               <button onClick={() => badgeInputRef.current?.click()} disabled={uploadingBadge}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
@@ -334,7 +361,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
           </div>
 
           {/* Status */}
-          <div className="flex items-center gap-3">
+          <div className="hidden">
             <label className="text-xs font-medium" style={{ color: C.muted }}>Status</label>
             <select value={editing.status ?? 'draft'} onChange={e => setEditing((p: any) => ({ ...p, status: e.target.value }))}
               className="rounded-xl px-3 py-2 text-sm focus:outline-none" style={inputStyle}>
@@ -344,7 +371,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
           </div>
 
           {/* Next path (auto-enroll chaining) */}
-          <div>
+          <div className="hidden">
             <label className="text-xs font-medium mb-1.5 block" style={{ color: C.muted }}>
               Next Learning Path
               <span className="ml-1.5 font-normal" style={{ color: C.faint }}>· students auto-enroll here when they complete this path</span>
@@ -364,7 +391,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
         </div>
 
         {/* Cohort assignment */}
-        <div className="space-y-3">
+        <div className="hidden">
           <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Assign to Cohorts</h3>
           {cohorts.length === 0
             ? <p className="text-sm" style={{ color: C.muted }}>No cohorts found. Create a cohort first.</p>
@@ -391,8 +418,39 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
             </div>
             )}
 
+            {lpSection === 'audience' && (
+              <div className="max-w-4xl space-y-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div><p className="text-sm font-bold" style={{ color: C.text }}>Assigned cohorts</p><p className="text-xs mt-1" style={{ color: C.faint }}>Learners in these cohorts receive the path when it is published.</p></div>
+                  <span className="text-xs font-bold px-3 py-1.5 rounded-full" style={{ background: `${C.green}12`, color: C.green }}>{selectedCohorts.length} selected</span>
+                </div>
+                {cohorts.length === 0 ? <div className="rounded-2xl py-16 text-center" style={{ background: C.pill }}><Users className="w-7 h-7 mx-auto mb-3" style={{ color: C.faint }}/><p className="text-sm font-semibold" style={{ color: C.text }}>No cohorts found</p><p className="text-xs mt-1" style={{ color: C.faint }}>Create a cohort before assigning this path.</p></div> : <div className="grid sm:grid-cols-2 gap-3">{cohorts.map((cohort: any) => { const selected = selectedCohorts.includes(cohort.id); return <button key={cohort.id} onClick={() => toggleCohort(cohort.id)} className="p-4 rounded-2xl flex items-center gap-3 text-left transition-all" style={{ background: selected ? `${C.green}10` : C.pill, boxShadow: selected ? `inset 0 0 0 1.5px ${C.green}` : 'none' }}><span className="w-10 h-10 rounded-xl grid place-items-center" style={{ background: selected ? `${C.green}18` : C.card }}><Users className="w-4 h-4" style={{ color: selected ? C.green : C.faint }}/></span><span className="text-sm font-semibold flex-1" style={{ color: C.text }}>{cohort.name}</span><span className="w-5 h-5 rounded-full grid place-items-center" style={{ background: selected ? C.green : 'transparent', border: `1.5px solid ${selected ? C.green : C.cardBorder}` }}>{selected && <Check className="w-3 h-3 text-white"/>}</span></button>; })}</div>}
+              </div>
+            )}
+
+            {lpSection === 'publish' && (
+              <div className="grid lg:grid-cols-[1fr_340px] gap-7 max-w-5xl">
+                <div className="space-y-6">
+                  <div><label className="text-xs font-bold block mb-2" style={{ color: C.muted }}>Publishing status</label><div className="grid sm:grid-cols-2 gap-3">{(['draft','published'] as const).map(status => { const active = editing.status === status; return <button key={status} onClick={() => setEditing((p: any) => ({ ...p, status }))} className="p-4 rounded-2xl flex items-center gap-3 text-left" style={{ background: active ? `${C.green}10` : C.pill, boxShadow: active ? `inset 0 0 0 1.5px ${C.green}` : 'none' }}><span className="w-10 h-10 rounded-xl grid place-items-center" style={{ background: active ? `${C.green}18` : C.card }}>{status === 'published' ? <Rocket className="w-4 h-4" style={{ color: active ? C.green : C.faint }}/> : <Settings2 className="w-4 h-4" style={{ color: active ? C.green : C.faint }}/>}</span><span><span className="block text-sm font-bold capitalize" style={{ color: C.text }}>{status}</span><span className="block text-[11px] mt-0.5" style={{ color: C.faint }}>{status === 'published' ? 'Visible to assigned learners' : 'Private working version'}</span></span></button>; })}</div></div>
+                  <div><label className="text-xs font-bold mb-2 block" style={{ color: C.muted }}>Continue into another path</label><p className="text-xs mb-3" style={{ color: C.faint }}>Automatically enrol learners after they complete this journey.</p><select value={editing.next_path_id ?? ''} onChange={e => setEditing((p: any) => ({ ...p, next_path_id: e.target.value || null }))} className={inputCls} style={inputStyle}><option value="">No next path</option>{paths.filter((path: any) => path.id !== editing.id).map((path: any) => <option key={path.id} value={path.id}>{path.title}</option>)}</select></div>
+                </div>
+                <aside className="rounded-2xl p-5" style={{ background: C.pill }}>
+                  <div className="flex items-center justify-between"><div><p className="text-sm font-bold" style={{ color: C.text }}>Path readiness</p><p className="text-xs mt-1" style={{ color: C.faint }}>Essentials for a strong launch.</p></div><span className="text-sm font-bold" style={{ color: C.green }}>{[editing.title?.trim(), editing.description?.trim(), editing.cover_image, selectedIds.length, selectedCohorts.length].filter(Boolean).length}/5</span></div>
+                  <div className="space-y-2 mt-5">{[
+                    ['Path title', !!editing.title?.trim(), 'overview'], ['Description', !!editing.description?.trim(), 'overview'], ['Cover image', !!editing.cover_image, 'overview'], ['Learning sequence', selectedIds.length > 0, 'content'], ['Audience', selectedCohorts.length > 0, 'audience'],
+                  ].map(([label, ready, target]) => <button key={String(label)} onClick={() => setLpSection(target as typeof lpSection)} className="w-full flex items-center gap-2 text-left text-xs py-1.5" style={{ color: ready ? C.muted : C.text }}>{ready ? <CheckCircle2 className="w-4 h-4" style={{ color: C.green }}/> : <Circle className="w-4 h-4" style={{ color: C.faint }}/>}<span className="flex-1">{label}</span>{!ready && <ChevronRight className="w-3.5 h-3.5"/>}</button>)}</div>
+                  <div className="mt-5 pt-4 space-y-2 text-xs" style={{ borderTop: `1px solid ${C.divider}`, color: C.faint }}><p>{selectedIds.length} milestones</p><p>{selectedCohorts.length} assigned cohorts</p><p>{editing.badge_image_url ? 'Custom completion badge' : 'Default completion credential'}</p></div>
+                </aside>
+              </div>
+            )}
+
             {lpSection === 'content' && (
             <div className="space-y-6">
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1"><Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.faint }}/><input value={contentSearch} onChange={e => setContentSearch(e.target.value)} placeholder="Search published content..." className={`${inputCls} pl-10`} style={inputStyle}/></div>
+          <div className="flex gap-1 p-1 rounded-xl overflow-x-auto" style={{ background: C.pill }}>{(['all','course','virtual_experience','certification'] as const).map(filter => <button key={filter} onClick={() => setContentFilter(filter)} className="px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap" style={{ background: contentFilter === filter ? C.card : 'transparent', color: contentFilter === filter ? C.green : C.faint }}>{filter === 'all' ? 'All' : filter === 'virtual_experience' ? 'Experiences' : filter === 'certification' ? 'Certifications' : 'Courses'}</button>)}</div>
+        </div>
 
         {/* Item selection -- grouped by type */}
         {allOptions.length === 0 ? (
@@ -403,7 +461,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
               { label: 'Courses', items: courseOptions },
               { label: 'Virtual Experiences', items: veOptions },
               { label: 'Certifications', items: certOptions },
-            ] as const).filter(g => g.items.length > 0).map(group => (
+            ] as const).map(group => ({ ...group, items: group.items.filter(matchesContent) })).filter(g => g.items.length > 0).map(group => (
               <div key={group.label} className="space-y-1.5">
                 <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>{group.label}</h3>
                 {group.items.map((f: any) => {
@@ -411,9 +469,9 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
                   return (
                     <div key={f.id} onClick={() => toggleItem(f.id)} role="button" tabIndex={0}
                       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleItem(f.id); } }}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors"
-                      style={{ background: selected ? `${C.green}14` : C.pill }}>
-                      <div className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border-2" style={{ background: selected ? C.green : 'transparent', borderColor: selected ? C.green : C.faint }}>
+                      className="flex items-center gap-3 px-4 py-3 rounded-2xl cursor-pointer transition-all"
+                      style={{ background: selected ? `${C.green}10` : C.pill, boxShadow: selected ? `inset 0 0 0 1.5px ${C.green}` : 'none' }}>
+                      <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: selected ? C.green : 'transparent', border: `1.5px solid ${selected ? C.green : C.cardBorder}` }}>
                         {selected && <Check className="w-2.5 h-2.5 text-white"/>}
                       </div>
                       <span className="text-sm flex-1 truncate" style={{ color: C.text }}>{f.title}</span>
@@ -427,22 +485,22 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
 
         {/* Order selected items */}
         {selectedIds.length > 0 && (
-          <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Order ({selectedIds.length} items)</h3>
+          <div className="space-y-3 pt-5" style={{ borderTop: `1px solid ${C.divider}` }}>
+            <div><h3 className="text-sm font-bold" style={{ color: C.text }}>Path sequence</h3><p className="text-xs mt-1" style={{ color: C.faint }}>{selectedIds.length} ordered milestone{selectedIds.length === 1 ? '' : 's'}</p></div>
             <div className="space-y-1.5">
               {selectedIds.map((id, idx) => {
                 const f = allOptions.find((x: any) => x.id === id);
                 const isVE = f && (f.content_type === 'virtual_experience' || f.content_type === 'guided_project' || f.config?.isVirtualExperience || f.config?.isGuidedProject);
                 const isCert = f?.content_type === 'certification';
                 return (
-                  <div key={id} className="flex items-center gap-2 px-3 py-2.5 rounded-xl" style={{ background: C.pill }}>
-                    <span className="text-xs font-bold w-5 text-center flex-shrink-0" style={{ color: C.faint }}>{idx + 1}</span>
+                  <div key={id} className="flex items-center gap-2 px-3 py-3 rounded-2xl" style={{ background: C.pill }}>
+                    <span className="text-xs font-bold w-8 h-8 rounded-full grid place-items-center flex-shrink-0" style={{ color: C.green, background: `${C.green}16` }}>{idx + 1}</span>
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: C.card, color: C.muted }}>
                       {isCert ? 'Cert' : isVE ? 'VE' : 'Course'}
                     </span>
                     <span className="text-sm flex-1 truncate" style={{ color: C.text }}>{f?.title ?? id}</span>
-                    <button onClick={() => moveItem(idx, -1)} disabled={idx === 0} className="p-1 rounded opacity-50 hover:opacity-100 disabled:opacity-20"><ArrowLeft className="w-3 h-3 rotate-90" style={{ color: C.muted }}/></button>
-                    <button onClick={() => moveItem(idx, 1)} disabled={idx === selectedIds.length - 1} className="p-1 rounded opacity-50 hover:opacity-100 disabled:opacity-20"><ArrowRight className="w-3 h-3 rotate-90" style={{ color: C.muted }}/></button>
+                    <button onClick={() => moveItem(idx, -1)} disabled={idx === 0} aria-label="Move up" className="p-1 rounded opacity-50 hover:opacity-100 disabled:opacity-20"><ArrowUp className="w-3.5 h-3.5" style={{ color: C.muted }}/></button>
+                    <button onClick={() => moveItem(idx, 1)} disabled={idx === selectedIds.length - 1} aria-label="Move down" className="p-1 rounded opacity-50 hover:opacity-100 disabled:opacity-20"><ArrowDown className="w-3.5 h-3.5" style={{ color: C.muted }}/></button>
                     <button onClick={() => toggleItem(id)} className="p-1 rounded opacity-50 hover:opacity-100"><X className="w-3 h-3" style={{ color: C.muted }}/></button>
                   </div>
                 );
@@ -456,30 +514,30 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
 
             </motion.div>
             </AnimatePresence>
+            </div>
           </div>
           );
         })()}
 
         {saveMsg && (
-          <p className={`text-sm ${saveMsg.ok ? 'text-emerald-500' : 'text-red-500'}`}>{saveMsg.text}</p>
+          <p role="status" className="mx-5 sm:mx-7 mb-5 px-4 py-3 rounded-xl text-sm" style={{ background: saveMsg.ok ? `${C.green}10` : '#ef444412', color: saveMsg.ok ? C.green : '#ef4444' }}>{saveMsg.text}</p>
         )}
-        <button onClick={save} disabled={saving} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-60" style={{ background: C.cta, color: C.ctaText }}>
-          {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Check className="w-4 h-4"/>}
-          {saving ? 'Saving…' : 'Save Learning Path'}
-        </button>
       </div>
     );
   }
 
   // -- List ---
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <p className="text-sm" style={{ color: C.faint }}>Group courses, virtual experiences, and certifications into structured learning journeys.</p>
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: C.text }}>Learning Paths</h1>
+          <p className="text-sm mt-0.5" style={{ color: C.faint }}>Build structured journeys across courses, experiences, and certifications.</p>
+        </div>
         <button onClick={openNewEditor}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-80 transition-opacity"
+          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold hover:opacity-80 transition-opacity"
           style={{ background: C.cta, color: C.ctaText }}>
-          <Plus className="w-4 h-4"/> New Path
+          <Plus className="w-4 h-4"/> New Learning Path
         </button>
       </div>
 
@@ -497,61 +555,62 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
           </button>
         </div>
       ) : (
-        <section className="rounded-2xl p-5 sm:p-6" style={{ ...cardStyle(C) }}>
+        <section className="rounded-2xl p-4 sm:p-5" style={{ ...cardStyle(C) }}>
           <div className="flex items-center justify-between gap-4 mb-4">
-            <h2 className="text-lg sm:text-xl font-bold" style={{ color: C.text }}>Learning Paths</h2>
+            <div>
+              <h3 className="text-base font-bold" style={{ color: C.text }}>Your learning paths</h3>
+              <p className="text-xs mt-0.5" style={{ color: C.faint }}>Browse and manage each structured journey.</p>
+            </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <button onClick={() => lpScrollBy(-1)} aria-label="Scroll left"
+              <button onClick={() => scrollPathCarousel(-1)} aria-label="Previous learning paths"
                 className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
                 style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
                 <ChevronLeft className="w-4 h-4"/>
               </button>
-              <button onClick={() => lpScrollBy(1)} aria-label="Scroll right"
+              <button onClick={() => scrollPathCarousel(1)} aria-label="Next learning paths"
                 className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
                 style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
                 <ChevronRight className="w-4 h-4"/>
               </button>
             </div>
           </div>
-          <div ref={lpScrollRef} className="flex gap-4 overflow-x-auto pb-2 snap-x" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <div ref={pathCarouselRef} className="flex gap-5 overflow-x-auto snap-x snap-mandatory pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {paths.map((path: any) => {
             const assignedCohortNames = (path.cohort_ids ?? []).map((id: string) => cohorts.find((c: any) => c.id === id)?.name).filter(Boolean);
             return (
-              <div key={path.id} className="flex-shrink-0 w-[300px] snap-start rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
+              <article key={path.id} className="group flex-none w-[280px] sm:w-[330px] snap-start rounded-2xl overflow-hidden transition-transform hover:-translate-y-0.5" style={{ ...cardStyle(C) }}>
                 {path.cover_image
-                  ? <img src={path.cover_image} alt="" loading="lazy" className="w-full h-28 object-cover"/>
-                  : <div className="w-full h-28 flex items-center justify-center" style={{ background: `${C.green}12` }}>
-                      <BookOpen className="w-8 h-8 opacity-30" style={{ color: C.green }}/>
+                  ? <img src={path.cover_image} alt="" loading="lazy" className="w-full aspect-[16/8] object-cover transition-transform duration-500 group-hover:scale-[1.02]"/>
+                  : <div className="w-full aspect-[16/8] flex items-center justify-center" style={{ background: `${C.green}0d` }}>
+                      <Layers3 className="w-8 h-8 opacity-40" style={{ color: C.green }}/>
                     </div>}
-                <div className="p-4 space-y-2">
+                <div className="p-5 space-y-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
                       style={{ background: path.status === 'published' ? `${C.green}18` : `${C.faint}18`, color: path.status === 'published' ? C.green : C.faint }}>
                       {path.status}
                     </span>
-                    <span className="text-[10px]" style={{ color: C.faint }}>{(path.item_ids ?? []).length} items</span>
+                    <span className="text-[11px] flex items-center gap-1" style={{ color: C.faint }}><Layers3 className="w-3 h-3"/>{(path.item_ids ?? []).length} milestones</span>
                   </div>
-                  <p className="font-semibold text-sm" style={{ color: C.text }}>{path.title}</p>
-                  {path.description && <p className="text-xs line-clamp-2" style={{ color: C.muted }}>{path.description}</p>}
+                  <p className="font-bold text-base" style={{ color: C.text }}>{path.title}</p>
+                  {path.description && <p className="text-sm line-clamp-2 leading-relaxed" style={{ color: C.muted }}>{path.description}</p>}
                   {assignedCohortNames.length > 0 && (
-                    <p className="text-[10px]" style={{ color: C.faint }}>
-                      {assignedCohortNames.join(', ')}
-                    </p>
+                    <p className="text-[11px] flex items-center gap-1.5" style={{ color: C.faint }}><Users className="w-3 h-3"/>{assignedCohortNames.slice(0, 2).join(', ')}{assignedCohortNames.length > 2 ? ` +${assignedCohortNames.length - 2}` : ''}</p>
                   )}
-                  <div className="flex gap-2 pt-1">
+                  <div className="flex gap-2 pt-3" style={{ borderTop: `1px solid ${C.divider}` }}>
                     <button onClick={() => openEditor(path)}
-                      className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl transition-all hover:opacity-80"
+                      className="flex-1 text-center text-xs font-bold py-2.5 rounded-xl transition-all hover:opacity-80"
                       style={{ background: `${C.green}18`, color: C.green }}>
                       Edit
                     </button>
                     <button onClick={() => { if (window.confirm(`Delete "${path.title}"? This cannot be undone.`)) deletePath(path.id); }} disabled={deleting === path.id}
-                      className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl transition-all hover:opacity-80 disabled:opacity-50"
+                      aria-label={`Delete ${path.title}`} title="Delete learning path" className="w-10 rounded-xl grid place-items-center transition-all hover:opacity-80 disabled:opacity-50"
                       style={{ background: '#ef444418', color: '#ef4444' }}>
-                      {deleting === path.id ? 'Deleting…' : 'Delete'}
+                      {deleting === path.id ? <Loader2 className="w-4 h-4 animate-spin"/> : <Trash2 className="w-4 h-4"/>}
                     </button>
                   </div>
                 </div>
-              </div>
+              </article>
             );
           })}
           </div>
