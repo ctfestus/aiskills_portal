@@ -170,6 +170,18 @@ export function AssignmentDetail({ assignment, userId, studentName, studentEmail
                 guideSnapshot: veData.guide_snapshot,
                 dataset: veData.dataset,
                 background: veData.background,
+                description: veData.description,
+                difficulty: veData.difficulty,
+                duration: veData.duration,
+                tools: veData.tools ?? [],
+                toolLogos: veData.tool_logos ?? {},
+                learnOutcomes: veData.learn_outcomes ?? [],
+                theme: veData.theme,
+                mode: veData.mode,
+                font: veData.font,
+                customAccent: veData.custom_accent,
+                isShortCourse: !!veData.is_short_course,
+                badgeImageUrl: veData.badge_image_url,
               },
             });
           }

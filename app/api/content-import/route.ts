@@ -275,6 +275,7 @@ export async function POST(req: NextRequest) {
           company:        cfg.company ?? null,
           duration:       cfg.duration ?? null,
           tools:          cfg.tools ?? [],
+          tool_logos:     cfg.toolLogos ?? {},
           tagline:        cfg.tagline ?? null,
           background:     cfg.background ?? null,
           learn_outcomes: cfg.learnOutcomes ?? [],
@@ -289,6 +290,8 @@ export async function POST(req: NextRequest) {
           mode:           cfg.mode ?? null,
           font:           cfg.font ?? null,
           custom_accent:  cfg.customAccent ?? null,
+          is_short_course: !!cfg.isShortCourse,
+          badge_image_url: cfg.badgeImageUrl ?? null,
         }).eq('id', existing.id);
         if (upErr) {
           console.error('[content-import] VE update:', upErr.message);
@@ -314,6 +317,7 @@ export async function POST(req: NextRequest) {
         company:        cfg.company ?? null,
         duration:       cfg.duration ?? null,
         tools:          cfg.tools ?? [],
+        tool_logos:     cfg.toolLogos ?? {},
         tagline:        cfg.tagline ?? null,
         background:     cfg.background ?? null,
         learn_outcomes: cfg.learnOutcomes ?? [],
@@ -328,6 +332,8 @@ export async function POST(req: NextRequest) {
         mode:           cfg.mode ?? null,
         font:           cfg.font ?? null,
         custom_accent:  cfg.customAccent ?? null,
+        is_short_course: !!cfg.isShortCourse,
+        badge_image_url: cfg.badgeImageUrl ?? null,
       }).select('id, slug').single();
       if (!error) return NextResponse.json({ id: data.id, slug: data.slug, type: 'virtual_experience', action: 'created' });
       if (error.code === '23505') { attempt++; continue; }

@@ -152,6 +152,7 @@ export function VirtualExperiencesManageSection({ C, forms, setFormToDelete, onD
           company:       original.company,
           duration:      original.duration,
           tools:         original.tools,
+          tool_logos:    original.tool_logos,
           tagline:       original.tagline,
           background:    original.background,
           learn_outcomes: original.learn_outcomes,
@@ -167,6 +168,8 @@ export function VirtualExperiencesManageSection({ C, forms, setFormToDelete, onD
           mode:          original.mode,
           font:          original.font,
           custom_accent: original.custom_accent,
+          is_short_course: original.is_short_course,
+          badge_image_url: original.badge_image_url,
           status:        'draft',
           cohort_ids:    [],
         })
@@ -181,12 +184,13 @@ export function VirtualExperiencesManageSection({ C, forms, setFormToDelete, onD
         isVirtualExperience: true, modules: newVe.modules ?? [],
         industry: newVe.industry, difficulty: newVe.difficulty,
         role: newVe.role, company: newVe.company, duration: newVe.duration,
-        tools: newVe.tools, tagline: newVe.tagline, background: newVe.background,
+        tools: newVe.tools, toolLogos: newVe.tool_logos ?? {}, tagline: newVe.tagline, background: newVe.background,
         learnOutcomes: newVe.learn_outcomes, managerName: newVe.manager_name,
         managerTitle: newVe.manager_title, guideId: newVe.guide_id,
         guideSnapshot: newVe.guide_snapshot, dataset: newVe.dataset,
         coverImage: newVe.cover_image, deadline_days: newVe.deadline_days,
         theme: newVe.theme, mode: newVe.mode, font: newVe.font, customAccent: newVe.custom_accent,
+        isShortCourse: !!newVe.is_short_course, badgeImageUrl: newVe.badge_image_url,
       }};
       onDuplicated(normalised);
     } finally {

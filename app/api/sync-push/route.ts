@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
         company: v.company,
         duration: v.duration,
         tools: v.tools ?? [],
+        toolLogos: v.tool_logos ?? {},
         tagline: v.tagline,
         background: v.background,
         learnOutcomes: v.learn_outcomes,
@@ -86,6 +87,8 @@ export async function POST(req: NextRequest) {
         mode: v.mode,
         font: v.font,
         customAccent: v.custom_accent,
+        isShortCourse: !!v.is_short_course,
+        badgeImageUrl: v.badge_image_url,
       },
     };
   } else if (type === 'assignment') {

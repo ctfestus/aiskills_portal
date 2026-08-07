@@ -612,7 +612,7 @@ export default function CreateAssignmentPage() {
       setLoadingPreviewVe(true);
       const { data: ve } = await supabase
         .from('virtual_experiences')
-        .select('id, title, slug, modules, company, role, industry, tagline, cover_image, manager_name, manager_title, guide_id, guide_snapshot, dataset, background, difficulty, duration, tools, learn_outcomes')
+        .select('id, title, slug, modules, company, role, industry, tagline, description, cover_image, manager_name, manager_title, guide_id, guide_snapshot, dataset, background, difficulty, duration, tools, tool_logos, learn_outcomes, theme, mode, font, custom_accent, is_short_course, badge_image_url')
         .eq('id', veFormId).single();
       if (ve) {
         setPreviewVeConfig({
@@ -624,6 +624,14 @@ export default function CreateAssignmentPage() {
           modules: ve.modules ?? [],
           tagline: ve.tagline,
           coverImage: ve.cover_image,
+          description: ve.description,
+          toolLogos: ve.tool_logos ?? {},
+          theme: ve.theme,
+          mode: ve.mode,
+          font: ve.font,
+          customAccent: ve.custom_accent,
+          isShortCourse: !!ve.is_short_course,
+          badgeImageUrl: ve.badge_image_url,
           managerName: ve.manager_name,
           managerTitle: ve.manager_title,
           guideId: ve.guide_id,
@@ -634,7 +642,6 @@ export default function CreateAssignmentPage() {
           duration: ve.duration,
           tools: ve.tools ?? [],
           learnOutcomes: ve.learn_outcomes ?? [],
-          description: '',
         });
       }
       setLoadingPreviewVe(false);

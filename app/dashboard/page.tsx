@@ -165,12 +165,13 @@ export default function DashboardPage() {
         allRows.push({ ...v, _response_count: responseCounts[v.id] ?? 0, content_type: 'virtual_experience', config: {
           isVirtualExperience: true, title: v.title, description: v.description,
           modules: v.modules ?? [], industry: v.industry, difficulty: v.difficulty,
-          role: v.role, company: v.company, duration: v.duration, tools: v.tools,
+          role: v.role, company: v.company, duration: v.duration, tools: v.tools, toolLogos: v.tool_logos ?? {},
           tagline: v.tagline, background: v.background, learnOutcomes: v.learn_outcomes,
           managerName: v.manager_name, managerTitle: v.manager_title,
           guideId: v.guide_id, guideSnapshot: v.guide_snapshot, dataset: v.dataset,
           coverImage: v.cover_image, deadline_days: v.deadline_days,
           theme: v.theme, mode: v.mode, font: v.font, customAccent: v.custom_accent,
+          isShortCourse: !!v.is_short_course, badgeImageUrl: v.badge_image_url,
         }});
       }
 
