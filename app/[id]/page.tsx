@@ -19,6 +19,7 @@ import { getFontById } from '@/lib/fonts';
 import { buildGoogleCalUrl, buildOutlookCalUrl, buildYahooCalUrl, downloadIcs, buildCalendarFields, isRecurring } from '@/lib/calendar-links';
 import { pointsSystemFromCourseRow } from '@/lib/course-schema';
 import { StudentModeBanner } from '@/components/student/StudentModeBanner';
+import { publicGuide, GuideAvatar, GuideByline, GuideCard } from '@/components/ve/guide';
 import { clearStudentMode, getStudentMode, installStudentModeFetchBridge, type StudentModeContext } from '@/lib/student-mode-client';
 
 // --- Social platform data (mirrors page.tsx) ---
@@ -845,6 +846,11 @@ export default function PublicFormPage() {
     const managerInitials = ((config as any).managerName || 'M').split(' ').map((w: string) => w[0]).join('').slice(0,2).toUpperCase();
     const dataset = (config as any).dataset;
     const isShortCourse = !!(form as any).is_short_course;
+    // The real professional behind the experience. Shown before enrolment on the hero,
+    // the brief header and the sidebar; null when the VE has no consented guide, in
+    // which case every block below falls back to the fictional manager as before.
+    const guide = isShortCourse ? null : publicGuide(config);
+    const guideTheme = { text: gp.title, muted: gp.muted, faint: gp.muted, surface: gp.card, border: gp.border, accent: indColor };
 
     return (
       <div style={{ minHeight: '100vh', background: gp.bg, color: gp.title, fontFamily: fontFace }}>
@@ -892,6 +898,19 @@ export default function PublicFormPage() {
             {config.tagline && (
               <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.65)', lineHeight: 1.55, maxWidth: 620, margin: 0 }}>{config.tagline}</p>
             )}
+            {/* Manager credit -- the reason to enrol, above the fold. Fixed light-on-dark
+                palette because the hero sits on the cover image, not the page surface. */}
+            {guide && (
+              <div style={{ marginTop: 16 }}>
+                <GuideByline
+                  guide={guide}
+                  size={30}
+                  withRole
+                  ring="rgba(255,255,255,0.35)"
+                  theme={{ text: '#ffffff', muted: 'rgba(255,255,255,0.72)', faint: 'rgba(255,255,255,0.55)', surface: 'transparent', border: 'transparent', accent: '#ffffff' }}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -907,9 +926,12 @@ export default function PublicFormPage() {
               <div style={{ background: gp.card, borderRadius: 14, overflow: 'hidden', border: `1px solid ${gp.border}` }}>
                 {/* Email header */}
                 <div style={{ padding: '14px 20px', background: gp.subtle, borderBottom: `1px solid ${gp.divider}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {/* The brief stays in-fiction (the guide's role inside the simulated company);
+                      their real employer is credited in the sidebar profile instead. */}
+                  {guide && <GuideAvatar guide={guide} size={34} accent={indColor} />}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 14.5, fontWeight: 700, color: gp.title, margin: 0, lineHeight: 1.3 }}>
-                      {(config as any).managerName || 'Your Manager'}
+                      {guide?.fullName || (config as any).managerName || 'Your Manager'}
                       <span style={{ fontWeight: 400, fontSize: 13, color: gp.muted }}> · {(config as any).managerTitle || 'Manager'}, {config.company}</span>
                     </p>
                     <p style={{ fontSize: 12, color: gp.muted, margin: 0, marginTop: 1 }}>To: You (New {config.role})</p>
@@ -1028,6 +1050,10 @@ export default function PublicFormPage() {
                 )}
               </div>
             </div>
+
+            {/* Guide profile (VE only) -- the real professional playing the manager, with
+                their actual title, employer and LinkedIn. */}
+            {guide && <GuideCard guide={guide} theme={guideTheme} />}
 
             {/* Difficulty badge (VE only) */}
             {!isShortCourse && (

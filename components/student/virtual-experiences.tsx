@@ -14,6 +14,7 @@ import { LIGHT_C } from '@/lib/theme';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { veProgressPct, veCompletionCounts } from '@/lib/ve-completion';
 import { CarouselSkeleton, EmptyState, ProgressBar, HoverPreviewCard } from '@/components/student/shared';
+import { publicGuide, GuideByline, GuideCard } from '@/components/ve/guide';
 import {
   Briefcase, Check, CheckCircle, ChevronLeft, ChevronRight, FileText, Play, RefreshCw, Star, X, Zap,
 } from 'lucide-react';
@@ -41,6 +42,7 @@ function VirtualExperienceCard({ form, attempt, deadline, C, onDetails }: {
   const actionHref  = `/${slug}`;
   const totalModules = (cfg.modules || []).length;
   const totalLessons = (cfg.modules || []).reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
+  const guide = publicGuide(cfg);
 
   // Deadline display
   const daysLeft = deadline && !isCompleted
@@ -96,6 +98,12 @@ function VirtualExperienceCard({ form, attempt, deadline, C, onDetails }: {
         </h3>
         {cfg.company && (
           <p className="text-xs mb-2" style={{ color: C.faint }}>{cfg.company} · {cfg.role}</p>
+        )}
+        {guide && (
+          <div className="mb-2">
+            <GuideByline guide={guide} size={20}
+              theme={{ text: C.text, muted: C.muted, faint: C.faint, surface: C.card, border: C.cardBorder, accent: color }} />
+          </div>
         )}
         {deadlineLabel && (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full mb-2"
@@ -168,6 +176,7 @@ function VirtualExperienceDetailPane({ form, attempt, C, onClose }: {
   const isCompleted = !!attempt?.completed_at;
   const isStarted   = !!attempt && !isCompleted;
   const actionLabel = isCompleted ? 'Review Project' : isStarted ? 'Continue Project' : 'Start Project';
+  const guide = publicGuide(cfg);
 
   return (
     <>
@@ -232,6 +241,12 @@ function VirtualExperienceDetailPane({ form, attempt, C, onClose }: {
                 <p className="text-sm mt-1" style={{ color: C.text }}>{cfg.tagline}</p>
               )}
             </div>
+
+            {/* The real professional playing the manager */}
+            {guide && (
+              <GuideCard guide={guide}
+                theme={{ text: C.text, muted: C.muted, faint: C.faint, surface: isDark ? 'rgba(255,255,255,0.04)' : C.pill, border: 'transparent', accent: color }} />
+            )}
 
             {/* Progress (if started) */}
             {isStarted && (
@@ -478,7 +493,7 @@ export function VirtualExperiencesSection({ userId, userEmail, C }: { userId: st
       const { data: profile } = await supabase.from('students').select('cohort_id').eq('id', userId).maybeSingle();
       if (!profile?.cohort_id) { setLoading(false); return; }
 
-      const veSelect = 'id, title, slug, cover_image, modules, industry, difficulty, role, company, duration, tools, tagline, deadline_days, cohort_ids, status';
+      const veSelect = 'id, title, slug, cover_image, modules, industry, difficulty, role, company, duration, tools, tagline, deadline_days, cohort_ids, status, guide_snapshot';
       const normalizeVe = (ve: any) => ({
         ...ve,
         content_type: 'virtual_experience',
@@ -494,6 +509,7 @@ export function VirtualExperiencesSection({ userId, userEmail, C }: { userId: st
           duration: ve.duration,
           tools: ve.tools,
           tagline: ve.tagline,
+          guideSnapshot: ve.guide_snapshot,
         },
       });
 
